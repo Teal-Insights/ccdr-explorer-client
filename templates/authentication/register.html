@@ -1,0 +1,59 @@
+{% extends "auth_base.html" %}
+
+{% block title %}Register{% endblock %}
+
+{% block auth_header %}Register{% endblock %}
+
+{% block auth_content %}
+<div class="register-form">
+    <form method="POST" action="{{ url_for('register') }}" class="needs-validation" novalidate>
+        <!-- Name Input -->
+        <div class="mb-3">
+            <label for="name" class="form-label">Name</label>
+            <input type="text" class="form-control" id="name" name="name" placeholder="Enter your name" required>
+        </div>
+        
+        <!-- Email Input -->
+        <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email" required>
+        </div>
+        
+        <!-- Password Input -->
+        <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" name="password" 
+                   pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}" 
+                   title="Must contain at least one number, one uppercase and lowercase letter, one special character, and at least 8 or more characters" 
+                   placeholder="Enter your password" required>
+            <div class="invalid-feedback">
+                Must contain at least one number, one uppercase and lowercase letter, one special character, and at least 8 or more characters
+            </div>
+        </div>
+        
+        <!-- Confirm Password Input -->
+        <div class="mb-3">
+            <label for="confirm_password" class="form-label">Confirm Password</label>
+            <input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm your password" required>
+        </div>
+        
+        <!-- Submit Button -->
+        <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Register</button>
+        </div>
+    </form>
+    
+    <!-- Login Link -->
+    <p class="mt-3 text-center">Already have an account? <a href="{{ url_for('read_login') }}">Login here</a></p>
+</div>
+
+<style>
+    .invalid-feedback {
+        display: none;
+        color: red;
+    }
+    input:invalid:not(:placeholder-shown) + .invalid-feedback {
+        display: block;
+    }
+</style>
+{% endblock %}

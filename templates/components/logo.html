@@ -1,0 +1,6 @@
+{% macro render_logo(width=30, height=30, classes="d-inline-block align-top") %}
+<svg width="{{ width }}" height="{{ height }}" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg" class="{{ classes }}">
+    <path d="M10 5 H15 A5 5 0 0 1 15 15 H10 Z" fill="pink" />
+    <rect x="10" y="5" width="2" height="20" fill="pink" />
+</svg>
+{% endmacro %}
