@@ -84,9 +84,7 @@ async def read_home(
     error_message: Optional[str] = None,
 ):
     if user:
-        logger.info(f"Redirecting to /dashboard for user: {user.id}")
         return RedirectResponse(url="/dashboard", status_code=302)
-    logger.info("Rendering home page for unauthenticated user")
     return templates.TemplateResponse(
         "index.html", {"request": request, "user": user,
                        "error_message": error_message}
