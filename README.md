@@ -2,6 +2,10 @@
 
 This project is still under development.
 
+## Installation
+
+`sudo apt update && sudo apt install -y python3-dev libpq-dev && pipx install poetry && poetry install && poetry shell`
+
 ## Start development database
 
 `docker compose up -d`

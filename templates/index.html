@@ -1,4 +1,6 @@
 <!-- landing page for unauthenticated users -->
+{% from 'components/logo.html' import render_logo %}
+
 {% extends "base.html" %}
 
 {% block title %}Home{% endblock %}
@@ -7,7 +9,8 @@
 <div class="container mt-5">
     <div class="row">
         <div class="col-md-8 offset-md-2 text-center">
-            <h1 class="display-4 mb-4">FastAPI Jinja2 Postgres Webapp</h1>
+            {{ render_logo(width=40, height=40, classes="d-inline-block align-middle mt-2 me-4") }}
+            <h1 class="display-4 mb-4 d-inline align-middle">FastAPI-Jinja2-Postgres Webapp</h1>
             <p class="lead mb-5">A template webapp with a pure-Python FastAPI backend, Jinja2 templating and Bootstrap styling for the frontend, and a PostgreSQL database with SQLModel ORM to power user auth</p>
         </div>
     </div>
@@ -41,7 +44,7 @@
 
     <div class="row">
         <div class="col-md-6 offset-md-3 text-center">
-            <a href="{{ url_for('read_register') }}" class="btn btn-primary btn-lg mr-3">Sign Up</a>
+            <a href="{{ url_for('read_register') }}" class="btn btn-primary btn-lg mx-3">Sign Up</a>
             <a href="{{ url_for('read_login') }}" class="btn btn-outline-secondary btn-lg">Log In</a>
         </div>
     </div>

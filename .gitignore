@@ -1,6 +1,4 @@
 .devcontainer
-.gpteng
-prompt
 __pycache__
 *.pyc
 .env

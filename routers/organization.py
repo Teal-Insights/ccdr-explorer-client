@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select
-from models import Organization
-from utils import get_session
+from utils.db import Organization, get_session
 from datetime import datetime
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -14,7 +13,7 @@ class OrganizationCreate(BaseModel):
 
 class OrganizationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     name: str
     created_at: datetime

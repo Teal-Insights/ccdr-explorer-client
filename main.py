@@ -1,15 +1,15 @@
 import logging
 from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, status
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import SQLModel, create_engine
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
-from routers import auth, organization, score, template, version
-from utils import get_current_user, get_connection_url
-from models import User
+from routers import auth, organization, role, user
+from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens
+from utils.db import User, get_connection_url
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -34,6 +34,28 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
+# Middleware to handle the NeedsNewTokens exception
+@app.exception_handler(NeedsNewTokens)
+async def needs_new_tokens_handler(request: Request, exc: NeedsNewTokens):
+    response = RedirectResponse(
+        url=request.url.path, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    response.set_cookie(
+        key="access_token",
+        value=exc.access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=exc.refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
+    return response
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     return templates.TemplateResponse(
@@ -52,23 +74,29 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+# -- Unauthenticated Routes --
+
+
 @app.get("/")
 async def read_home(
     request: Request,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     if user:
+        logger.info(f"Redirecting to /dashboard for user: {user.id}")
         return RedirectResponse(url="/dashboard", status_code=302)
+    logger.info("Rendering home page for unauthenticated user")
     return templates.TemplateResponse(
-        "index.html", {"request": request, "user": user, "error_message": error_message}
+        "index.html", {"request": request, "user": user,
+                       "error_message": error_message}
     )
 
 
 @app.get("/login")
 async def read_login(
     request: Request,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     if user:
@@ -82,7 +110,7 @@ async def read_login(
 @app.get("/register")
 async def read_register(
     request: Request,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     if user:
@@ -96,7 +124,7 @@ async def read_register(
 @app.get("/forgot_password")
 async def read_forgot_password(
     request: Request,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     if user:
@@ -111,7 +139,7 @@ async def read_forgot_password(
 async def read_reset_password(
     request: Request,
     token: str,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     if user:
@@ -128,49 +156,22 @@ async def read_reset_password(
     )
 
 
-@app.get("/dashboard")
-async def read_dashboard(
-    request: Request,
-    user: Optional[User] = Depends(get_current_user),
-    error_message: Optional[str] = None,
-):
-    if not user:
-        return RedirectResponse(url="/", status_code=302)
-    return templates.TemplateResponse(
-        "dashboard/index.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
-
-
-@app.get("/user_profile")
-async def read_user_profile(
-    request: Request,
-    user: Optional[User] = Depends(get_current_user),
-    error_message: Optional[str] = None,
-):
-    if not user:
-        return RedirectResponse(url="/", status_code=302)
-    return templates.TemplateResponse(
-        "user_profile/index.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
-
-
 @app.get("/about")
 async def read_about(
     request: Request,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     return templates.TemplateResponse(
-        "about.html", {"request": request, "user": user, "error_message": error_message}
+        "about.html",
+        {"request": request, "user": user, "error_message": error_message}
     )
 
 
 @app.get("/privacy_policy")
 async def read_privacy_policy(
     request: Request,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     return templates.TemplateResponse(
@@ -182,7 +183,7 @@ async def read_privacy_policy(
 @app.get("/terms_of_service")
 async def read_terms_of_service(
     request: Request,
-    user: Optional[User] = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
 ):
     return templates.TemplateResponse(
@@ -191,8 +192,40 @@ async def read_terms_of_service(
     )
 
 
+# -- Authenticated Routes --
+
+
+@app.get("/dashboard")
+async def read_dashboard(
+    request: Request,
+    user: User = Depends(get_authenticated_user),
+    error_message: Optional[str] = None,
+):
+    return templates.TemplateResponse(
+        "dashboard/index.html",
+        {"request": request, "user": user, "error_message": error_message},
+    )
+
+
+@app.get("/user_profile")
+async def read_user_profile(
+    request: Request,
+    user: User = Depends(get_authenticated_user),
+    error_message: Optional[str] = None,
+):
+    return templates.TemplateResponse(
+        "users/profile.html",
+        {"request": request, "user": user, "error_message": error_message},
+    )
+
+
+# -- Include Routers --
+
+
 app.include_router(auth.router)
 app.include_router(organization.router)
+app.include_router(role.router)
+app.include_router(user.router)
 
 
 if __name__ == "__main__":
