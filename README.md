@@ -18,11 +18,24 @@ Set your desired database name, username, and password in the .env file.
 
 `docker compose up -d`
 
+## Create database tables and default permissions/roles
+
+`poetry run python migrations/set_up_db.py --drop`
+
 ## Run the development server
+
+Make sure the development database is running and tables and default permissions/roles are created first.
 
 `uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
 
 Navigate to http://localhost:8000/
+
+## To do
+
+- Implement password recovery
+- Implement role/org system
+- Implement user profile page
+- Add payments/billing system?
 
 ## License
 

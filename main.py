@@ -5,11 +5,10 @@ from fastapi import FastAPI, Request, Depends, status
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import SQLModel, create_engine
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 from routers import auth, organization, role, user
 from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens
-from utils.db import User, get_connection_url
+from utils.db import User
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -17,12 +16,9 @@ logger = logging.getLogger("uvicorn.error")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup logic
-    engine = create_engine(get_connection_url())
-    SQLModel.metadata.create_all(engine)
-    engine.dispose()
+    # Optional startup logic
     yield
-    # Shutdown logic
+    # Optional shutdown logic
 
 
 app = FastAPI(lifespan=lifespan)
