@@ -1,8 +1,10 @@
 # auth.py
 from typing import Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException, Form, BackgroundTasks
 from fastapi.responses import RedirectResponse
+# from sendgrid import SendGridAPIClient
+# from sendgrid.helpers.mail import Mail
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
 from utils.db import User
@@ -151,14 +153,31 @@ def refresh_token(
     return response
 
 
+class EmailSchema(BaseModel):
+    email: EmailStr
+
+
+class ResetSchema(BaseModel):
+    token: str
+    new_password: str
+
+
 @router.post("/forgot_password")
 def forgot_password(user: UserCreate, session: Session = Depends(get_session)):
     # db_user = session.exec(select(User).where(
     #     User.email == user.email)).first()
     # TODO: Send reset password email
-    return {
-        "msg": "If an account with that email exists, a password reset link has been sent."
-    }
+    # email = email_schema.email
+    # if email not in user_store:
+    #     raise HTTPException(status_code=404, detail="User not found")
+
+    # token = str(uuid.uuid4())
+    # expiration = datetime.utcnow() + timedelta(hours=1)
+    # token_store[token] = {"email": email, "expiration": expiration}
+
+    # background_tasks.add_task(send_reset_email, email, token)
+
+    return {"message": "If an account exists with this email, a password reset link will be sent."}
 
 
 @router.post("/reset_password")
@@ -166,6 +185,21 @@ def reset_password(
     token: str, new_password: str, session: Session = Depends(get_session)
 ):
     # TODO: Reset password
+    # token = reset_schema.token
+    # new_password = reset_schema.new_password
+
+    # if token not in token_store:
+    #     raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    # token_data = token_store[token]
+    # if datetime.utcnow() > token_data['expiration']:
+    #     del token_store[token]
+    #     raise HTTPException(status_code=400, detail="Token has expired")
+
+    # # Update password (replace with actual password update logic)
+    # # user_store[token_data['email']]['password'] = hash_password(new_password)
+
+    # del token_store[token]
     return {"msg": "Password reset successfully"}
 
 

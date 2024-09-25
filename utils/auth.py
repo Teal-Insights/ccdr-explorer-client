@@ -4,7 +4,8 @@ import jwt
 import logging
 from dotenv import load_dotenv
 from sqlmodel import Session, select
-from sqlalchemy.engine import URL
+# from sendgrid import SendGridAPIClient
+# from sendgrid.helpers.mail import Mail
 from passlib.context import CryptContext
 from datetime import UTC, datetime, timedelta
 from typing import Optional
@@ -168,3 +169,17 @@ class NeedsNewTokens(Exception):
         self.user = user
         self.access_token = access_token
         self.refresh_token = refresh_token
+
+
+# def send_reset_email(email: str, token: str):
+#     message = Mail(
+#         from_email="noreply@yourdomain.com",
+#         to_emails=email,
+#         subject="Password Reset Request",
+#         html_content=f'<p>Click <a href="https://yourdomain.com/reset?token={token}">here</a> to reset your password.</p>'
+#     )
+#     try:
+#         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+#         sg.send(message)
+#     except Exception as e:
+#         print(f"Error sending email: {e}")
