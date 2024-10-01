@@ -5,10 +5,11 @@ from fastapi import FastAPI, Request, Depends, status
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.exceptions import RequestValidationError, StarletteHTTPException
-from routers import auth, organization, role, user
-from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens
-from utils.db import User
+from fastapi.exceptions import RequestValidationError, StarletteHTTPException, HTTPException
+from sqlmodel import Session
+from routers import authentication, organization, role, user
+from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token
+from utils.db import User, get_session
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -51,14 +52,15 @@ async def needs_new_tokens_handler(request: Request, exc: NeedsNewTokens):
     )
     return response
 
-
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    return templates.TemplateResponse(
-        "errors/error.html",
-        {"request": request, "status_code": exc.status_code, "detail": exc.detail},
-        status_code=exc.status_code,
-    )
+# TODO: Make sure this only catches server errors and not 307 redirects
+# Create a custom server error class that inherits from StarletteHTTPException?
+# @app.exception_handler(StarletteHTTPException)
+# async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+#     return templates.TemplateResponse(
+#         "errors/error.html",
+#         {"request": request, "status_code": exc.status_code, "detail": exc.detail},
+#         status_code=exc.status_code,
+#     )
 
 
 @app.exception_handler(RequestValidationError)
@@ -72,151 +74,124 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # -- Unauthenticated Routes --
 
-
-@app.get("/")
-async def read_home(
+# Define a dependency for common parameters
+async def common_unauthenticated_parameters(
     request: Request,
     user: Optional[User] = Depends(get_optional_user),
     error_message: Optional[str] = None,
+) -> dict:
+    return {"request": request, "user": user, "error_message": error_message}
+
+
+@app.get("/")
+async def read_home(
+    params: dict = Depends(common_unauthenticated_parameters)
 ):
-    if user:
+    if params["user"]:
         return RedirectResponse(url="/dashboard", status_code=302)
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "user": user,
-                       "error_message": error_message}
-    )
+    return templates.TemplateResponse("index.html", params)
 
 
 @app.get("/login")
 async def read_login(
-    request: Request,
-    user: Optional[User] = Depends(get_optional_user),
-    error_message: Optional[str] = None,
+    params: dict = Depends(common_unauthenticated_parameters)
 ):
-    if user:
+    if params["user"]:
         return RedirectResponse(url="/dashboard", status_code=302)
-    return templates.TemplateResponse(
-        "authentication/login.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
+    return templates.TemplateResponse("authentication/login.html", params)
 
 
 @app.get("/register")
 async def read_register(
-    request: Request,
-    user: Optional[User] = Depends(get_optional_user),
-    error_message: Optional[str] = None,
+    params: dict = Depends(common_unauthenticated_parameters)
 ):
-    if user:
+    if params["user"]:
         return RedirectResponse(url="/dashboard", status_code=302)
-    return templates.TemplateResponse(
-        "authentication/register.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
+    return templates.TemplateResponse("authentication/register.html", params)
 
 
 @app.get("/forgot_password")
 async def read_forgot_password(
-    request: Request,
-    user: Optional[User] = Depends(get_optional_user),
-    error_message: Optional[str] = None,
+    params: dict = Depends(common_unauthenticated_parameters),
+    show_form: Optional[bool] = True,
 ):
-    if user:
+    if params["user"]:
         return RedirectResponse(url="/dashboard", status_code=302)
-    return templates.TemplateResponse(
-        "authentication/forgot_password.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
+    params["show_form"] = show_form
+
+    return templates.TemplateResponse("authentication/forgot_password.html", params)
+
+
+@app.get("/about")
+async def read_about(params: dict = Depends(common_unauthenticated_parameters)):
+    return templates.TemplateResponse("about.html", params)
+
+
+@app.get("/privacy_policy")
+async def read_privacy_policy(params: dict = Depends(common_unauthenticated_parameters)):
+    return templates.TemplateResponse("privacy_policy.html", params)
+
+
+@app.get("/terms_of_service")
+async def read_terms_of_service(params: dict = Depends(common_unauthenticated_parameters)):
+    return templates.TemplateResponse("terms_of_service.html", params)
 
 
 @app.get("/reset_password")
 async def read_reset_password(
-    request: Request,
+    email: str,
     token: str,
-    user: Optional[User] = Depends(get_optional_user),
-    error_message: Optional[str] = None,
+    params: dict = Depends(common_unauthenticated_parameters),
+    session: Session = Depends(get_session)
 ):
-    if user:
-        return RedirectResponse(url="/dashboard", status_code=302)
-    # TODO: Validate the token here?
-    return templates.TemplateResponse(
-        "authentication/reset_password.html",
-        {
-            "request": request,
-            "token": token,
-            "user": user,
-            "error_message": error_message,
-        },
-    )
+    authorized_user, _ = get_user_from_reset_token(email, token, session)
 
+    # Raise informative error to let user know the token is invalid and may have expired
+    if not authorized_user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-@app.get("/about")
-async def read_about(
-    request: Request,
-    user: Optional[User] = Depends(get_optional_user),
-    error_message: Optional[str] = None,
-):
-    return templates.TemplateResponse(
-        "about.html",
-        {"request": request, "user": user, "error_message": error_message}
-    )
+    params["email"] = email
+    params["token"] = token
 
-
-@app.get("/privacy_policy")
-async def read_privacy_policy(
-    request: Request,
-    user: Optional[User] = Depends(get_optional_user),
-    error_message: Optional[str] = None,
-):
-    return templates.TemplateResponse(
-        "privacy_policy.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
-
-
-@app.get("/terms_of_service")
-async def read_terms_of_service(
-    request: Request,
-    user: Optional[User] = Depends(get_optional_user),
-    error_message: Optional[str] = None,
-):
-    return templates.TemplateResponse(
-        "terms_of_service.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
+    return templates.TemplateResponse("authentication/reset_password.html", params)
 
 
 # -- Authenticated Routes --
 
 
+# Define a dependency for common parameters
+async def common_authenticated_parameters(
+    request: Request,
+    user: User = Depends(get_authenticated_user),
+    error_message: Optional[str] = None,
+) -> dict:
+    return {"request": request, "user": user, "error_message": error_message}
+
+
+# Redirect to home if user is not authenticated
 @app.get("/dashboard")
 async def read_dashboard(
-    request: Request,
-    user: User = Depends(get_authenticated_user),
-    error_message: Optional[str] = None,
+    params: dict = Depends(common_authenticated_parameters)
 ):
-    return templates.TemplateResponse(
-        "dashboard/index.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
+    if not params["user"]:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    return templates.TemplateResponse("dashboard/index.html", params)
 
 
-@app.get("/user_profile")
-async def read_user_profile(
-    request: Request,
-    user: User = Depends(get_authenticated_user),
-    error_message: Optional[str] = None,
+@app.get("/profile")
+async def read_profile(
+    params: dict = Depends(common_authenticated_parameters)
 ):
-    return templates.TemplateResponse(
-        "users/profile.html",
-        {"request": request, "user": user, "error_message": error_message},
-    )
+    if not params["user"]:
+        # Changed to 302
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    return templates.TemplateResponse("users/profile.html", params)
 
 
 # -- Include Routers --
 
 
-app.include_router(auth.router)
+app.include_router(authentication.router)
 app.include_router(organization.router)
 app.include_router(role.router)
 app.include_router(user.router)

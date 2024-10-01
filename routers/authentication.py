@@ -3,19 +3,19 @@ from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Form, BackgroundTasks
 from fastapi.responses import RedirectResponse
-# from sendgrid import SendGridAPIClient
-# from sendgrid.helpers.mail import Mail
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
 from utils.db import User
 from utils.auth import (
     get_session,
+    get_user_from_reset_token,
     oauth2_scheme_cookie,
     get_password_hash,
     verify_password,
     create_access_token,
     create_refresh_token,
     validate_token,
+    send_reset_email
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -40,18 +40,33 @@ class UserRead(BaseModel):
     deleted: bool
 
 
+class UserForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class UserResetPassword(BaseModel):
+    token: str
+    new_password: str
+
+
 @router.post("/register", response_class=RedirectResponse)
 async def register(
     name: str = Form(...),
     email: EmailStr = Form(...),
     password: str = Form(...),
+    confirm_password: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    if password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
     user = UserCreate(name=name, email=email, password=password)
     db_user = session.exec(select(User).where(
         User.email == user.email)).first()
+
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
+
     hashed_password = get_password_hash(user.password)
     db_user = User(name=user.name, email=user.email,
                    hashed_password=hashed_password)
@@ -163,44 +178,37 @@ class ResetSchema(BaseModel):
 
 
 @router.post("/forgot_password")
-def forgot_password(user: UserCreate, session: Session = Depends(get_session)):
-    # db_user = session.exec(select(User).where(
-    #     User.email == user.email)).first()
-    # TODO: Send reset password email
-    # email = email_schema.email
-    # if email not in user_store:
-    #     raise HTTPException(status_code=404, detail="User not found")
+def forgot_password(user: UserForgotPassword, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
+    db_user = session.exec(select(User).where(
+        User.email == user.email)).first()
 
-    # token = str(uuid.uuid4())
-    # expiration = datetime.utcnow() + timedelta(hours=1)
-    # token_store[token] = {"email": email, "expiration": expiration}
+    # TODO: Handle this in background task so we don't leak information via timing attacks
+    if db_user:
+        background_tasks.add_task(send_reset_email, user.email, session)
 
-    # background_tasks.add_task(send_reset_email, email, token)
-
-    return {"message": "If an account exists with this email, a password reset link will be sent."}
+    return RedirectResponse(url="/forgot_password", status_code=303, show_form=False)
 
 
 @router.post("/reset_password")
 def reset_password(
-    token: str, new_password: str, session: Session = Depends(get_session)
+    email: str, token: str, new_password: str, confirm_new_password: str, session: Session = Depends(get_session)
 ):
-    # TODO: Reset password
-    # token = reset_schema.token
-    # new_password = reset_schema.new_password
+    if new_password != confirm_new_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
 
-    # if token not in token_store:
-    #     raise HTTPException(status_code=400, detail="Invalid or expired token")
+    authorized_user, reset_token = get_user_from_reset_token(
+        email, token, session)
 
-    # token_data = token_store[token]
-    # if datetime.utcnow() > token_data['expiration']:
-    #     del token_store[token]
-    #     raise HTTPException(status_code=400, detail="Token has expired")
+    if not authorized_user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    # # Update password (replace with actual password update logic)
-    # # user_store[token_data['email']]['password'] = hash_password(new_password)
+    # Update password and mark token as used
+    authorized_user.hashed_password = get_password_hash(new_password)
+    reset_token.used = True
+    session.commit()
+    session.refresh(authorized_user)
 
-    # del token_store[token]
-    return {"msg": "Password reset successfully"}
+    return RedirectResponse(url="/login", status_code=303)
 
 
 @router.get("/logout", response_class=RedirectResponse)

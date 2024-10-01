@@ -1,8 +1,9 @@
 import os
 import logging
 from enum import Enum
+from uuid import uuid4
+from datetime import datetime, UTC, timedelta
 from typing import Optional, List
-from datetime import datetime, UTC
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL
 from sqlmodel import create_engine, Session, SQLModel, Field, Relationship, select
@@ -156,6 +157,19 @@ class RolePermissionLink(SQLModel, table=True):
         back_populates="role_permission_links")
 
 
+class PasswordResetToken(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    token: str = Field(default_factory=lambda: str(
+        uuid4()), index=True, unique=True)
+    expires_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC) + timedelta(hours=1))
+    used: bool = Field(default=False)
+
+    user: Optional["User"] = Relationship(
+        back_populates="password_reset_tokens")
+
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -172,6 +186,8 @@ class User(SQLModel, table=True):
     organization: Optional["Organization"] = Relationship(
         back_populates="users")
     role: Optional["Role"] = Relationship(back_populates="users")
+    password_reset_tokens: List["PasswordResetToken"] = Relationship(
+        back_populates="user")
 
 
 class UserOrganizationLink(SQLModel, table=True):

@@ -14,6 +14,8 @@ Generate a 256 bit secret key with `openssl rand -base64 32` and paste it into t
 
 Set your desired database name, username, and password in the .env file.
 
+To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
+
 ## Start development database
 
 `docker compose up -d`
@@ -32,10 +34,9 @@ Navigate to http://localhost:8000/
 
 ## To do
 
-- Implement password recovery
-- Implement role/org system
+- Finish implementing role/org system
 - Implement user profile page
-- Add payments/billing system?
+- Add payments/billing system
 
 ## License
 

@@ -1,16 +1,16 @@
 # utils.py
 import os
 import jwt
+import uuid
 import logging
+import resend
 from dotenv import load_dotenv
 from sqlmodel import Session, select
-# from sendgrid import SendGridAPIClient
-# from sendgrid.helpers.mail import Mail
 from passlib.context import CryptContext
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from fastapi import Depends, Cookie, HTTPException, status
-from utils.db import get_session, User
+from utils.db import get_session, User, PasswordResetToken
 
 load_dotenv()
 logger = logging.getLogger("uvicorn.error")
@@ -171,15 +171,61 @@ class NeedsNewTokens(Exception):
         self.refresh_token = refresh_token
 
 
-# def send_reset_email(email: str, token: str):
-#     message = Mail(
-#         from_email="noreply@yourdomain.com",
-#         to_emails=email,
-#         subject="Password Reset Request",
-#         html_content=f'<p>Click <a href="https://yourdomain.com/reset?token={token}">here</a> to reset your password.</p>'
-#     )
-#     try:
-#         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
-#         sg.send(message)
-#     except Exception as e:
-#         print(f"Error sending email: {e}")
+def send_reset_email(email: str, session: Session):
+    # Check for an existing unexpired token
+    user = session.exec(select(User).where(User.email == email)).first()
+    if user:
+        existing_token = session.exec(
+            select(PasswordResetToken)
+            .where(
+                PasswordResetToken.user_id == user.id,
+                PasswordResetToken.expires_at > datetime.now(UTC),
+                PasswordResetToken.used == False
+            )
+        ).first()
+
+        if existing_token:
+            logger.debug("An unexpired token already exists for this user.")
+            return
+
+        # Generate a new token
+        token = str(uuid.uuid4())
+        reset_token = PasswordResetToken(user_id=user.id, token=token)
+        session.add(reset_token)
+
+        try:
+            # TODO: Use a templating engine
+            params: resend.Emails.SendParams = {
+                "from": "noreply@promptlytechnologies.com",
+                "to": [email],
+                "subject": "Password Reset Request",
+                "html": f"<p>Click <a href='{os.getenv('BASE_URL')}/reset_password?email={email}&token={token}'>here</a> to reset your password.</p>",
+            }
+
+            email: resend.Email = resend.Emails.send(params)
+            logger.debug("Password reset email sent.")
+
+            session.commit()
+        except Exception as e:
+            logger.error(f"Failed to send password reset email: {e}")
+            session.rollback()
+    else:
+        logger.debug("No user found with the provided email.")
+
+
+def get_user_from_reset_token(email: str, token: str, session: Session) -> Optional[User]:
+    reset_token = session.exec(select(PasswordResetToken).where(
+        PasswordResetToken.token == token,
+        PasswordResetToken.expires_at > datetime.now(UTC),
+        PasswordResetToken.used == False
+    )).first()
+
+    if not reset_token:
+        return None
+
+    user = session.exec(select(User).where(
+        User.email == email,
+        User.id == reset_token.user_id
+    )).first()
+
+    return user, reset_token
