@@ -4,7 +4,52 @@ This project is still under development.
 
 ## Installation
 
-`sudo apt update && sudo apt install -y python3-dev libpq-dev && pipx install poetry && poetry install && poetry shell`
+### Prerequisites
+
+- Python 3.12 or higher
+- Docker and Docker Compose
+- PostgreSQL development headers
+- Poetry (Python package manager)
+
+### System Dependencies
+
+For Ubuntu/Debian:
+
+```bash
+sudo apt update && sudo apt install -y python3-dev libpq-dev
+```
+For macOS:
+
+```bash
+brew install postgresql
+```
+
+For Windows:
+
+- No additional system dependencies required
+- Install Python from the official Python website
+
+### Install Python dependencies
+
+1. Install Poetry
+
+```bash
+pipx install poetry
+```
+
+2. Install project dependencies
+
+```bash
+poetry install
+```
+
+3. Activate shell
+
+```bash
+poetry shell
+```
+
+(Note: You will need to activate the shell every time you open a new terminal session. Alternatively, you can use the `poetry run` prefix before other commands to run them without activating the shell.)
 
 ## Set environment variables
 
@@ -22,7 +67,7 @@ To use password recovery, register a [Resend](https://resend.com/) account, veri
 
 ## Create database tables and default permissions/roles
 
-`poetry run python migrations/set_up_db.py --drop`
+`python migrations/set_up_db.py --drop`
 
 ## Run the development server
 
@@ -32,12 +77,10 @@ Make sure the development database is running and tables and default permissions
 
 Navigate to http://localhost:8000/
 
-## To do
+## Contributing
 
-- Finish implementing role/org system
-- Implement user profile page
-- Add payments/billing system
+Fork the repository, create a new branch, make your changes, and submit a pull request.
 
 ## License
 
-This project is licensed under the GPLv3 License. See the LICENSE file for more details.
+This project is licensed under the MIT License. See the LICENSE file for more details.
