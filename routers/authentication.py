@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from utils.db import User
 from utils.auth import (
     get_session,
+    validate_password_strength,
     get_user_from_reset_token,
     oauth2_scheme_cookie,
     get_password_hash,
@@ -59,6 +60,10 @@ async def register(
 ) -> RedirectResponse:
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    if not validate_password_strength(password):
+        raise HTTPException(
+            status_code=400, detail="Password does not satisfy the security policy")
 
     user = UserCreate(name=name, email=email, password=password)
     db_user = session.exec(select(User).where(
@@ -195,6 +200,10 @@ def reset_password(
 ):
     if new_password != confirm_new_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    if not validate_password_strength(new_password):
+        raise HTTPException(
+            status_code=400, detail="Password does not satisfy the security policy")
 
     authorized_user, reset_token = get_user_from_reset_token(
         email, token, session)

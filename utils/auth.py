@@ -1,5 +1,6 @@
 # utils.py
 import os
+import re
 import jwt
 import uuid
 import logging
@@ -31,6 +32,19 @@ def oauth2_scheme_cookie(
     refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
 ) -> tuple[Optional[str], Optional[str]]:
     return access_token, refresh_token
+
+
+def validate_password_strength(password: str) -> bool:
+    """
+    Validate the password to ensure it meets the required criteria:
+    - At least one number
+    - At least one uppercase and one lowercase letter
+    - At least one special character
+    - At least 8 characters long
+    """
+    pattern = re.compile(
+        r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}")
+    return bool(pattern.match(password))
 
 
 def get_password_hash(password: str) -> str:
