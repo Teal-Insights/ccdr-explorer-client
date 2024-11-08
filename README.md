@@ -1,5 +1,7 @@
 # FastAPI, Jinja2, PostgreSQL Webapp
 
+![Screenshot of homepage](static/Screenshot.png)
+
 This project is still under development.
 
 ## Installation
