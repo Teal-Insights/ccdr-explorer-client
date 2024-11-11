@@ -1,3 +1,5 @@
+# ToDo: Add CSRF protection to all POST, download, and sensitive data routes
+
 import logging
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -5,14 +7,15 @@ from fastapi import FastAPI, Request, Depends, status
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.exceptions import RequestValidationError, StarletteHTTPException, HTTPException
+from fastapi.exceptions import RequestValidationError, HTTPException, StarletteHTTPException
 from sqlmodel import Session
 from routers import authentication, organization, role, user
-from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token
+from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError
 from utils.db import User, get_session
 
 
 logger = logging.getLogger("uvicorn.error")
+logger.setLevel(logging.DEBUG)
 
 
 @asynccontextmanager
@@ -31,7 +34,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-# Middleware to handle the NeedsNewTokens exception
+# -- Exception Handling Middlewares --
+
+
+# Handle NeedsNewTokens by setting new tokens and redirecting to same page
 @app.exception_handler(NeedsNewTokens)
 async def needs_new_tokens_handler(request: Request, exc: NeedsNewTokens):
     response = RedirectResponse(
@@ -52,27 +58,82 @@ async def needs_new_tokens_handler(request: Request, exc: NeedsNewTokens):
     )
     return response
 
-# TODO: Make sure this only catches server errors and not 307 redirects
-# Create a custom server error class that inherits from StarletteHTTPException?
-# @app.exception_handler(StarletteHTTPException)
-# async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-#     return templates.TemplateResponse(
-#         "errors/error.html",
-#         {"request": request, "status_code": exc.status_code, "detail": exc.detail},
-#         status_code=exc.status_code,
-#     )
 
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+# Handle PasswordValidationError by rendering the error page
+@app.exception_handler(PasswordValidationError)
+async def password_validation_exception_handler(request: Request, exc: PasswordValidationError):
     return templates.TemplateResponse(
-        "errors/error.html",
-        {"request": request, "status_code": 422, "detail": str(exc)},
+        "errors/validation_error.html",
+        {
+            "request": request,
+            "status_code": 422,
+            "errors": {exc.detail["field"]: exc.detail["message"]}
+        },
         status_code=422,
     )
 
 
+# Handle RequestValidationError by rendering the error page (TODO: use toast instead?)
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = {}
+    for error in exc.errors():
+        # Handle different error locations more carefully
+        location = error["loc"]
+
+        # Skip type errors for the whole body
+        if len(location) == 1 and location[0] == "body":
+            continue
+
+        # For form fields, the location might be just (field_name,)
+        # For JSON body, it might be (body, field_name)
+        field_name = location[-1]  # Take the last item in the location tuple
+        errors[field_name] = error["msg"]
+
+    return templates.TemplateResponse(
+        "errors/validation_error.html",
+        {
+            "request": request,
+            "status_code": 422,
+            "errors": errors
+        },
+        status_code=422,
+    )
+
+
+# Handle StarletteHTTPException (including 404, 405, etc.) by rendering the error page
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    # Don't handle redirects
+    if exc.status_code in [301, 302, 303, 307, 308]:
+        raise exc
+
+    return templates.TemplateResponse(
+        "errors/error.html",
+        {"request": request, "status_code": exc.status_code, "detail": exc.detail},
+        status_code=exc.status_code,
+    )
+
+
+# Add handler for uncaught exceptions (500 Internal Server Error)
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    # Log the error for debugging
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
+    return templates.TemplateResponse(
+        "errors/error.html",
+        {
+            "request": request,
+            "status_code": 500,
+            "detail": "Internal Server Error"
+        },
+        status_code=500,
+    )
+
+
 # -- Unauthenticated Routes --
+
 
 # Define a dependency for common parameters
 async def common_unauthenticated_parameters(
@@ -113,7 +174,7 @@ async def read_register(
 @app.get("/forgot_password")
 async def read_forgot_password(
     params: dict = Depends(common_unauthenticated_parameters),
-    show_form: Optional[bool] = True,
+    show_form: Optional[str] = "true",
 ):
     if params["user"]:
         return RedirectResponse(url="/dashboard", status_code=302)
@@ -195,7 +256,6 @@ app.include_router(authentication.router)
 app.include_router(organization.router)
 app.include_router(role.router)
 app.include_router(user.router)
-
 
 if __name__ == "__main__":
     import uvicorn

@@ -6,6 +6,7 @@ import uuid
 import logging
 import resend
 from dotenv import load_dotenv
+from pydantic import field_validator
 from sqlmodel import Session, select
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
@@ -33,17 +34,79 @@ def oauth2_scheme_cookie(
     return access_token, refresh_token
 
 
-def validate_password_strength(password: str) -> bool:
+class PasswordValidationError(HTTPException):
+    def __init__(self, field: str, message: str):
+        super().__init__(
+            status_code=422,
+            detail={
+                "field": field,
+                "message": message
+            }
+        )
+
+
+class PasswordMismatchError(PasswordValidationError):
+    def __init__(self, field: str = "confirm_password"):
+        super().__init__(
+            field=field,
+            message="The passwords you entered do not match"
+        )
+
+
+def create_password_validator(field_name: str = "password"):
     """
-    Validate the password to ensure it meets the required criteria:
-    - At least one number
-    - At least one uppercase and one lowercase letter
-    - At least one special character
-    - At least 8 characters long
+    Factory function that creates a password validation decorator for Pydantic models.
+
+    Args:
+        field_name: Name of the field to validate and use in error messages
+
+    Returns:
+        A configured field_validator for password validation
     """
-    pattern = re.compile(
-        r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~]{8,}")
-    return bool(pattern.match(password))
+    @field_validator(field_name, check_fields=False)
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """
+        Validate password meets security requirements:
+        - At least one number
+        - At least one uppercase and one lowercase letter
+        - At least one special character
+        - At least 8 characters long
+        """
+        logger.debug(f"Validating password for {field_name}")
+        pattern = re.compile(
+            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~]{8,}")
+        if not pattern.match(v):
+            logger.debug(f"Password for {
+                         field_name} does not satisfy the security policy")
+            raise PasswordValidationError(
+                field=field_name,
+                message=f"{field_name} does not satisfy the security policy"
+            )
+        return v
+
+    return validate_password_strength
+
+
+def create_passwords_match_validator(password_field: str, confirm_field: str):
+    """
+    Factory function that creates a password matching validation decorator for Pydantic models.
+
+    Args:
+        password_field: Name of the main password field
+        confirm_field: Name of the confirmation password field
+
+    Returns:
+        A configured field_validator for password matching validation
+    """
+    @field_validator(confirm_field)
+    @classmethod
+    def passwords_match(cls, v: str, values: dict) -> str:
+        if password_field in values.data and v != values.data[password_field]:
+            raise PasswordMismatchError(field=confirm_field)
+        return v
+
+    return passwords_match
 
 
 def get_password_hash(password: str) -> str:

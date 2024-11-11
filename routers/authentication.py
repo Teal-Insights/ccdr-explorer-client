@@ -1,15 +1,17 @@
 # auth.py
+from logging import getLogger
 from typing import Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import User
 from utils.auth import (
     get_session,
-    validate_password_strength,
     get_user_from_reset_token,
+    create_password_validator,
+    create_passwords_match_validator,
     oauth2_scheme_cookie,
     get_password_hash,
     verify_password,
@@ -19,14 +21,88 @@ from utils.auth import (
     send_reset_email
 )
 
+logger = getLogger("uvicorn.error")
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-class UserCreate(BaseModel):
+# -- Server Request and Response Models --
+
+
+class UserRegister(BaseModel):
     name: str
     email: EmailStr
     password: str
-    organization_id: Optional[int] = None
+    confirm_password: str
+
+    validate_password_strength = create_password_validator("password")
+    validate_passwords_match = create_passwords_match_validator(
+        "password", "confirm_password")
+
+    @classmethod
+    async def as_form(
+        cls,
+        name: str = Form(...),
+        email: EmailStr = Form(...),
+        password: str = Form(...),
+        confirm_password: str = Form(...)
+    ):
+        return cls(
+            name=name,
+            email=email,
+            password=password,
+            confirm_password=confirm_password
+        )
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+    @classmethod
+    async def as_form(
+        cls,
+        email: EmailStr = Form(...),
+        password: str = Form(...)
+    ):
+        return cls(email=email, password=password)
+
+
+class UserForgotPassword(BaseModel):
+    email: EmailStr
+
+    @classmethod
+    async def as_form(
+        cls,
+        email: EmailStr = Form(...)
+    ):
+        return cls(email=email)
+
+
+class UserResetPassword(BaseModel):
+    email: EmailStr
+    token: str
+    new_password: str
+    confirm_new_password: str
+
+    # Use the factory with a different field name
+    validate_password_strength = create_password_validator("new_password")
+    validate_passwords_match = create_passwords_match_validator(
+        "new_password", "confirm_new_password")
+
+    @classmethod
+    async def as_form(
+        cls,
+        email: EmailStr = Form(...),
+        token: str = Form(...),
+        new_password: str = Form(...),
+        confirm_new_password: str = Form(...)
+    ):
+        return cls(email=email, token=token,
+                   new_password=new_password, confirm_new_password=confirm_new_password)
+
+
+# -- DB Request and Response Models --
 
 
 class UserRead(BaseModel):
@@ -41,31 +117,14 @@ class UserRead(BaseModel):
     deleted: bool
 
 
-class UserForgotPassword(BaseModel):
-    email: EmailStr
-
-
-class UserResetPassword(BaseModel):
-    token: str
-    new_password: str
+# -- Routes --
 
 
 @router.post("/register", response_class=RedirectResponse)
 async def register(
-    name: str = Form(...),
-    email: EmailStr = Form(...),
-    password: str = Form(...),
-    confirm_password: str = Form(...),
+    user: UserRegister = Depends(UserRegister.as_form),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
-    if password != confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-
-    if not validate_password_strength(password):
-        raise HTTPException(
-            status_code=400, detail="Password does not satisfy the security policy")
-
-    user = UserCreate(name=name, email=email, password=password)
     db_user = session.exec(select(User).where(
         User.email == user.email)).first()
 
@@ -92,13 +151,13 @@ async def register(
 
 
 @router.post("/login", response_class=RedirectResponse)
-def login(
-    email: str = Form(...),
-    password: str = Form(...),
+async def login(
+    user: UserLogin = Depends(UserLogin.as_form),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
-    db_user = session.exec(select(User).where(User.email == email)).first()
-    if not db_user or not verify_password(password, db_user.hashed_password):
+    db_user = session.exec(select(User).where(
+        User.email == user.email)).first()
+    if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
 
     # Create access token
@@ -128,7 +187,7 @@ def login(
 
 # Updated refresh_token endpoint
 @router.post("/refresh", response_class=RedirectResponse)
-def refresh_token(
+async def refresh_token(
     tokens: tuple[Optional[str], Optional[str]
                   ] = Depends(oauth2_scheme_cookie),
     session: Session = Depends(get_session),
@@ -173,17 +232,12 @@ def refresh_token(
     return response
 
 
-class EmailSchema(BaseModel):
-    email: EmailStr
-
-
-class ResetSchema(BaseModel):
-    token: str
-    new_password: str
-
-
 @router.post("/forgot_password")
-def forgot_password(user: UserForgotPassword, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
+async def forgot_password(
+    background_tasks: BackgroundTasks,
+    user: UserForgotPassword = Depends(UserForgotPassword.as_form),
+    session: Session = Depends(get_session)
+):
     db_user = session.exec(select(User).where(
         User.email == user.email)).first()
 
@@ -191,28 +245,22 @@ def forgot_password(user: UserForgotPassword, background_tasks: BackgroundTasks,
     if db_user:
         background_tasks.add_task(send_reset_email, user.email, session)
 
-    return RedirectResponse(url="/forgot_password", status_code=303, show_form=False)
+    return RedirectResponse(url="/forgot_password?show_form=false", status_code=303)
 
 
 @router.post("/reset_password")
-def reset_password(
-    email: str, token: str, new_password: str, confirm_new_password: str, session: Session = Depends(get_session)
+async def reset_password(
+    user: UserResetPassword = Depends(UserResetPassword.as_form),
+    session: Session = Depends(get_session)
 ):
-    if new_password != confirm_new_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-
-    if not validate_password_strength(new_password):
-        raise HTTPException(
-            status_code=400, detail="Password does not satisfy the security policy")
-
     authorized_user, reset_token = get_user_from_reset_token(
-        email, token, session)
+        user.email, user.token, session)
 
     if not authorized_user:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
     # Update password and mark token as used
-    authorized_user.hashed_password = get_password_hash(new_password)
+    authorized_user.hashed_password = get_password_hash(user.new_password)
     reset_token.used = True
     session.commit()
     session.refresh(authorized_user)
