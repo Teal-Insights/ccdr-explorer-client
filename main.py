@@ -59,7 +59,7 @@ async def needs_new_tokens_handler(request: Request, exc: NeedsNewTokens):
     return response
 
 
-# Handle PasswordValidationError by rendering the error page
+# Handle PasswordValidationError by rendering the validation_error page
 @app.exception_handler(PasswordValidationError)
 async def password_validation_exception_handler(request: Request, exc: PasswordValidationError):
     return templates.TemplateResponse(
@@ -73,7 +73,7 @@ async def password_validation_exception_handler(request: Request, exc: PasswordV
     )
 
 
-# Handle RequestValidationError by rendering the error page (TODO: use toast instead?)
+# Handle RequestValidationError by rendering the validation_error page
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = {}

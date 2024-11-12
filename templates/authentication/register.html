@@ -34,7 +34,11 @@
         <!-- Confirm Password Input -->
         <div class="mb-3">
             <label for="confirm_password" class="form-label">Confirm Password</label>
-            <input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm your password" required>
+            <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
+                   placeholder="Confirm your password" required>
+            <div class="invalid-feedback">
+                Passwords do not match.
+            </div>
         </div>
         
         <!-- Submit Button -->
@@ -47,13 +51,16 @@
     <p class="mt-3 text-center">Already have an account? <a href="{{ url_for('read_login') }}">Login here</a></p>
 </div>
 
-<style>
-    .invalid-feedback {
-        display: none;
-        color: red;
-    }
-    input:invalid:not(:placeholder-shown) + .invalid-feedback {
-        display: block;
-    }
-</style>
+<script>
+    // JavaScript to validate password match
+    document.getElementById('confirm_password').addEventListener('input', function() {
+        const password = document.getElementById('password').value;
+        const confirmPassword = this.value;
+        if (password !== confirmPassword) {
+            this.setCustomValidity('Passwords do not match.');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+</script>
 {% endblock %}
