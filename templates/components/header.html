@@ -23,7 +23,9 @@
                 {% if user %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        {{ render_silhouette() }}
+                        <button class="profile-button btn p-0 border-0 bg-transparent">
+                            {{ render_silhouette() }}
+                        </button>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                         <li><a class="dropdown-item" href="{{ url_for('read_profile') }}">Profile</a></li>

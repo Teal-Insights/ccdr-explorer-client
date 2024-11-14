@@ -241,7 +241,6 @@ async def forgot_password(
     db_user = session.exec(select(User).where(
         User.email == user.email)).first()
 
-    # TODO: Handle this in background task so we don't leak information via timing attacks
     if db_user:
         background_tasks.add_task(send_reset_email, user.email, session)
 
