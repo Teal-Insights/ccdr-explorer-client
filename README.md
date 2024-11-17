@@ -25,21 +25,25 @@ less efficient than a partial page update on the client side.
 
 ### Install development dependencies in a VSCode Dev Container
 
-If you use VSCode with Docker, the following VSCode Dev Container configuration will install all dependencies and automatically open the project in a container:
+If you use VSCode with Docker, the following VSCode Dev Container
+configuration will install all dependencies and automatically open the
+project in a container:
 
 ``` json
 {
-	"name": "Python 3",
-	"image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
-	"postCreateCommand": "sudo apt update && sudo apt install -y python3-dev libpq-dev graphviz && pipx install poetry && poetry install && poetry shell",
-	"features": {
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-		"ghcr.io/rocker-org/devcontainer-features/quarto-cli:1": {}
-	}
+    "name": "Python 3",
+    "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
+    "postCreateCommand": "sudo apt update && sudo apt install -y python3-dev libpq-dev graphviz && pipx install poetry && poetry install && poetry shell",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+        "ghcr.io/rocker-org/devcontainer-features/quarto-cli:1": {}
+    }
 }
 ```
 
-Simply create a .devcontainer folder in the root of the project and add a devcontainer.json file with this content, and then "Reopen in Container" from View > Command Palette.
+Simply create a .devcontainer folder in the root of the project and add
+a devcontainer.json file with this content, and then “Reopen in
+Container” from View \> Command Palette.
 
 ### Install development dependencies manually
 
@@ -70,7 +74,6 @@ For Windows:
 
 - [Quarto CLI](https://quarto.org/docs/get-started/)
 
-
 For macOS:
 
 ``` bash
@@ -85,7 +88,8 @@ sudo apt update && sudo apt install -y graphviz
 
 For Windows:
 
-- Download and install from [Graphviz.org](https://graphviz.org/download/#windows)
+- Download and install from
+  [Graphviz.org](https://graphviz.org/download/#windows)
 
 #### Python dependencies
 
