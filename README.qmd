@@ -148,19 +148,31 @@ To use password recovery, register a [Resend](https://resend.com/) account, veri
 
 ### Start development database
 
-`docker compose up -d`
+``` bash
+docker compose up -d
+```
 
 ### Create database tables and default permissions/roles
 
-`python migrations/set_up_db.py --drop`
+``` bash
+python migrations/set_up_db.py --drop
+```
 
 ### Run the development server
 
 Make sure the development database is running and tables and default permissions/roles are created first.
 
-`uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
+``` bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
 
 Navigate to http://localhost:8000/
+
+### Lint types with mypy
+
+``` bash
+mypy .
+```
 
 ### Render the README
 

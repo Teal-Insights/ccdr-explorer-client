@@ -25,9 +25,8 @@ less efficient than a partial page update on the client side.
 
 ### Install development dependencies in a VSCode Dev Container
 
-If you use VSCode with Docker, the following VSCode Dev Container
-configuration will install all dependencies and automatically open the
-project in a container:
+If you use VSCode with Docker to develop in a container, the following
+VSCode Dev Container configuration will install all dependencies:
 
 ``` json
 {
@@ -41,9 +40,12 @@ project in a container:
 }
 ```
 
-Simply create a .devcontainer folder in the root of the project and add
-a devcontainer.json file with this content, and then “Reopen in
-Container” from View \> Command Palette.
+Simply create a `.devcontainer` folder in the root of the project and
+add a `devcontainer.json` file in the folder with the above content.
+VSCode may prompt you to install the Dev Container extension if you
+haven’t already, and/or to open the project in a container. If not, you
+can manually select “Dev Containers: Reopen in Container” from View \>
+Command Palette.
 
 ### Install development dependencies manually
 
@@ -130,24 +132,42 @@ account, verify a domain, get an API key, and paste the API key into the
 
 ### Start development database
 
-`docker compose up -d`
+``` bash
+docker compose up -d
+```
 
 ### Create database tables and default permissions/roles
 
-`python migrations/set_up_db.py --drop`
+``` bash
+python migrations/set_up_db.py --drop
+```
 
 ### Run the development server
 
 Make sure the development database is running and tables and default
 permissions/roles are created first.
 
-`uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
+``` bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
 
 Navigate to http://localhost:8000/
 
+### Lint types with mypy
+
+``` bash
+mypy .
+```
+
 ### Render the README
 
-`quarto render README.qmd`
+When updating the documentation, remember to make changes in the
+README.qmd file, not the README.md file. Then run the following command
+to render the README.md file:
+
+``` bash
+quarto render README.qmd
+```
 
 ### Contributing
 
