@@ -1,5 +1,7 @@
-# README
-
+---
+title: "README"
+format: gfm
+---
 
 ## FastAPI, Jinja2, PostgreSQL Webapp
 
@@ -9,22 +11,23 @@ This project is still under development.
 
 ### Install development dependencies
 
-#### Python and Docker
+#### Python, Docker, and Quarto CLI
 
 - [Python 3.12 or higher](https://www.python.org/downloads/)
 - [Docker and Docker Compose](https://docs.docker.com/get-docker/)
+- [Quarto CLI](https://quarto.org/docs/get-started/)
 
 #### PostgreSQL headers
 
 For Ubuntu/Debian:
 
-``` bash
+```bash
 sudo apt update && sudo apt install -y python3-dev libpq-dev
 ```
 
 For macOS:
 
-``` bash
+```bash
 brew install postgresql
 ```
 
@@ -35,40 +38,35 @@ For Windows:
 
 #### Python dependencies
 
-1.  Install Poetry
+1. Install Poetry
 
-``` bash
+```bash
 pipx install poetry
 ```
 
-2.  Install project dependencies
+2. Install project dependencies
 
-``` bash
+```bash
 poetry install
 ```
 
-3.  Activate shell
+3. Activate shell
 
-``` bash
+```bash
 poetry shell
 ```
 
-(Note: You will need to activate the shell every time you open a new
-terminal session. Alternatively, you can use the `poetry run` prefix
-before other commands to run them without activating the shell.)
+(Note: You will need to activate the shell every time you open a new terminal session. Alternatively, you can use the `poetry run` prefix before other commands to run them without activating the shell.)
 
 ### Set environment variables
 
 Copy .env.example to .env with `cp .env.example .env`.
 
-Generate a 256 bit secret key with `openssl rand -base64 32` and paste
-it into the .env file.
+Generate a 256 bit secret key with `openssl rand -base64 32` and paste it into the .env file.
 
 Set your desired database name, username, and password in the .env file.
 
-To use password recovery, register a [Resend](https://resend.com/)
-account, verify a domain, get an API key, and paste the API key into the
-.env file.
+To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
 
 ### Start development database
 
@@ -80,19 +78,20 @@ account, verify a domain, get an API key, and paste the API key into the
 
 ### Run the development server
 
-Make sure the development database is running and tables and default
-permissions/roles are created first.
+Make sure the development database is running and tables and default permissions/roles are created first.
 
 `uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
 
 Navigate to http://localhost:8000/
 
+### Render the README
+
+`quarto render README.qmd`
+
 ### Contributing
 
-Fork the repository, create a new branch, make your changes, and submit
-a pull request.
+Fork the repository, create a new branch, make your changes, and submit a pull request.
 
 ### License
 
-This project is licensed under the MIT License. See the LICENSE file for
-more details.
+This project is licensed under the MIT License. See the LICENSE file for more details.
