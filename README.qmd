@@ -52,7 +52,7 @@ The advantage of the PRG pattern is that it is very straightforward to implement
 
 ### Install development dependencies in a VSCode Dev Container
 
-If you use VSCode with Docker, the following VSCode Dev Container configuration will install all dependencies and automatically open the project in a container:
+If you use VSCode with Docker, the following VSCode Dev Container configuration will install all dependencies:
 
 ``` json
 {
