@@ -7,12 +7,29 @@
 
 This project is still under development.
 
+### Architecture
+
+This application uses a Post-Redirect-Get (PRG) pattern. The user
+submits a form, which sends a POST request to a FastAPI endpoint on the
+server. The database is updated, and the user is redirected to a GET
+endpoint, which fetches the updated data and re-renders the Jinja2 page
+template with the new data.
+
+![Webapp Flow](static/webapp_flow.png)
+
+The advantage of the PRG pattern is that it is very straightforward to
+implement and keeps most of the rendering logic on the server side. The
+disadvantage is that it requires an extra round trip to the database to
+fetch the updated data, and re-rendering the entire page template may be
+less efficient than a partial page update on the client side.
+
 ### Install development dependencies
 
-#### Python and Docker
+#### Python, Docker, and Quarto CLI
 
 - [Python 3.12 or higher](https://www.python.org/downloads/)
 - [Docker and Docker Compose](https://docs.docker.com/get-docker/)
+- [Quarto CLI](https://quarto.org/docs/get-started/)
 
 #### PostgreSQL headers
 
@@ -86,6 +103,10 @@ permissions/roles are created first.
 `uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
 
 Navigate to http://localhost:8000/
+
+### Render the README
+
+`quarto render README.qmd`
 
 ### Contributing
 
