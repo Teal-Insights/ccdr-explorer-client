@@ -9,16 +9,16 @@ package-mode = false
 [tool.poetry.dependencies]
 python = "^3.12"
 sqlmodel = "^0.0.22"
-fastapi = "^0.114.1"
-pyjwt = "^2.9.0"
+pyjwt = "^2.10.0"
 jinja2 = "^3.1.4"
-uvicorn = "^0.30.6"
-psycopg2 = "^2.9.9"
-pydantic = {extras = ["email"], version = "^2.9.1"}
-python-multipart = "^0.0.9"
+uvicorn = "^0.32.0"
+psycopg2 = "^2.9.10"
+pydantic = "^2.9.2"
+python-multipart = "^0.0.17"
 python-dotenv = "^1.0.1"
 resend = "^2.4.0"
 bcrypt = "^4.2.0"
+fastapi = "^0.115.5"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -26,6 +26,7 @@ graphviz = "^0.20.3"
 quarto = "^0.1.0"
 mypy = "^1.11.2"
 jupyter = "^1.1.1"
+notebook = "^7.2.2"
 
 [build-system]
 requires = ["poetry-core"]

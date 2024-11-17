@@ -67,7 +67,7 @@ async def password_validation_exception_handler(request: Request, exc: PasswordV
         {
             "request": request,
             "status_code": 422,
-            "errors": {exc.detail["field"]: exc.detail["message"]}
+            "errors": {"error": exc.detail}
         },
         status_code=422,
     )

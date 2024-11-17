@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
+from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
 from utils.db import User
 from utils.auth import (
@@ -255,7 +255,7 @@ async def reset_password(
     authorized_user, reset_token = get_user_from_reset_token(
         user.email, user.token, session)
 
-    if not authorized_user:
+    if not authorized_user or not reset_token:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
     # Update password and mark token as used

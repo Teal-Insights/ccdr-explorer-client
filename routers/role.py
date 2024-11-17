@@ -4,7 +4,7 @@ from logging import getLogger
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 from utils.db import Role, RolePermissionLink, ValidPermissions, get_session, utc_time
 
 logger = getLogger("uvicorn.error")
@@ -37,12 +37,13 @@ class RoleRead(BaseModel):
 class RoleUpdate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    id: int
     name: str
     permissions: List[ValidPermissions]
 
     @classmethod
-    async def as_form(cls, name: str = Form(...), permissions: List[ValidPermissions] = Form(...)):
-        return cls(name=name, permissions=permissions)
+    async def as_form(cls, id: int = Form(...), name: str = Form(...), permissions: List[ValidPermissions] = Form(...)):
+        return cls(id=id, name=name, permissions=permissions)
 
 
 @router.post("/", response_class=RedirectResponse)
@@ -56,30 +57,29 @@ def create_role(
 
     # Create role and permissions in a single transaction
     db_role = Role(name=role.name)
-    session.add(db_role)
-    session.commit()
-    session.refresh(db_role)
 
-    for permission in role.permissions:
-        db_role_permission_link = RolePermissionLink(
-            role_id=db_role.id,
-            permission_id=permission.name
-        )
-        session.add(db_role_permission_link)
-    session.commit()
+    # Create RolePermissionLink objects and associate them with the role
+    db_role.permissions = [
+        RolePermissionLink(permission_id=permission.name)
+        for permission in role.permissions
+    ]
+
+    session.add(db_role)
+    session.commit()  # Commit once after all operations
 
     return RedirectResponse(url="/roles", status_code=303)
 
 
 @router.get("/{role_id}", response_model=RoleRead)
 def read_role(role_id: int, session: Session = Depends(get_session)):
-    db_role = session.get(Role, role_id)
-    if not db_role:
+    db_role: Role | None = session.get(Role, role_id)
+    if not db_role or not db_role.id or db_role.deleted:
         raise HTTPException(status_code=404, detail="Role not found")
 
     permissions = [
         ValidPermissions(link.permission.name)
         for link in db_role.role_permission_links
+        if link.permission is not None
     ]
 
     return RoleRead(
@@ -94,12 +94,11 @@ def read_role(role_id: int, session: Session = Depends(get_session)):
 
 @router.put("/{role_id}", response_class=RedirectResponse)
 def update_role(
-    role_id: int,
     role: RoleUpdate = Depends(RoleUpdate.as_form),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
-    db_role = session.get(Role, role_id)
-    if not db_role:
+    db_role: Role | None = session.get(Role, role.id)
+    if not db_role or not db_role.id or db_role.deleted:
         raise HTTPException(status_code=404, detail="Role not found")
     role_data = role.model_dump(exclude_unset=True)
     for key, value in role_data.items():
@@ -108,9 +107,8 @@ def update_role(
     session.add(db_role)
     session.commit()
 
-    # Update RolePermissionLinks
-    session.exec(select(RolePermissionLink).where(
-        RolePermissionLink.role_id == role_id)).delete()
+    # Correctly delete RolePermissionLinks for the role
+    session.delete(RolePermissionLink.role_id == role.id)
 
     for permission in role.permissions:
         db_role_permission_link = RolePermissionLink(
@@ -121,7 +119,7 @@ def update_role(
 
     session.commit()
     session.refresh(db_role)
-    return RedirectResponse(url=f"/roles/{role_id}", status_code=303)
+    return RedirectResponse(url=f"/roles/{role.id}", status_code=303)
 
 
 @router.delete("/{role_id}", response_class=RedirectResponse)

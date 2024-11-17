@@ -6,7 +6,7 @@ import uuid
 import logging
 import resend
 from dotenv import load_dotenv
-from pydantic import field_validator
+from pydantic import field_validator, BaseModel
 from sqlmodel import Session, select
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
@@ -64,8 +64,7 @@ def create_password_validator(field_name: str = "password"):
         A configured field_validator for password validation
     """
     @field_validator(field_name, check_fields=False)
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
+    def validate_password_strength(v: str) -> str:
         """
         Validate password meets security requirements:
         - At least one number
@@ -100,9 +99,8 @@ def create_passwords_match_validator(password_field: str, confirm_field: str):
         A configured field_validator for password matching validation
     """
     @field_validator(confirm_field)
-    @classmethod
-    def passwords_match(cls, v: str, values: dict) -> str:
-        if password_field in values.data and v != values.data[password_field]:
+    def passwords_match(v: str, values: BaseModel) -> str:
+        if password_field in values.__dict__ and v != values.__dict__[password_field]:
             raise PasswordMismatchError(field=confirm_field)
         return v
 
@@ -176,7 +174,7 @@ def validate_token_and_get_user(
     token: str,
     token_type: str,
     session: Session
-) -> Optional[tuple[User, Optional[str], Optional[str]]]:
+) -> tuple[Optional[User], Optional[str], Optional[str]]:
     decoded_token = validate_token(token, token_type=token_type)
     if decoded_token:
         user_email = decoded_token.get("sub")
@@ -196,7 +194,7 @@ def validate_token_and_get_user(
 def get_user_from_tokens(
     tokens: tuple[Optional[str], Optional[str]],
     session: Session
-) -> Optional[tuple[User, Optional[str], Optional[str]]]:
+) -> tuple[Optional[User], Optional[str], Optional[str]]:
     access_token, refresh_token = tokens
 
     # Try to validate the access token first
@@ -212,6 +210,7 @@ def get_user_from_tokens(
         if user:
             return user, new_access_token, new_refresh_token
 
+    # Return a tuple of None values if no valid user is found
     return None, None, None
 
 
@@ -289,8 +288,8 @@ def send_reset_email(email: str, session: Session):
                 "html": f"<p>Click <a href='{os.getenv('BASE_URL')}/reset_password?email={email}&token={token}'>here</a> to reset your password.</p>",
             }
 
-            email: resend.Email = resend.Emails.send(params)
-            logger.debug("Password reset email sent.")
+            sent_email: resend.Email = resend.Emails.send(params)
+            logger.debug(f"Password reset email sent: {sent_email.get('id')}")
 
             session.commit()
         except Exception as e:
@@ -300,7 +299,7 @@ def send_reset_email(email: str, session: Session):
         logger.debug("No user found with the provided email.")
 
 
-def get_user_from_reset_token(email: str, token: str, session: Session) -> Optional[User]:
+def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple[Optional[User], Optional[PasswordResetToken]]:
     reset_token = session.exec(select(PasswordResetToken).where(
         PasswordResetToken.token == token,
         PasswordResetToken.expires_at > datetime.now(UTC),
@@ -308,7 +307,7 @@ def get_user_from_reset_token(email: str, token: str, session: Session) -> Optio
     )).first()
 
     if not reset_token:
-        return None
+        return None, None
 
     user = session.exec(select(User).where(
         User.email == email,
