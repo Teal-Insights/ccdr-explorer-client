@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from datetime import timedelta
+from unittest.mock import patch
+import resend
 
 from main import app
 from utils.models import User, PasswordResetToken
@@ -49,6 +51,24 @@ def test_user_fixture(session: Session):
     session.commit()
     session.refresh(user)
     return user
+
+
+# Mock email response fixture
+@pytest.fixture
+def mock_email_response():
+    """
+    Returns a mock Email response object
+    """
+    return resend.Email(id="6229f547-f3f6-4eb8-b0dc-82c1b09121b6")
+
+
+@pytest.fixture
+def mock_resend_send(mock_email_response):
+    """
+    Patches resend.Emails.send to return a mock response
+    """
+    with patch('resend.Emails.send', return_value=mock_email_response) as mock:
+        yield mock
 
 
 # --- Authentication Helper Function Tests ---
@@ -166,40 +186,56 @@ def test_refresh_token_endpoint(client: TestClient, test_user: User):
     assert decoded["sub"] == test_user.email
 
 
-# # TODO: Mock email sending
-# def test_password_reset_flow(client: TestClient, session: Session, test_user: User):
-#     # Test forgot password request
-#     response = client.post(
-#         "/auth/forgot_password",
-#         data={"email": test_user.email},
-#         follow_redirects=False
-#     )
-#     assert response.status_code == 303
+def test_password_reset_flow(client: TestClient, session: Session, test_user: User, mock_resend_send):
+    # Test forgot password request
+    response = client.post(
+        "/auth/forgot_password",
+        data={"email": test_user.email},
+        follow_redirects=False
+    )
+    assert response.status_code == 303
 
-#     # Verify reset token was created
-#     reset_token = session.exec(select(PasswordResetToken)
-#                                .where(PasswordResetToken.user_id == test_user.id)).first()
-#     assert reset_token is not None
-#     assert not reset_token.used
+    # Verify the email was "sent" with correct parameters
+    mock_resend_send.assert_called_once()
+    call_args = mock_resend_send.call_args[0][0]  # Get the SendParams argument
 
-#     # Test password reset
-#     response = client.post(
-#         "/auth/reset_password",
-#         data={
-#             "email": test_user.email,
-#             "token": reset_token.token,
-#             "new_password": "NewPass123!@#",
-#             "confirm_new_password": "NewPass123!@#"
-#         },
-#         follow_redirects=False
-#     )
-#     assert response.status_code == 303
+    # Verify SendParams structure and required fields
+    assert isinstance(call_args, dict)
+    assert isinstance(call_args["from"], str)
+    assert isinstance(call_args["to"], list)
+    assert isinstance(call_args["subject"], str)
+    assert isinstance(call_args["html"], str)
 
-#     # Verify password was updated and token was marked as used
-#     session.refresh(test_user)
-#     session.refresh(reset_token)
-#     assert verify_password("NewPass123!@#", test_user.hashed_password)
-#     assert reset_token.used
+    # Verify content
+    assert call_args["to"] == [test_user.email]
+    assert call_args["from"] == "noreply@promptlytechnologies.com"
+    assert "Password Reset Request" in call_args["subject"]
+    assert "reset_password" in call_args["html"]
+
+    # Verify reset token was created
+    reset_token = session.exec(select(PasswordResetToken)
+                               .where(PasswordResetToken.user_id == test_user.id)).first()
+    assert reset_token is not None
+    assert not reset_token.used
+
+    # Test password reset
+    response = client.post(
+        "/auth/reset_password",
+        data={
+            "email": test_user.email,
+            "token": reset_token.token,
+            "new_password": "NewPass123!@#",
+            "confirm_new_password": "NewPass123!@#"
+        },
+        follow_redirects=False
+    )
+    assert response.status_code == 303
+
+    # Verify password was updated and token was marked as used
+    session.refresh(test_user)
+    session.refresh(reset_token)
+    assert verify_password("NewPass123!@#", test_user.hashed_password)
+    assert reset_token.used
 
 
 def test_logout_endpoint(client: TestClient):
