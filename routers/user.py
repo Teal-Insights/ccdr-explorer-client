@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session
-from utils.db import User
+from utils.models import User
 from utils.auth import get_session, get_authenticated_user, verify_password
 
 router = APIRouter(prefix="/user", tags=["user"])

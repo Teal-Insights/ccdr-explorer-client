@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
-from utils.db import User
+from utils.models import User
 from utils.auth import (
     get_session,
     get_user_from_reset_token,

@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select
-from utils.db import Organization, get_session
+from utils.db import get_session
+from utils.models import Organization
 from datetime import datetime
 
 logger = getLogger("uvicorn.error")

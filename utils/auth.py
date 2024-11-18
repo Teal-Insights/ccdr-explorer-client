@@ -6,13 +6,14 @@ import uuid
 import logging
 import resend
 from dotenv import load_dotenv
-from pydantic import field_validator, BaseModel
+from pydantic import field_validator, ValidationInfo
 from sqlmodel import Session, select
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from fastapi import Depends, Cookie, HTTPException, status
-from utils.db import get_session, User, PasswordResetToken
+from utils.db import get_session
+from utils.models import User, PasswordResetToken
 
 load_dotenv()
 logger = logging.getLogger("uvicorn.error")
@@ -99,8 +100,8 @@ def create_passwords_match_validator(password_field: str, confirm_field: str):
         A configured field_validator for password matching validation
     """
     @field_validator(confirm_field)
-    def passwords_match(v: str, values: BaseModel) -> str:
-        if password_field in values.__dict__ and v != values.__dict__[password_field]:
+    def passwords_match(v: str, values: ValidationInfo) -> str:
+        if password_field in values.data and v != values.data[password_field]:
             raise PasswordMismatchError(field=confirm_field)
         return v
 

@@ -4,8 +4,9 @@ from logging import getLogger
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
-from sqlmodel import Session, select, delete
-from utils.db import Role, RolePermissionLink, ValidPermissions, get_session, utc_time
+from sqlmodel import Session, select
+from utils.db import get_session
+from utils.models import Role, RolePermissionLink, ValidPermissions, utc_time
 
 logger = getLogger("uvicorn.error")
 
