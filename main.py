@@ -1,5 +1,3 @@
-# ToDo: Add CSRF protection to all POST, download, and sensitive data routes
-
 import logging
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -201,7 +199,7 @@ async def read_terms_of_service(params: dict = Depends(common_unauthenticated_pa
     return templates.TemplateResponse(params["request"], "terms_of_service.html", params)
 
 
-@app.get("/reset_password")
+@app.get("/auth/reset_password")
 async def read_reset_password(
     email: str,
     token: str,
