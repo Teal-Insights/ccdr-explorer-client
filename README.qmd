@@ -152,12 +152,6 @@ To use password recovery, register a [Resend](https://resend.com/) account, veri
 docker compose up -d
 ```
 
-### Create database tables and default permissions/roles
-
-``` bash
-python migrations/set_up_db.py --drop
-```
-
 ### Run the development server
 
 Make sure the development database is running and tables and default permissions/roles are created first.

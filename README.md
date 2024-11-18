@@ -136,12 +136,6 @@ account, verify a domain, get an API key, and paste the API key into the
 docker compose up -d
 ```
 
-### Create database tables and default permissions/roles
-
-``` bash
-python migrations/set_up_db.py --drop
-```
-
 ### Run the development server
 
 Make sure the development database is running and tables and default
