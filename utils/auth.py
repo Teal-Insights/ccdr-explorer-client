@@ -286,7 +286,7 @@ def send_reset_email(email: str, session: Session):
                 "from": "noreply@promptlytechnologies.com",
                 "to": [email],
                 "subject": "Password Reset Request",
-                "html": f"<p>Click <a href='{os.getenv('BASE_URL')}/reset_password?email={email}&token={token}'>here</a> to reset your password.</p>",
+                "html": f"<p>Click <a href='{os.getenv('BASE_URL')}/auth/reset_password?email={email}&token={token}'>here</a> to reset your password.</p>",
             }
 
             sent_email: resend.Email = resend.Emails.send(params)
