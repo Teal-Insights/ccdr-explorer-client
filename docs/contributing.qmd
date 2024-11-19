@@ -8,11 +8,16 @@ Fork the repository, create a new branch, make your changes, and submit a pull r
 
 ### Render the documentation
 
-The documentation is rendered with [Quarto](https://quarto.org/docs/). Make changes to the `.qmd` files in the `docs` folder. Then run the following command to render:
+The README and documentation website are rendered with [Quarto](https://quarto.org/docs/). Make changes to the `.qmd` files in the root folder and the `docs` folder. Then run the following commands to render:
 
 ``` bash
+# To render the documentation website
 quarto render
+# To render the README
+quarto render index.qmd --output-dir . --output README.md --to gfm
 ```
+
+Due to a quirk of Quarto, an unnecessary `index.html` file is created in the root folder when the README is rendered. This file can be safely deleted.
 
 ## Maintainers
 

@@ -6,7 +6,7 @@ website:
   title: "FastAPI Webapp Template"
   navbar:
     left:
-      - href: docs/index.qmd
+      - href: index.qmd
         text: Home
       - href: docs/architecture.qmd
         text: Architecture
