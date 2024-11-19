@@ -25,12 +25,14 @@ The design philosophy of the template is to prefer low-level, best-in-class open
 ## Tech stack
 
 **Core frameworks:**
+
 - [FastAPI](https://fastapi.tiangolo.com/): scalable, high-performance, type-annotated Python web backend framework
 - [PostgreSQL](https://www.postgresql.org/): the world's most advanced open-source database engine
 - [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/): frontend HTML templating engine
 - [SQLModel](https://sqlmodel.tiangolo.com/): easy-to-use Python ORM
 
 **Additional technologies:**
+
 - [Poetry](https://python-poetry.org/): Python dependency manager
 - [Pytest](https://docs.pytest.org/en/7.4.x/): testing framework
 - [Docker](https://www.docker.com/): development containerization
