@@ -12,18 +12,34 @@ This application uses a Post-Redirect-Get (PRG) pattern. The user submits a form
 from graphviz import Digraph
 
 dot = Digraph()
+dot.attr(rankdir='TB')
+dot.attr('node', shape='box', style='rounded')
 
-dot.node('A', 'User submits form')
-dot.node('B', 'HTML/JS form validation')
-dot.node('C', 'Convert to Pydantic model')
-dot.node('D', 'Optional custom validation')
-dot.node('E', 'Update database')
-dot.node('F', 'Middleware error handler')
-dot.node('G', 'Render error template')
-dot.node('H', 'Redirect to GET endpoint')
-dot.node('I', 'Fetch updated data')
-dot.node('J', 'Re-render Jinja2 page template')
+# Create client subgraph at top
+with dot.subgraph(name='cluster_client') as client:
+    client.attr(label='Client')
+    client.attr(rank='topmost')
+    client.node('A', 'User submits form', fillcolor='lightblue', style='rounded,filled')
+    client.node('B', 'HTML/JS form validation', fillcolor='lightblue', style='rounded,filled')
 
+# Create server subgraph below
+with dot.subgraph(name='cluster_server') as server:
+    server.attr(label='Server')
+    server.node('C', 'Convert to Pydantic model', fillcolor='lightgreen', style='rounded,filled')
+    server.node('D', 'Optional custom validation', fillcolor='lightgreen', style='rounded,filled')
+    server.node('E', 'Update database', fillcolor='lightgreen', style='rounded,filled')
+    server.node('F', 'Middleware error handler', fillcolor='lightgreen', style='rounded,filled')
+    server.node('G', 'Render error template', fillcolor='lightgreen', style='rounded,filled')
+    server.node('H', 'Redirect to GET endpoint', fillcolor='lightgreen', style='rounded,filled')
+    server.node('I', 'Fetch updated data', fillcolor='lightgreen', style='rounded,filled')
+    server.node('K', 'Re-render Jinja2 page template', fillcolor='lightgreen', style='rounded,filled')
+
+with dot.subgraph(name='cluster_client_post') as client_post:
+    client_post.attr(label='Client')
+    client_post.attr(rank='bottommost')
+    client_post.node('J', 'Display rendered page', fillcolor='lightblue', style='rounded,filled')
+
+# Add visible edges
 dot.edge('A', 'B')
 dot.edge('B', 'A')
 dot.edge('B', 'C', label='POST Request to FastAPI endpoint')
@@ -33,12 +49,14 @@ dot.edge('D', 'E', label='Valid data')
 dot.edge('D', 'F', label='Custom Validation Error')
 dot.edge('E', 'H', label='Data updated')
 dot.edge('H', 'I')
-dot.edge('I', 'J')
+dot.edge('I', 'K')
+dot.edge('K', 'J', label='Return HTML')
 dot.edge('F', 'G')
+dot.edge('G', 'J', label='Return HTML')
 
-dot.render('static/webapp_flow', format='png', cleanup=True)
+dot.render('static/data_flow', format='png', cleanup=True)
 ```
 
-![Data flow diagram](static/webapp_flow.png)
+![Data flow diagram](static/data_flow.png)
 
 The advantage of the PRG pattern is that it is very straightforward to implement and keeps most of the rendering logic on the server side. The disadvantage is that it requires an extra round trip to the database to fetch the updated data, and re-rendering the entire page template may be less efficient than a partial page update on the client side.

@@ -10,10 +10,10 @@ website:
         text: Home
       - href: docs/architecture.qmd
         text: Architecture
-      - href: docs/installation.qmd
-        text: Installation
       - href: docs/authentication.qmd
         text: Authentication
+      - href: docs/installation.qmd
+        text: Installation
       - href: docs/customization.qmd
         text: Customization
       - href: docs/deployment.qmd
