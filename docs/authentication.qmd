@@ -2,7 +2,7 @@
 title: "Authentication"
 ---
 
-## Authentication Flow
+## Security features
 
 This template implements a comprehensive authentication system with security best practices:
 
@@ -30,9 +30,9 @@ This template implements a comprehensive authentication system with security bes
    - Security-related errors don't leak information
    - Comprehensive error logging
    
-The diagrams below show the main authentication flows and security measures.
+The diagrams below show the main authentication flows.
 
-### Registration and Login Flow
+### Registration and login flow
 
 ``` {python}
 #| echo: false
@@ -47,25 +47,25 @@ auth.attr('node', shape='box', style='rounded')
 # Client-side nodes
 with auth.subgraph(name='cluster_client') as client:
     client.attr(label='Client')
-    client.node('register_form', 'Submit registration')
-    client.node('login_form', 'Submit login')
-    client.node('store_cookies', 'Store secure cookies')
+    client.node('register_form', 'Submit registration', fillcolor='lightblue', style='rounded,filled')
+    client.node('login_form', 'Submit login', fillcolor='lightblue', style='rounded,filled')
+    client.node('store_cookies', 'Store secure cookies', fillcolor='lightblue', style='rounded,filled')
 
 # Server-side nodes
 with auth.subgraph(name='cluster_server') as server:
     server.attr(label='Server')
     # Registration path
-    server.node('validate_register', 'Validate registration data')
-    server.node('hash_new', 'Hash new password')
-    server.node('store_user', 'Store user in database')
+    server.node('validate_register', 'Validate registration data', fillcolor='lightgreen', style='rounded,filled')
+    server.node('hash_new', 'Hash new password', fillcolor='lightgreen', style='rounded,filled')
+    server.node('store_user', 'Store user in database', fillcolor='lightgreen', style='rounded,filled')
     
     # Login path
-    server.node('validate_login', 'Validate login data')
-    server.node('verify_password', 'Verify password hash')
-    server.node('fetch_user', 'Fetch user from database')
+    server.node('validate_login', 'Validate login data', fillcolor='lightgreen', style='rounded,filled')
+    server.node('verify_password', 'Verify password hash', fillcolor='lightgreen', style='rounded,filled')
+    server.node('fetch_user', 'Fetch user from database', fillcolor='lightgreen', style='rounded,filled')
     
     # Common path
-    server.node('generate_tokens', 'Generate JWT tokens')
+    server.node('generate_tokens', 'Generate JWT tokens', fillcolor='lightgreen', style='rounded,filled')
 
 # Registration path
 auth.edge('register_form', 'validate_register', 'POST /register')
@@ -85,9 +85,9 @@ auth.edge('generate_tokens', 'store_cookies', 'Set-Cookie')
 auth.render('static/auth_flow', format='png', cleanup=True)
 ```
 
-![Registration and Login Flow](static/auth_flow.png)
+![Registration and login flow](static/auth_flow.png)
 
-### Password Reset Flow
+### Password reset flow
 
 ``` {python}
 #| echo: false
@@ -99,19 +99,17 @@ reset = Digraph(name='reset_flow')
 reset.attr(rankdir='TB')
 reset.attr('node', shape='box', style='rounded')
 
-# Client-side nodes
-reset.attr(label='Client')
-reset.node('forgot', 'User submits forgot password form')
-reset.node('reset', 'User submits reset password form')
-reset.node('email_client', 'User clicks reset link')
+# Client-side nodes - using light blue fill
+reset.node('forgot', 'User submits forgot password form', fillcolor='lightblue', style='rounded,filled')
+reset.node('reset', 'User submits reset password form', fillcolor='lightblue', style='rounded,filled')
+reset.node('email_client', 'User clicks reset link', fillcolor='lightblue', style='rounded,filled')
 
-# Server-side nodes
-reset.attr(label='Server')
-reset.node('validate', 'Validation')
-reset.node('token_gen', 'Generate reset token')
-reset.node('hash', 'Hash password')
-reset.node('email_server', 'Send email with Resend')
-reset.node('db', 'Database', shape='cylinder')
+# Server-side nodes - using light green fill
+reset.node('validate', 'Validation', fillcolor='lightgreen', style='rounded,filled')
+reset.node('token_gen', 'Generate reset token', fillcolor='lightgreen', style='rounded,filled')
+reset.node('hash', 'Hash password', fillcolor='lightgreen', style='rounded,filled')
+reset.node('email_server', 'Send email with Resend', fillcolor='lightgreen', style='rounded,filled')
+reset.node('db', 'Database', shape='cylinder', fillcolor='lightgreen', style='filled')
 
 # Add edges with labels
 reset.edge('forgot', 'token_gen', 'POST')
@@ -126,4 +124,4 @@ reset.edge('hash', 'db', 'Update')
 reset.render('static/reset_flow', format='png', cleanup=True)
 ```
 
-![Password Reset Flow](static/reset_flow.png)
+![Password reset flow](static/reset_flow.png)
