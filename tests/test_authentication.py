@@ -1,9 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
+from starlette.datastructures import URLPath
 from sqlmodel import Session, select
 from datetime import timedelta
 from unittest.mock import patch
 import resend
+from urllib.parse import urlparse, parse_qs
 
 from main import app
 from utils.models import User, PasswordResetToken
@@ -13,7 +15,8 @@ from utils.auth import (
     create_refresh_token,
     verify_password,
     get_password_hash,
-    validate_token
+    validate_token,
+    generate_password_reset_url
 )
 
 
@@ -292,3 +295,69 @@ def test_password_reset_with_invalid_token(client: TestClient, test_user: User):
         }
     )
     assert response.status_code == 400
+
+
+def test_password_reset_url_generation(client: TestClient):
+    """
+    Tests that the password reset URL is correctly formatted and contains
+    the required query parameters.
+    """
+    test_email = "test@example.com"
+    test_token = "abc123"
+
+    url = generate_password_reset_url(test_email, test_token)
+
+    # Parse the URL
+    parsed = urlparse(url)
+    query_params = parse_qs(parsed.query)
+
+    # Get the actual path from the FastAPI app
+    reset_password_path: URLPath = app.url_path_for("reset_password")
+
+    # Verify URL path
+    assert parsed.path == str(reset_password_path)
+
+    # Verify query parameters
+    assert "email" in query_params
+    assert "token" in query_params
+    assert query_params["email"][0] == test_email
+    assert query_params["token"][0] == test_token
+
+
+def test_password_reset_email_url(client: TestClient, session: Session, test_user: User, mock_resend_send):
+    """
+    Tests that the password reset email contains a properly formatted reset URL.
+    """
+    response = client.post(
+        "/auth/forgot_password",
+        data={"email": test_user.email},
+        follow_redirects=False
+    )
+    assert response.status_code == 303
+
+    # Get the reset token from the database
+    reset_token = session.exec(select(PasswordResetToken)
+                               .where(PasswordResetToken.user_id == test_user.id)).first()
+    assert reset_token is not None
+
+    # Get the actual path from the FastAPI app
+    reset_password_path: URLPath = app.url_path_for("reset_password")
+
+    # Verify the email HTML contains the correct URL
+    mock_resend_send.assert_called_once()
+    call_args = mock_resend_send.call_args[0][0]
+    html_content = call_args["html"]
+
+    # Extract URL from HTML
+    import re
+    url_match = re.search(r'href=[\'"]([^\'"]*)[\'"]', html_content)
+    assert url_match is not None
+    reset_url = url_match.group(1)
+
+    # Parse and verify the URL
+    parsed = urlparse(reset_url)
+    query_params = parse_qs(parsed.query)
+
+    assert parsed.path == str(reset_password_path)
+    assert query_params["email"][0] == test_user.email
+    assert query_params["token"][0] == reset_token.token
