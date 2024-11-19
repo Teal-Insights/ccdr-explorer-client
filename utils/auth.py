@@ -258,6 +258,21 @@ class NeedsNewTokens(Exception):
         self.refresh_token = refresh_token
 
 
+def generate_password_reset_url(email: str, token: str) -> str:
+    """
+    Generates the password reset URL with proper query parameters.
+
+    Args:
+        email: User's email address
+        token: Password reset token
+
+    Returns:
+        Complete password reset URL
+    """
+    base_url = os.getenv('BASE_URL')
+    return f"{base_url}/auth/reset_password?email={email}&token={token}"
+
+
 def send_reset_email(email: str, session: Session):
     # Check for an existing unexpired token
     user = session.exec(select(User).where(User.email == email)).first()
@@ -281,12 +296,12 @@ def send_reset_email(email: str, session: Session):
         session.add(reset_token)
 
         try:
-            # TODO: Use a templating engine
+            reset_url = generate_password_reset_url(email, token)
             params: resend.Emails.SendParams = {
                 "from": "noreply@promptlytechnologies.com",
                 "to": [email],
                 "subject": "Password Reset Request",
-                "html": f"<p>Click <a href='{os.getenv('BASE_URL')}/reset_password?email={email}&token={token}'>here</a> to reset your password.</p>",
+                "html": f"<p>Click <a href='{reset_url}'>here</a> to reset your password.</p>",
             }
 
             sent_email: resend.Email = resend.Emails.send(params)
