@@ -1,0 +1,44 @@
+---
+title: "Architecture"
+---
+
+## Architecture
+
+This application uses a Post-Redirect-Get (PRG) pattern. The user submits a form, which sends a POST request to a FastAPI endpoint on the server. The database is updated, and the user is redirected to a GET endpoint, which fetches the updated data and re-renders the Jinja2 page template with the new data.
+
+``` {python}
+#| echo: false
+#| include: false
+from graphviz import Digraph
+
+dot = Digraph()
+
+dot.node('A', 'User submits form')
+dot.node('B', 'HTML/JS form validation')
+dot.node('C', 'Convert to Pydantic model')
+dot.node('D', 'Optional custom validation')
+dot.node('E', 'Update database')
+dot.node('F', 'Middleware error handler')
+dot.node('G', 'Render error template')
+dot.node('H', 'Redirect to GET endpoint')
+dot.node('I', 'Fetch updated data')
+dot.node('J', 'Re-render Jinja2 page template')
+
+dot.edge('A', 'B')
+dot.edge('B', 'A')
+dot.edge('B', 'C', label='POST Request to FastAPI endpoint')
+dot.edge('C', 'D')
+dot.edge('C', 'F', label='RequestValidationError')
+dot.edge('D', 'E', label='Valid data')
+dot.edge('D', 'F', label='Custom Validation Error')
+dot.edge('E', 'H', label='Data updated')
+dot.edge('H', 'I')
+dot.edge('I', 'J')
+dot.edge('F', 'G')
+
+dot.render('static/webapp_flow', format='png', cleanup=True)
+```
+
+![Webapp Flow](static/webapp_flow.png)
+
+The advantage of the PRG pattern is that it is very straightforward to implement and keeps most of the rendering logic on the server side. The disadvantage is that it requires an extra round trip to the database to fetch the updated data, and re-rendering the entire page template may be less efficient than a partial page update on the client side.

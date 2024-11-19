@@ -1,0 +1,33 @@
+---
+title: "Contributing"
+---
+
+## Contributors
+
+Fork the repository, create a new branch, make your changes, and submit a pull request.
+
+### Render the documentation
+
+The documentation is rendered with [Quarto](https://quarto.org/docs/). Make changes to the `.qmd` files in the `docs` folder. Then run the following command to render:
+
+``` bash
+quarto render
+```
+
+## Maintainers
+
+### Increment the version
+
+Run the following command to increment the version:
+
+``` bash
+poetry version patch minor
+```
+
+### Publish the documentation
+
+To publish the documentation to GitHub Pages, run the following command:
+
+``` bash
+quarto publish gh-pages
+```
