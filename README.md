@@ -23,6 +23,43 @@ disadvantage is that it requires an extra round trip to the database to
 fetch the updated data, and re-rendering the entire page template may be
 less efficient than a partial page update on the client side.
 
+### Authentication Flow
+
+This application implements a comprehensive authentication system with
+security best practices. The diagrams below show the main authentication
+flows and security measures.
+
+#### Registration and Login Flow
+
+![Registration and Login Flow](static/auth_flow.png)
+
+#### Password Reset Flow
+
+![Password Reset Flow](static/reset_flow.png)
+
+The authentication system implements multiple security measures:
+
+1.  **Token Security**:
+    - JWT-based with separate access/refresh tokens
+    - Strict expiry times (30 min access, 30 day refresh)
+    - Token type validation
+    - HTTP-only cookies
+    - Secure flag enabled
+    - SameSite=strict restriction
+2.  **Password Security**:
+    - Strong password requirements enforced
+    - Bcrypt hashing with random salt
+    - Password reset tokens are single-use
+    - Reset tokens have expiration
+3.  **Cookie Security**:
+    - HTTP-only prevents JavaScript access
+    - Secure flag ensures HTTPS only
+    - Strict SameSite prevents CSRF
+4.  **Error Handling**:
+    - Validation errors properly handled
+    - Security-related errors don’t leak information
+    - Comprehensive error logging
+
 ### Install development dependencies in a VSCode Dev Container
 
 If you use VSCode with Docker to develop in a container, the following
