@@ -1,0 +1,27 @@
+project:
+  type: website
+  output-dir: _docs
+
+website:
+  title: "FastAPI Webapp Template"
+  navbar:
+    left:
+      - href: docs/index.qmd
+        text: Home
+      - href: docs/architecture.qmd
+        text: Architecture
+      - href: docs/installation.qmd
+        text: Installation
+      - href: docs/authentication.qmd
+        text: Authentication
+      - href: docs/customization.qmd
+        text: Customization
+      - href: docs/deployment.qmd
+        text: Deployment
+      - href: docs/contributing.qmd
+        text: Contributing
+format:
+  html:
+    theme: cosmo
+    css: docs/static/styles.css
+    toc: true
