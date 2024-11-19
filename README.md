@@ -8,7 +8,7 @@ This README provides a high-level overview. See the **[full documentation websit
 
 ## Features
 
-*FastAPI, Jinja2, PostgreSQL Webapp Template* combines three of the most lightweight and performant open-source web development frameworks in existence into a customizable webapp template with:
+*FastAPI, Jinja2, PostgreSQL Webapp Template* combines three of the most lightweight and performant open-source web development frameworks into a customizable webapp template with:
 
 - Pure Python backend
 - Low-Javascript frontend
