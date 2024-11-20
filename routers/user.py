@@ -77,6 +77,6 @@ async def delete_account(
     # Mark the user as deleted
     current_user.deleted = True
     session.commit()
-    #Deletes user
+    # Deletes user
     session.delete(current_user)
     return RedirectResponse(url="/", status_code=303)
