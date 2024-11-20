@@ -20,6 +20,14 @@ website:
         text: Deployment
       - href: docs/contributing.qmd
         text: Contributing
+    right:
+      - icon: github
+        href: https://github.com/promptly-technologies-llc/fastapi-jinja2-postgres-webapp
+  page-footer:
+    left: "Copyright 2024, Promptly Technologies, LLC. MIT License."
+    right:
+      - icon: github
+        href: https://github.com/promptly-technologies-llc/fastapi-jinja2-postgres-webapp
 format:
   html:
     theme: cosmo
