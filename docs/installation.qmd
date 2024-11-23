@@ -2,7 +2,7 @@
 title: "Installation"
 ---
 
-## Install development dependencies in a VSCode Dev Container
+## Install all dependencies in a VSCode Dev Container
 
 If you use VSCode with Docker to develop in a container, the following VSCode Dev Container configuration will install all dependencies:
 
@@ -45,27 +45,6 @@ For Windows:
 
 - No installation required
 
-### Quarto CLI and Graphviz
-
-- [Quarto CLI](https://quarto.org/docs/get-started/)
-
-
-For macOS:
-
-``` bash
-brew install graphviz
-```
-
-For Ubuntu/Debian:
-
-``` bash
-sudo apt update && sudo apt install -y graphviz
-```
-
-For Windows:
-
-- Download and install from [Graphviz.org](https://graphviz.org/download/#windows)
-
 ### Python dependencies
 
 1.  Install Poetry
@@ -87,6 +66,32 @@ poetry shell
 ```
 
 (Note: You will need to activate the shell every time you open a new terminal session. Alternatively, you can use the `poetry run` prefix before other commands to run them without activating the shell.)
+
+## Install documentation dependencies manually
+
+### Quarto CLI
+
+To render the project documentation, you will need to download and install the [Quarto CLI](https://quarto.org/docs/get-started/) for your operating system.
+
+### Graphviz
+
+Architecture diagrams in the documentation are rendered with [Graphviz](https://graphviz.org/).
+
+For macOS:
+
+``` bash
+brew install graphviz
+```
+
+For Ubuntu/Debian:
+
+``` bash
+sudo apt update && sudo apt install -y graphviz
+```
+
+For Windows:
+
+- Download and install from [Graphviz.org](https://graphviz.org/download/#windows)
 
 ## Set environment variables
 
