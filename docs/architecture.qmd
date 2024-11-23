@@ -95,12 +95,74 @@ The best solution, I think, is to use really robust client-side form validation 
 
 Here are some patterns we've considered for server-side error handling:
 
-| ID | Approach | Returns to same page | Preserves form inputs | Follows PRG pattern | Complexity |
-|-----|----------|-------------------|-------------------|------------------|------------|
-| 1 | Validate with Pydantic dependency, catch and redirect from middleware (with exception message as context) to an error page with "go back" button | No | Yes | Yes | Low |
-| 2 | Validate in FastAPI endpoint function body, redirect to origin page with error message query param | Yes | No | Yes | Medium |
-| 3 | Validate in FastAPI endpoint function body, redirect to origin page with error message query param and form inputs as context | Yes | Yes | Yes | High |
-| 4 | Validate with Pydantic dependency, use session context to get form inputs from request, redirect to origin page from middleware with exception message and form inputs as context so we can re-render page with original form inputs | Yes | Yes | Yes | High |
-| 5 | Validate in either Pydantic dependency or function endpoint body and directly return error message in JSON, then mount it with HTMX or some simple layout-level Javascript | Yes | Yes | No | Low |
+<style>
+.styled-table, .styled-table th, .styled-table td {
+  border: 1px solid black;
+  padding: 8px;
+  border-collapse: collapse;
+}
+
+.styled-table th:nth-child(1) { width: 5%; }
+.styled-table th:nth-child(2) { width: 50%; }
+.styled-table th:nth-child(3), 
+.styled-table th:nth-child(4),
+.styled-table th:nth-child(5) { width: 15%; }
+.styled-table th:nth-child(6) { width: 10%; }
+</style>
+
+<table class="styled-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Approach</th>
+      <th>Returns to same page</th>
+      <th>Preserves form inputs</th>
+      <th>Follows PRG pattern</th>
+      <th>Complexity</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>Validate with Pydantic dependency, catch and redirect from middleware (with exception message as context) to an error page with "go back" button</td>
+      <td>No</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Low</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>Validate in FastAPI endpoint function body, redirect to origin page with error message query param</td>
+      <td>Yes</td>
+      <td>No</td>
+      <td>Yes</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>Validate in FastAPI endpoint function body, redirect to origin page with error message query param and form inputs as context so we can re-render page with original form inputs</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>Validate with Pydantic dependency, use session context to get form inputs from request, redirect to origin page from middleware with exception message and form inputs as context so we can re-render page with original form inputs</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>Validate in either Pydantic dependency or function endpoint body and directly return error message or error toast HTML partial in JSON, then mount error toast with HTMX or some simple layout-level Javascript</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>No</td>
+      <td>Low</td>
+    </tr>
+  </tbody>
+</table>
 
 Presently this template primarily uses option 1 but also supports option 2. Ultimately, I think option 5 will be preferable; support for that [is planned](https://github.com/Promptly-Technologies-LLC/fastapi-jinja2-postgres-webapp/issues/5) for a future update or fork of this template.
