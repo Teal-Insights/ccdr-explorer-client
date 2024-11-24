@@ -121,7 +121,7 @@ Best practices dictate implementing thorough client-side validation via JavaScri
 - Improve user experience by avoiding round-trips to the server
 - Prevent malformed data from ever reaching the backend
 
-Server-side validation remains essential as a security measure against malicious requests that bypass client-side validation, but it should rarely be encountered during normal user interaction. See `templates/authentication/register.html` for a client-side form validation example.
+Server-side validation remains essential as a security measure against malicious requests that bypass client-side validation, but it should rarely be encountered during normal user interaction. See `templates/authentication/register.html` for a client-side form validation example involving both JavaScript and HTML regex `pattern` matching.
 
 ### Writing type annotated code
 
@@ -236,16 +236,34 @@ Our database models are defined in `utils/models.py`. Each model is a Python cla
 - `RolePermissionLink`: Maps roles to their allowed permissions
 - `PasswordResetToken`: Manages password reset functionality
 
-Models can have relationships with other models using SQLModel's `Relationship` field. For example:
+Here's an entity-relationship diagram (ERD) of the current database schema, automatically generated from our SQLModel definitions:
 
-```python
-class User(SQLModel, table=True):
-    # ... other fields ...
-    organization: Optional["Organization"] = Relationship(back_populates="users")
-    role: Optional["Role"] = Relationship(back_populates="users")
+```{python}
+#| echo: false
+#| warning: false
+import sys
+sys.path.append("..")
+from utils.models import *
+from utils.db import engine
+from sqlalchemy import MetaData
+from sqlalchemy_schemadisplay import create_schema_graph
+
+# Create the directed graph
+graph = create_schema_graph(
+    engine=engine,
+    metadata=SQLModel.metadata,
+    show_datatypes=True,
+    show_indexes=True,
+    rankdir='TB',
+    concentrate=False
+)
+
+# Save the graph
+graph.write_png('static/schema.png')
 ```
 
-This creates a many-to-one relationship between users and organizations, and between users and roles.
+![Database Schema](static/schema.png)
+
 
 #### Database operations
 
@@ -265,4 +283,3 @@ async def get_users(session: Session = Depends(get_session)):
 ```
 
 The session automatically handles transaction management, ensuring that database operations are atomic and consistent.
-
