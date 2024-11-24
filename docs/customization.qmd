@@ -2,3 +2,255 @@
 title: "Customization"
 ---
 
+## Development workflow
+
+### Dependency management with Poetry
+
+The project uses Poetry to manage dependencies:
+
+- Add new dependency: `poetry add <dependency>`
+- Add development dependency: `poetry add --dev <dependency>`
+- Remove dependency: `poetry remove <dependency>`
+- Update lock file: `poetry lock`
+- Install dependencies: `poetry install`
+- Update all dependencies: `poetry update`
+
+### Testing
+
+The project uses Pytest for unit testing. It's highly recommended to write and run tests before committing code to ensure nothing is broken!
+
+The following fixtures, defined in `tests/conftest.py`, are available in the test suite:
+
+- `engine`: Creates a new SQLModel engine for the test database.
+- `set_up_database`: Sets up the test database before running the test suite by dropping all tables and recreating them to ensure a clean state.
+- `session`: Provides a session for database operations in tests.
+- `clean_db`: Cleans up the database tables before each test by deleting all entries in the `PasswordResetToken` and `User` tables.
+- `client`: Provides a `TestClient` instance with the session fixture, overriding the `get_session` dependency to use the test session.
+- `test_user`: Creates a test user in the database with a predefined name, email, and hashed password.
+
+To run the tests, use these commands:
+
+- Run all tests: `pytest`
+- Run tests in debug mode (includes logs and print statements in console output): `pytest -s`
+- Run particular test files by name: `pytest <test_file_name>`
+- Run particular tests by name: `pytest -k <test_name>`
+
+### Type checking with mypy
+
+The project uses type annotations and mypy for static type checking. To run mypy, use this command from the root directory:
+
+```bash
+mypy
+```
+
+We find that mypy is an enormous time-saver, catching many errors early and greatly reducing time spent debugging unit tests. However, note that mypy requires you type annotate every variable, function, and method in your code base, so taking advantage of it is a lifestyle change!
+
+## Project structure
+
+### Customizable folders and files
+
+- FastAPI application entry point and GET routes: `main.py`
+- FastAPI POST routes: `routers/`
+    - User authentication endpoints: `auth.py`
+    - User profile management endpoints: `user.py`
+    - Organization management endpoints: `organization.py`
+    - Role management endpoints: `role.py`
+- Jinja2 templates: `templates/`
+- Static assets: `static/`
+- Unit tests: `tests/`
+- Test database configuration: `docker-compose.yml`
+- Helper functions: `utils/`
+    - Auth helpers: `auth.py`
+    - Database helpers: `db.py`
+    - Database models: `models.py`
+- Environment variables: `.env`
+- CI/CD configuration: `.github/`
+- Project configuration: `pyproject.toml`
+- Quarto documentation: 
+    - Source: `index.qmd` + `docs/`
+    - Configuration: `_quarto.yml`
+
+Most everything else is auto-generated and should not be manually modified.
+
+### Defining a web backend with FastAPI
+
+We use FastAPI to define the "API endpoints" of our application. An API endpoint is simply a URL that accepts user requests and returns responses. When a user visits a page, their browser sends what's called a "GET" request to an endpoint, and the server processes it (often querying a database), and returns a response (typically HTML). The browser renders the HTML, displaying the page.
+
+We also create POST endpoints, which accept form submissions so the user can create, update, and delete data in the database. This template follows the Post-Redirect-Get (PRG) pattern to handle POST requests. When a form is submitted, the server processes the data and then returns a "redirect" response, which sends the user to a GET endpoint to re-render the page with the updated data. (See [Architecture](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/architecture.html) for more details.)
+
+#### Routing patterns in this template
+
+In this template, GET routes are defined in the main entry point for the application, `main.py`. POST routes are organized into separate modules within the `routers/` directory. We name our GET routes using the convention `read_<name>`, where `<name>` is the name of the page, to indicate that they are read-only endpoints that do not modify the database.
+
+We divide our GET routes into authenticated and unauthenticated routes, using commented section headers in our code that look like this:
+
+```python
+# -- Authenticated Routes --
+```
+
+Some of our routes take request parameters, which we pass as keyword arguments to the route handler. These parameters should be type annotated for validation purposes. Some parameters are shared across all authenticated or unauthenticated routes, so we define them in the `common_authenticated_parameters` and `common_unauthenticated_parameters` dependencies defined in `main.py`.
+
+### HTML templating with Jinja2
+
+To generate the HTML pages to be returned from our GET routes, we use Jinja2 templates. Jinja2's hierarchical templates allow creating a base template (`templates/base.html`) that defines the overall layout of our web pages (e.g., where the header, body, and footer should go). Individual pages can then extend this base template. We can also template reusable components that can be injected into our layout or page templates.
+
+With Jinja2, we can use the `{% block %}` tag to define content blocks, and the `{% extends %}` tag to extend a base template. We can also use the `{% include %}` tag to include a component in a parent template. See the [Jinja2 documentation on template inheritance](https://jinja.palletsprojects.com/en/stable/templates/#template-inheritance) for more details.
+
+#### Context variables
+
+Context refers to Python variables passed to a template to populate the HTML. In a FastAPI GET route, we can pass context to a template using the `templates.TemplateResponse` method, which takes the request and any context data as arguments. For example:
+
+```python
+@app.get("/welcome")
+async def welcome(request: Request):
+    return templates.TemplateResponse(
+        "welcome.html",
+        {"username": "Alice"}
+    )
+```
+
+In this example, the `welcome.html` template will receive two pieces of context: the user's `request`, which is always passed automatically by FastAPI, and a `username` variable, which we specify as "Alice". We can then use the `{{ username }}` syntax in the `welcome.html` template (or any of its parent or child templates) to insert the value into the HTML.
+
+### Writing type annotated code
+
+Pydantic is used for data validation and serialization. It ensures that the data received in requests meets the expected format and constraints. Pydantic models are used to define the structure of request and response data, making it easy to validate and parse JSON payloads.
+
+If a user-submitted form contains data that has the wrong number, names, or types of fields, Pydantic will raise a `RequestValidationError`, which is caught by middleware and converted into an HTTP 422 error response.
+
+For other, custom validation logic, we add Pydantic `@field_validator` methods to our Pydantic request models and then add the models as dependencies in the signatures of corresponding POST routes. FastAPI's dependency injection system ensures that dependency logic is executed before the body of the route handler.
+
+#### Defining request models and custom validators
+
+For example, in the `UserRegister` request model in `routers/authentication.py`, we add a custom validation method to ensure that the `confirm_password` field matches the `password` field. If not, it raises a custom `PasswordMismatchError`:
+
+```python
+class PasswordMismatchError(HTTPException):
+    def __init__(self, field: str = "confirm_password"):
+        super().__init__(
+            status_code=422,
+            detail={
+                "field": field,
+                "message": "The passwords you entered do not match"
+            }
+        )
+
+class UserRegister(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    confirm_password: str
+
+    # Custom validators are added as class attributes
+    @field_validator("confirm_password", check_fields=False)
+    def validate_passwords_match(cls, v: str, values: dict[str, Any]) -> str:
+        if v != values["password"]:
+            raise PasswordMismatchError()
+        return v
+    # ...
+```
+
+We then add this request model as a dependency in the signature of our POST route:
+
+```python
+@app.post("/register")
+async def register(request: UserRegister = Depends()):
+    # ...
+```
+
+When the user submits the form, Pydantic will first check that all expected fields are present and match the expected types. If not, it raises a `RequestValidationError`. Then, it runs our custom `field_validator`, `validate_passwords_match`. If it finds that the `confirm_password` field does not match the `password` field, it raises a `PasswordMismatchError`. These exceptions can then be caught and handled by our middleware.
+
+(Note that these examples are simplified versions of the actual code.)
+
+#### Converting form data to request models
+
+In addition to custom validation logic, we also need to define a method on our request models that converts form data into the request model. Here's what that looks like in the `UserRegister` request model from the previous example:
+
+```python
+class UserRegister(BaseModel):
+    # ...
+
+    @classmethod
+    async def as_form(
+        cls,
+        name: str = Form(...),
+        email: EmailStr = Form(...),
+        password: str = Form(...),
+        confirm_password: str = Form(...)
+    ):
+        return cls(
+            name=name,
+            email=email,
+            password=password,
+            confirm_password=confirm_password
+        )
+``` 
+
+#### Middleware exception handling
+
+Middlewares—which process requests before they reach the route handlers and responses before they are sent back to the client—are defined in `main.py`. They are commonly used in web development for tasks such as error handling, authentication token validation, logging, and modifying request/response objects.
+
+This template uses middlewares exclusively for global exception handling; they only affect requests that raise an exception. This allows for consistent error responses and centralized error logging. Middleware can catch exceptions raised during request processing and return appropriate HTTP responses. 
+
+Middleware functions are decorated with `@app.exception_handler(ExceptionType)` and are executed in the order they are defined in `main.py`, from most to least specific.
+
+Here's a middleware for handling the `PasswordMismatchError` exception from the previous example, which renders the `errors/validation_error.html` template with the error details:
+
+```python
+@app.exception_handler(PasswordMismatchError)
+async def password_mismatch_exception_handler(request: Request, exc: PasswordMismatchError):
+    return templates.TemplateResponse(
+        request,
+        "errors/validation_error.html",
+        {
+            "status_code": 422,
+            "errors": {"error": exc.detail}
+        },
+        status_code=422,
+    )
+```
+
+### Database configuration and access with SQLModel
+
+SQLModel is an Object-Relational Mapping (ORM) library that allows us to interact with our PostgreSQL database using Python classes instead of writing raw SQL. It combines the features of SQLAlchemy (a powerful database toolkit) with Pydantic's data validation.
+
+#### Models and relationships
+
+Our database models are defined in `utils/models.py`. Each model is a Python class that inherits from `SQLModel` and represents a database table. The key models are:
+
+- `Organization`: Represents a company or team
+- `User`: Represents a user account
+- `Role`: Represents a discrete set of user permissions within an organization
+- `Permission`: Represents specific actions a user can perform
+- `RolePermissionLink`: Maps roles to their allowed permissions
+- `PasswordResetToken`: Manages password reset functionality
+
+Models can have relationships with other models using SQLModel's `Relationship` field. For example:
+
+```python
+class User(SQLModel, table=True):
+    # ... other fields ...
+    organization: Optional["Organization"] = Relationship(back_populates="users")
+    role: Optional["Role"] = Relationship(back_populates="users")
+```
+
+This creates a many-to-one relationship between users and organizations, and between users and roles.
+
+#### Database operations
+
+Database operations are handled by helper functions in `utils/db.py`. Key functions include:
+
+- `set_up_db()`: Initializes the database schema and default data (which we do on every application start in `main.py`)
+- `get_connection_url()`: Creates a database connection URL from environment variables in `.env`
+- `get_session()`: Provides a database session for performing operations
+
+To perform database operations in route handlers, inject the database session as a dependency:
+
+```python
+@app.get("/users")
+async def get_users(session: Session = Depends(get_session)):
+    users = session.exec(select(User)).all()
+    return users
+```
+
+The session automatically handles transaction management, ensuring that database operations are atomic and consistent.
+
