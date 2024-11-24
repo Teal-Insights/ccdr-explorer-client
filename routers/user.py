@@ -74,11 +74,9 @@ async def delete_account(
     if not verify_password(confirm_delete_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Password is incorrect")
 
-    # Mark the user as deleted
-    current_user.deleted = True
-    session.commit()
-    #Logs Out
-    router.get("/logout", response_class=RedirectResponse)
-    # Deletes user
+    # Delete the user
     session.delete(current_user)
-    return RedirectResponse(url="/", status_code=303)
+    session.commit()
+
+    # Log out the user
+    return RedirectResponse(url="/logout", status_code=303)

@@ -27,7 +27,6 @@ class OrganizationRead(BaseModel):
     name: str
     created_at: datetime
     updated_at: datetime
-    deleted: bool
 
 
 class OrganizationUpdate(BaseModel):
@@ -113,9 +112,7 @@ def delete_organization(
     if not db_org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    db_org.deleted = True
-    db_org.updated_at = datetime.utcnow()
-    session.add(db_org)
+    session.delete(db_org)
     session.commit()
 
     return RedirectResponse(url="/organizations", status_code=303)

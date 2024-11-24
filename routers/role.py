@@ -31,7 +31,6 @@ class RoleRead(BaseModel):
     name: str
     created_at: datetime
     updated_at: datetime
-    deleted: bool
     permissions: List[ValidPermissions]
 
 
@@ -74,7 +73,7 @@ def create_role(
 @router.get("/{role_id}", response_model=RoleRead)
 def read_role(role_id: int, session: Session = Depends(get_session)):
     db_role: Role | None = session.get(Role, role_id)
-    if not db_role or not db_role.id or db_role.deleted:
+    if not db_role or not db_role.id:
         raise HTTPException(status_code=404, detail="Role not found")
 
     permissions = [
@@ -88,7 +87,6 @@ def read_role(role_id: int, session: Session = Depends(get_session)):
         name=db_role.name,
         created_at=db_role.created_at,
         updated_at=db_role.updated_at,
-        deleted=db_role.deleted,
         permissions=permissions
     )
 
@@ -99,7 +97,7 @@ def update_role(
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     db_role: Role | None = session.get(Role, role.id)
-    if not db_role or not db_role.id or db_role.deleted:
+    if not db_role or not db_role.id:
         raise HTTPException(status_code=404, detail="Role not found")
     role_data = role.model_dump(exclude_unset=True)
     for key, value in role_data.items():
@@ -131,8 +129,6 @@ def delete_role(
     db_role = session.get(Role, role_id)
     if not db_role:
         raise HTTPException(status_code=404, detail="Role not found")
-    db_role.deleted = True
-    db_role.updated_at = utc_time()
-    session.add(db_role)
+    session.delete(db_role)
     session.commit()
     return RedirectResponse(url="/roles", status_code=303)

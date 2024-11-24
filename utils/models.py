@@ -29,7 +29,6 @@ class Organization(SQLModel, table=True):
     name: str
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     users: List["User"] = Relationship(back_populates="organization")
 
@@ -41,7 +40,6 @@ class Role(SQLModel, table=True):
         default=None, foreign_key="organization.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     users: List["User"] = Relationship(back_populates="role")
     role_permission_links: List["RolePermissionLink"] = Relationship(
@@ -54,7 +52,6 @@ class Permission(SQLModel, table=True):
         sa_column=Column(SQLAlchemyEnum(ValidPermissions, create_type=False)))
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     role_permission_links: List["RolePermissionLink"] = Relationship(
         back_populates="permission")
@@ -83,7 +80,9 @@ class PasswordResetToken(SQLModel, table=True):
     used: bool = Field(default=False)
 
     user: Optional["User"] = Relationship(
-        back_populates="password_reset_tokens")
+        back_populates="password_reset_tokens",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class User(SQLModel, table=True):
@@ -97,13 +96,14 @@ class User(SQLModel, table=True):
     role_id: Optional[int] = Field(default=None, foreign_key="role.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     organization: Optional["Organization"] = Relationship(
         back_populates="users")
     role: Optional["Role"] = Relationship(back_populates="users")
     password_reset_tokens: List["PasswordResetToken"] = Relationship(
-        back_populates="user")
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class UserOrganizationLink(SQLModel, table=True):
