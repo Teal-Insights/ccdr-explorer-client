@@ -3,7 +3,7 @@ from uuid import uuid4
 from datetime import datetime, UTC, timedelta
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Enum as SQLAlchemyEnum
+from sqlalchemy import Column, Enum as SQLAlchemyEnum, Index
 
 
 def utc_time():
@@ -89,7 +89,7 @@ class PasswordResetToken(SQLModel, table=True):
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    email: str = Field(index=True, unique=True)
+    email: str = Field(index=True)
     hashed_password: str
     avatar_url: Optional[str] = None
     organization_id: Optional[int] = Field(
@@ -104,6 +104,15 @@ class User(SQLModel, table=True):
     role: Optional["Role"] = Relationship(back_populates="users")
     password_reset_tokens: List["PasswordResetToken"] = Relationship(
         back_populates="user")
+
+    __table_args__ = (
+        Index(
+            'ix_user_email_unique_active',
+            'email',
+            unique=True,
+            postgresql_where=(deleted == False)
+        ),
+    )
 
 
 class UserOrganizationLink(SQLModel, table=True):

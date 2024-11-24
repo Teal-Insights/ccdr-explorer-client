@@ -180,7 +180,9 @@ def validate_token_and_get_user(
     if decoded_token:
         user_email = decoded_token.get("sub")
         user = session.exec(select(User).where(
-            User.email == user_email)).first()
+            User.email == user_email,
+            User.deleted == False
+        )).first()
         if user:
             if token_type == "refresh":
                 new_access_token = create_access_token(
@@ -275,7 +277,10 @@ def generate_password_reset_url(email: str, token: str) -> str:
 
 def send_reset_email(email: str, session: Session):
     # Check for an existing unexpired token
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(select(User).where(
+        User.email == email,
+        User.deleted == False
+    )).first()
     if user:
         existing_token = session.exec(
             select(PasswordResetToken)
@@ -327,7 +332,11 @@ def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple
 
     user = session.exec(select(User).where(
         User.email == email,
-        User.id == reset_token.user_id
+        User.id == reset_token.user_id,
+        User.deleted == False
     )).first()
+
+    if not user:
+        return None, None
 
     return user, reset_token
