@@ -432,7 +432,7 @@ def test_deleted_user_cannot_use_tokens(client: TestClient, test_user: User, ses
     assert response.status_code == 303  # user is redirected to login
 
 
-def test_deleted_user_cannot_use_reset_token(client: TestClient, session: Session, test_user: User, mock_resend_send):
+def test_deleted_user_cannot_use_reset_token(client: TestClient, session: Session, test_user: User):
     """Test that a deleted user cannot use a previously issued reset token"""
     # First create a reset token
     response = client.post(
