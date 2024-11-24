@@ -32,7 +32,7 @@ This template implements a comprehensive authentication system with security bes
    
 The diagrams below show the main authentication flows.
 
-### Registration and login flow
+## Registration and login flow
 
 ``` {python}
 #| echo: false
@@ -87,7 +87,7 @@ auth.render('static/auth_flow', format='png', cleanup=True)
 
 ![Registration and login flow](static/auth_flow.png)
 
-### Password reset flow
+## Password reset flow
 
 ``` {python}
 #| echo: false

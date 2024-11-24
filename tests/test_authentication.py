@@ -9,7 +9,6 @@ from urllib.parse import urlparse, parse_qs
 
 from main import app
 from utils.models import User, PasswordResetToken
-from utils.db import get_session
 from utils.auth import (
     create_access_token,
     create_refresh_token,
@@ -21,39 +20,6 @@ from utils.auth import (
 
 
 # --- Fixture setup ---
-
-
-# Test client fixture
-@pytest.fixture(name="client")
-def client_fixture(session: Session):
-    """
-    Provides a TestClient instance with the session fixture.
-    Overrides the get_session dependency to use the test session.
-    """
-    def get_session_override():
-        return session
-
-    app.dependency_overrides[get_session] = get_session_override
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
-
-
-# Test user fixture
-@pytest.fixture(name="test_user")
-def test_user_fixture(session: Session):
-    """
-    Creates a test user in the database.
-    """
-    user = User(
-        name="Test User",
-        email="test@example.com",
-        hashed_password=get_password_hash("Test123!@#")
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
 
 
 # Mock email response fixture
