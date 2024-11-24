@@ -1,5 +1,5 @@
 # auth.py
-from logging import getLogger, DEBUG
+from logging import getLogger
 from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
@@ -22,7 +22,6 @@ from utils.auth import (
 )
 
 logger = getLogger("uvicorn.error")
-logger.setLevel(DEBUG)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -127,9 +126,7 @@ async def register(
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     db_user = session.exec(select(User).where(
-        User.email == user.email,
-        User.deleted == False
-    )).first()
+        User.email == user.email)).first()
 
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -159,9 +156,7 @@ async def login(
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     db_user = session.exec(select(User).where(
-        User.email == user.email,
-        User.deleted == False
-    )).first()
+        User.email == user.email)).first()
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
 
@@ -210,9 +205,7 @@ async def refresh_token(
 
     user_email = decoded_token.get("sub")
     db_user = session.exec(select(User).where(
-        User.email == user_email,
-        User.deleted == False
-    )).first()
+        User.email == user_email)).first()
     if not db_user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -246,9 +239,7 @@ async def forgot_password(
     session: Session = Depends(get_session)
 ):
     db_user = session.exec(select(User).where(
-        User.email == user.email,
-        User.deleted == False
-    )).first()
+        User.email == user.email)).first()
 
     if db_user:
         background_tasks.add_task(send_reset_email, user.email, session)
@@ -264,13 +255,8 @@ async def reset_password(
     authorized_user, reset_token = get_user_from_reset_token(
         user.email, user.token, session)
 
-    logger.debug(f"authorized_user: {authorized_user}")
-    logger.debug(f"reset_token: {reset_token}")
-
-    if not reset_token:
+    if not authorized_user or not reset_token:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    elif not authorized_user:
-        raise HTTPException(status_code=400, detail="User not found")
 
     # Update password and mark token as used
     authorized_user.hashed_password = get_password_hash(user.new_password)

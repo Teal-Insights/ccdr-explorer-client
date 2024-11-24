@@ -261,10 +261,6 @@ def test_logout_endpoint(client: TestClient):
 
 
 def test_register_with_existing_email(client: TestClient, test_user: User):
-    """Test that registration fails with an existing non-deleted user's email"""
-    # Ensure test user is not deleted
-    assert not test_user.deleted
-
     response = client.post(
         "/auth/register",
         data={
@@ -275,34 +271,6 @@ def test_register_with_existing_email(client: TestClient, test_user: User):
         }
     )
     assert response.status_code == 400
-
-
-def test_register_with_deleted_user_email(client: TestClient, test_user: User, session: Session):
-    """Test that registration succeeds with a deleted user's email"""
-    # Mark test user as deleted
-    test_user.deleted = True
-    session.add(test_user)
-    session.commit()
-
-    response = client.post(
-        "/auth/register",
-        data={
-            "name": "New User",
-            "email": test_user.email,
-            "password": "Test123!@#",
-            "confirm_password": "Test123!@#"
-        },
-        follow_redirects=False
-    )
-    assert response.status_code == 303
-
-    # Verify new user was created
-    new_user = session.exec(select(User).where(
-        User.email == test_user.email,
-        User.deleted == False
-    )).first()
-    assert new_user is not None
-    assert new_user.id != test_user.id
 
 
 def test_login_with_invalid_credentials(client: TestClient, test_user: User):
@@ -393,74 +361,3 @@ def test_password_reset_email_url(client: TestClient, session: Session, test_use
     assert parsed.path == str(reset_password_path)
     assert query_params["email"][0] == test_user.email
     assert query_params["token"][0] == reset_token.token
-
-
-def test_deleted_user_cannot_login(client: TestClient, test_user: User, session: Session):
-    """Test that a deleted user cannot log in"""
-    # First mark the user as deleted
-    test_user.deleted = True
-    session.add(test_user)
-    session.commit()
-
-    response = client.post(
-        "/auth/login",
-        data={
-            "email": test_user.email,
-            "password": "Test123!@#"
-        }
-    )
-    assert response.status_code == 400
-
-
-def test_deleted_user_cannot_use_tokens(client: TestClient, test_user: User, session: Session):
-    """Test that a deleted user's tokens become invalid"""
-    # Create tokens before marking user as deleted
-    access_token = create_access_token({"sub": test_user.email})
-    refresh_token = create_refresh_token({"sub": test_user.email})
-
-    # Mark user as deleted
-    test_user.deleted = True
-    session.add(test_user)
-    session.commit()
-
-    # Set tokens in cookies
-    client.cookies.set("access_token", access_token)
-    client.cookies.set("refresh_token", refresh_token)
-
-    # Try to refresh tokens
-    response = client.post("/auth/refresh", follow_redirects=False)
-    assert response.status_code == 303  # user is redirected to login
-
-
-def test_deleted_user_cannot_use_reset_token(client: TestClient, session: Session, test_user: User):
-    """Test that a deleted user cannot use a previously issued reset token"""
-    # First create a reset token
-    response = client.post(
-        "/auth/forgot_password",
-        data={"email": test_user.email},
-        follow_redirects=False
-    )
-    assert response.status_code == 303
-
-    # Get the reset token
-    reset_token = session.exec(select(PasswordResetToken)
-                               .where(PasswordResetToken.user_id == test_user.id)).first()
-    assert reset_token is not None
-
-    # Now mark user as deleted
-    test_user.deleted = True
-    session.add(test_user)
-    session.commit()
-
-    # Try to use the reset token
-    response = client.post(
-        "/auth/reset_password",
-        data={
-            "email": test_user.email,
-            "token": reset_token.token,
-            "new_password": "NewPass123!@#",
-            "confirm_new_password": "NewPass123!@#"
-        },
-        follow_redirects=False
-    )
-    assert response.status_code == 400
