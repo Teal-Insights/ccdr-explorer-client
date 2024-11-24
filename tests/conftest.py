@@ -1,8 +1,11 @@
 import pytest
-from sqlmodel import create_engine, Session, delete
-from utils.db import get_connection_url, set_up_db, tear_down_db
-from utils.models import User, PasswordResetToken
 from dotenv import load_dotenv
+from sqlmodel import create_engine, Session, delete
+from fastapi.testclient import TestClient
+from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
+from utils.models import User, PasswordResetToken
+from utils.auth import get_password_hash
+from main import app
 
 load_dotenv()
 
@@ -49,3 +52,36 @@ def clean_db(session: Session):
     session.exec(delete(User))  # type: ignore
 
     session.commit()
+
+
+# Test client fixture
+@pytest.fixture()
+def client(session: Session):
+    """
+    Provides a TestClient instance with the session fixture.
+    Overrides the get_session dependency to use the test session.
+    """
+    def get_session_override():
+        return session
+
+    app.dependency_overrides[get_session] = get_session_override
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+# Test user fixture
+@pytest.fixture()
+def test_user(session: Session):
+    """
+    Creates a test user in the database.
+    """
+    user = User(
+        name="Test User",
+        email="test@example.com",
+        hashed_password=get_password_hash("Test123!@#")
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
