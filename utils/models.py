@@ -80,9 +80,7 @@ class PasswordResetToken(SQLModel, table=True):
     used: bool = Field(default=False)
 
     user: Optional["User"] = Relationship(
-        back_populates="password_reset_tokens",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+        back_populates="password_reset_tokens")
 
 
 class User(SQLModel, table=True):
