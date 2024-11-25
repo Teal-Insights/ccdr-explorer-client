@@ -11,7 +11,8 @@ router = APIRouter(prefix="/user", tags=["user"])
 # -- Server Request and Response Models --
 
 
-class UserProfile(BaseModel):
+class UpdateProfile(BaseModel):
+    """Request model for updating user profile information"""
     name: str
     email: EmailStr
     avatar_url: str
@@ -40,26 +41,16 @@ class UserDeleteAccount(BaseModel):
 # -- Routes --
 
 
-@router.get("/profile", response_class=RedirectResponse)
-async def view_profile(
-    current_user: User = Depends(get_authenticated_user)
-):
-    # Render the profile page with the current user's data
-    return {"user": current_user}
-
-
-@router.post("/edit_profile", response_class=RedirectResponse)
-async def edit_profile(
-    name: str = Form(...),
-    email: str = Form(...),
-    avatar_url: str = Form(...),
+@router.post("/update_profile", response_class=RedirectResponse)
+async def update_profile(
+    user_profile: UpdateProfile = Depends(UpdateProfile.as_form),
     current_user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ):
     # Update user details
-    current_user.name = name
-    current_user.email = email
-    current_user.avatar_url = avatar_url
+    current_user.name = user_profile.name
+    current_user.email = user_profile.email
+    current_user.avatar_url = user_profile.avatar_url
     session.commit()
     session.refresh(current_user)
     return RedirectResponse(url="/profile", status_code=303)
@@ -67,16 +58,23 @@ async def edit_profile(
 
 @router.post("/delete_account", response_class=RedirectResponse)
 async def delete_account(
-    confirm_delete_password: str = Form(...),
+    user_delete_account: UserDeleteAccount = Depends(
+        UserDeleteAccount.as_form),
     current_user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ):
-    if not verify_password(confirm_delete_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Password is incorrect")
+    if not verify_password(
+        user_delete_account.confirm_delete_password,
+        current_user.hashed_password
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Password is incorrect"
+        )
 
     # Delete the user
     session.delete(current_user)
     session.commit()
 
     # Log out the user
-    return RedirectResponse(url="/logout", status_code=303)
+    return RedirectResponse(url="/auth/logout", status_code=303)
