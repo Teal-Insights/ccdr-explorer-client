@@ -107,6 +107,8 @@ To use password recovery, register a [Resend](https://resend.com/) account, veri
 
 ### Start development database
 
+To start the development database, run the following command in your terminal from the root directory:
+
 ``` bash
 docker compose up -d
 ```
