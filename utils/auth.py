@@ -12,6 +12,7 @@ from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from fastapi import Depends, Cookie, HTTPException, status
+from fastapi.responses import RedirectResponse
 from utils.db import get_session
 from utils.models import User, PasswordResetToken
 
@@ -180,7 +181,8 @@ def validate_token_and_get_user(
     if decoded_token:
         user_email = decoded_token.get("sub")
         user = session.exec(select(User).where(
-            User.email == user_email)).first()
+            User.email == user_email
+        )).first()
         if user:
             if token_type == "refresh":
                 new_access_token = create_access_token(
@@ -215,6 +217,14 @@ def get_user_from_tokens(
     return None, None, None
 
 
+class AuthenticationError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/login"}
+        )
+
+
 def get_authenticated_user(
     tokens: tuple[Optional[str], Optional[str]
                   ] = Depends(oauth2_scheme_cookie),
@@ -228,11 +238,7 @@ def get_authenticated_user(
             raise NeedsNewTokens(user, new_access_token, new_refresh_token)
         return user
 
-    # If both tokens are invalid or missing, redirect to login
-    raise HTTPException(
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={"Location": "/login"}
-    )
+    raise AuthenticationError()
 
 
 def get_optional_user(
@@ -275,7 +281,9 @@ def generate_password_reset_url(email: str, token: str) -> str:
 
 def send_reset_email(email: str, session: Session):
     # Check for an existing unexpired token
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(select(User).where(
+        User.email == email
+    )).first()
     if user:
         existing_token = session.exec(
             select(PasswordResetToken)
@@ -316,18 +324,19 @@ def send_reset_email(email: str, session: Session):
 
 
 def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple[Optional[User], Optional[PasswordResetToken]]:
-    reset_token = session.exec(select(PasswordResetToken).where(
-        PasswordResetToken.token == token,
-        PasswordResetToken.expires_at > datetime.now(UTC),
-        PasswordResetToken.used == False
-    )).first()
+    result = session.exec(
+        select(User, PasswordResetToken)
+        .where(
+            User.email == email,
+            PasswordResetToken.token == token,
+            PasswordResetToken.expires_at > datetime.now(UTC),
+            PasswordResetToken.used == False,
+            PasswordResetToken.user_id == User.id
+        )
+    ).first()
 
-    if not reset_token:
+    if not result:
         return None, None
 
-    user = session.exec(select(User).where(
-        User.email == email,
-        User.id == reset_token.user_id
-    )).first()
-
+    user, reset_token = result
     return user, reset_token
