@@ -12,7 +12,6 @@ from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from fastapi import Depends, Cookie, HTTPException, status
-from fastapi.responses import RedirectResponse
 from utils.db import get_session
 from utils.models import User, PasswordResetToken
 
@@ -76,7 +75,7 @@ def create_password_validator(field_name: str = "password"):
         """
         logger.debug(f"Validating password for {field_name}")
         pattern = re.compile(
-            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~]{8,}")
+            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/]{8,}")
         if not pattern.match(v):
             logger.debug(f"Password for {
                          field_name} does not satisfy the security policy")
