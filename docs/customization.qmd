@@ -25,7 +25,8 @@ The following fixtures, defined in `tests/conftest.py`, are available in the tes
 - `set_up_database`: Sets up the test database before running the test suite by dropping all tables and recreating them to ensure a clean state.
 - `session`: Provides a session for database operations in tests.
 - `clean_db`: Cleans up the database tables before each test by deleting all entries in the `PasswordResetToken` and `User` tables.
-- `client`: Provides a `TestClient` instance with the session fixture, overriding the `get_session` dependency to use the test session.
+- `auth_client`: Provides a `TestClient` instance with access and refresh token cookies set, overriding the `get_session` dependency to use the `session` fixture.
+- `unauth_client`: Provides a `TestClient` instance without authentication cookies set, overriding the `get_session` dependency to use the `session` fixture.
 - `test_user`: Creates a test user in the database with a predefined name, email, and hashed password.
 
 To run the tests, use these commands:

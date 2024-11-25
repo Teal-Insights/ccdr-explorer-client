@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from fastapi.responses import Response
+from httpx import Response
 from sqlmodel import Session
 
 from main import app
@@ -63,7 +63,7 @@ def test_delete_account_wrong_password(auth_client: TestClient, test_user: User)
         follow_redirects=False
     )
     assert response.status_code == 400
-    assert "Password is incorrect" in response.text
+    assert "Password is incorrect" in response.text.strip()
 
 
 def test_delete_account_success(auth_client: TestClient, test_user: User, session: Session):
