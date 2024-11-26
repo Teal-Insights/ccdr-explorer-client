@@ -45,6 +45,10 @@ mypy
 
 We find that mypy is an enormous time-saver, catching many errors early and greatly reducing time spent debugging unit tests. However, note that mypy requires you type annotate every variable, function, and method in your code base, so taking advantage of it is a lifestyle change!
 
+### Developing with LLMs
+
+In line with the [llms.txt standard](https://llmstxt.org/), we have exposed the full Markdown-formatted project documentation as a [single text file](https://promptlytechnologies.com/docs/static/llms.txt) to make it more usable by LLM agents.
+
 ## Project structure
 
 ### Customizable folders and files

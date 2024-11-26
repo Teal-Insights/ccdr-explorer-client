@@ -127,10 +127,77 @@ Navigate to http://localhost:8000/
 mypy .
 ```
 
-### Contributing
+## Developing with LLMs
+
+In line with the [llms.txt standard](https://llmstxt.org/), we have exposed the full Markdown-formatted project documentation as a [single text file](https://promptlytechnologies.com/docs/static/llms.txt) to make it more usable by LLM agents.
+
+``` {python}
+#| echo: false
+#| include: false
+import re
+from pathlib import Path
+
+
+def extract_file_paths(quarto_yml_path):
+    """
+    Extract href paths from _quarto.yml file.
+    Returns a list of .qmd file paths.
+    """
+    with open(quarto_yml_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Find all href entries that point to .qmd files
+    pattern = r'^\s*-\s*href:\s*(.*?\.qmd)\s*$'
+    matches = re.findall(pattern, content, re.MULTILINE)
+    return matches
+
+
+def process_qmd_content(file_path):
+    """
+    Process a .qmd file by converting YAML frontmatter to markdown heading.
+    Returns the processed content as a string.
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Replace YAML frontmatter with markdown heading
+    pattern = r'^---\s*\ntitle:\s*"([^"]+)"\s*\n---'
+    processed_content = re.sub(pattern, r'# \1', content)
+    return processed_content
+
+
+# Get the current working directory
+base_dir = Path.cwd()
+quarto_yml_path = base_dir / '_quarto.yml'
+
+# Extract file paths from _quarto.yml
+qmd_files = extract_file_paths(quarto_yml_path)
+
+# Process each .qmd file and collect contents
+processed_contents = []
+for qmd_file in qmd_files:
+    file_path = base_dir / qmd_file
+    if file_path.exists():
+        processed_content = process_qmd_content(file_path)
+        processed_contents.append(processed_content)
+
+# Concatenate all contents with double newline separator
+final_content = '\n\n'.join(processed_contents)
+
+# Ensure the output directory exists
+output_dir = base_dir / 'docs' / 'static'
+output_dir.mkdir(parents=True, exist_ok=True)
+
+# Write the concatenated content to the output file
+output_path = output_dir / 'llms.txt'
+with open(output_path, 'w', encoding='utf-8') as f:
+    f.write(final_content)
+```
+
+## Contributing
 
 Your contributions are welcome! See the [issues page](https://github.com/promptly-technologies-llc/fastapi-jinja2-postgres-webapp/issues) for ideas. Fork the repository, create a new branch, make your changes, and submit a pull request.
 
-### License
+## License
 
 This project is created and maintained by [Promptly Technologies, LLC](https://promptlytechnologies.com/) and licensed under the MIT License. See the LICENSE file for more details.
