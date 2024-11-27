@@ -24,6 +24,27 @@ class ValidPermissions(Enum):
     EDIT_ROLE = "Edit Role"
 
 
+class UserOrganizationLink(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    organization_id: int = Field(foreign_key="organization.id")
+    role_id: int = Field(foreign_key="role.id")
+    created_at: datetime = Field(default_factory=utc_time)
+    updated_at: datetime = Field(default_factory=utc_time)
+
+    user: "User" = Relationship(back_populates="organization_links")
+    organization: "Organization" = Relationship(back_populates="user_links")
+    role: "Role" = Relationship(back_populates="user_links")
+
+
+class RolePermissionLink(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    role_id: int = Field(foreign_key="role.id")
+    permission_id: int = Field(foreign_key="permission.id")
+    created_at: datetime = Field(default_factory=utc_time)
+    updated_at: datetime = Field(default_factory=utc_time)
+
+
 class Organization(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -31,21 +52,30 @@ class Organization(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_time)
     deleted: bool = Field(default=False)
 
-    users: List["User"] = Relationship(back_populates="organization")
+    user_links: List[UserOrganizationLink] = Relationship(
+        back_populates="organization")
+    users: List["User"] = Relationship(
+        back_populates="organizations",
+        link_model=UserOrganizationLink
+    )
+    roles: List["Role"] = Relationship(back_populates="organization")
 
 
 class Role(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    organization_id: Optional[int] = Field(
-        default=None, foreign_key="organization.id")
+    organization_id: int = Field(foreign_key="organization.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
     deleted: bool = Field(default=False)
 
-    users: List["User"] = Relationship(back_populates="role")
-    role_permission_links: List["RolePermissionLink"] = Relationship(
+    organization: Organization = Relationship(back_populates="roles")
+    user_links: List[UserOrganizationLink] = Relationship(
         back_populates="role")
+    permissions: List["Permission"] = Relationship(
+        back_populates="roles",
+        link_model=RolePermissionLink
+    )
 
 
 class Permission(SQLModel, table=True):
@@ -56,21 +86,10 @@ class Permission(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_time)
     deleted: bool = Field(default=False)
 
-    role_permission_links: List["RolePermissionLink"] = Relationship(
-        back_populates="permission")
-
-
-class RolePermissionLink(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    role_id: Optional[int] = Field(
-        default=None, foreign_key="role.id")
-    permission_id: Optional[int] = Field(
-        default=None, foreign_key="permission.id")
-
-    role: Optional["Role"] = Relationship(
-        back_populates="role_permission_links")
-    permission: Optional["Permission"] = Relationship(
-        back_populates="role_permission_links")
+    roles: List["Role"] = Relationship(
+        back_populates="permissions",
+        link_model=RolePermissionLink
+    )
 
 
 class PasswordResetToken(SQLModel, table=True):
@@ -92,23 +111,15 @@ class User(SQLModel, table=True):
     email: str = Field(index=True, unique=True)
     hashed_password: str
     avatar_url: Optional[str] = None
-    organization_id: Optional[int] = Field(
-        default=None, foreign_key="organization.id")
-    role_id: Optional[int] = Field(default=None, foreign_key="role.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
     deleted: bool = Field(default=False)
 
-    organization: Optional["Organization"] = Relationship(
-        back_populates="users")
-    role: Optional["Role"] = Relationship(back_populates="users")
+    organization_links: List[UserOrganizationLink] = Relationship(
+        back_populates="user")
+    organizations: List["Organization"] = Relationship(
+        back_populates="users",
+        link_model=UserOrganizationLink
+    )
     password_reset_tokens: List["PasswordResetToken"] = Relationship(
         back_populates="user")
-
-
-class UserOrganizationLink(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: Optional[int] = Field(
-        default=None, foreign_key="user.id")
-    organization_id: Optional[int] = Field(
-        default=None, foreign_key="organization.id")
