@@ -6,7 +6,8 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
-from utils.models import Role, RolePermissionLink, ValidPermissions, utc_time
+from utils.auth import get_authenticated_user
+from utils.models import Role, RolePermissionLink, ValidPermissions, utc_time, User
 
 logger = getLogger("uvicorn.error")
 
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 
 
 # -- Custom Exceptions --
+
 
 class RoleAlreadyExistsError(HTTPException):
     """Raised when attempting to create a role with a name that already exists"""
@@ -107,9 +109,11 @@ class RoleUpdate(BaseModel):
 
 # -- Routes --
 
+
 @router.post("/", response_class=RedirectResponse)
 def create_role(
     role: RoleCreate = Depends(RoleCreate.as_form),
+    user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     # Create role and permissions in a single transaction
@@ -128,7 +132,11 @@ def create_role(
 
 
 @router.get("/{role_id}", response_model=RoleRead)
-def read_role(role_id: int, session: Session = Depends(get_session)):
+def read_role(
+    role_id: int,
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session)
+):
     db_role: Role | None = session.get(Role, role_id)
     if not db_role or not db_role.id or db_role.deleted:
         raise RoleNotFoundError()
@@ -152,6 +160,7 @@ def read_role(role_id: int, session: Session = Depends(get_session)):
 @router.put("/{role_id}", response_class=RedirectResponse)
 def update_role(
     role: RoleUpdate = Depends(RoleUpdate.as_form),
+    user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     db_role: Role | None = session.get(Role, role.id)
@@ -181,6 +190,7 @@ def update_role(
 @router.delete("/{role_id}", response_class=RedirectResponse)
 def delete_role(
     role_id: int,
+    user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     db_role = session.get(Role, role_id)
