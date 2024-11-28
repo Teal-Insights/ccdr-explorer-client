@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from sqlmodel import create_engine, Session, delete
 from fastapi.testclient import TestClient
 from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
-from utils.models import User, PasswordResetToken
+from utils.models import User, PasswordResetToken, Organization
 from utils.auth import get_password_hash, create_access_token, create_refresh_token
 from main import app
 
@@ -107,3 +107,12 @@ def auth_client(session: Session, test_user: User):
 
     yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def test_organization(session: Session):
+    """Create a test organization for use in tests"""
+    organization = Organization(name="Test Organization")
+    session.add(organization)
+    session.commit()
+    return organization
