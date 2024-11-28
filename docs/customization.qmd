@@ -25,7 +25,8 @@ The following fixtures, defined in `tests/conftest.py`, are available in the tes
 - `set_up_database`: Sets up the test database before running the test suite by dropping all tables and recreating them to ensure a clean state.
 - `session`: Provides a session for database operations in tests.
 - `clean_db`: Cleans up the database tables before each test by deleting all entries in the `PasswordResetToken` and `User` tables.
-- `client`: Provides a `TestClient` instance with the session fixture, overriding the `get_session` dependency to use the test session.
+- `auth_client`: Provides a `TestClient` instance with access and refresh token cookies set, overriding the `get_session` dependency to use the `session` fixture.
+- `unauth_client`: Provides a `TestClient` instance without authentication cookies set, overriding the `get_session` dependency to use the `session` fixture.
 - `test_user`: Creates a test user in the database with a predefined name, email, and hashed password.
 
 To run the tests, use these commands:
@@ -43,7 +44,7 @@ The project uses type annotations and mypy for static type checking. To run mypy
 mypy
 ```
 
-We find that mypy is an enormous time-saver, catching many errors early and greatly reducing time spent debugging unit tests. However, note that mypy requires you type annotate every variable, function, and method in your code base, so taking advantage of it is a lifestyle change!
+We find that mypy is an enormous time-saver, catching many errors early and greatly reducing time spent debugging unit tests. However, note that mypy requires you type annotate every variable, function, and method in your code base, so taking advantage of it requires a lifestyle change!
 
 ### Developing with LLMs
 
@@ -84,7 +85,9 @@ We also create POST endpoints, which accept form submissions so the user can cre
 
 #### Routing patterns in this template
 
-In this template, GET routes are defined in the main entry point for the application, `main.py`. POST routes are organized into separate modules within the `routers/` directory. We name our GET routes using the convention `read_<name>`, where `<name>` is the name of the page, to indicate that they are read-only endpoints that do not modify the database.
+In this template, GET routes are defined in the main entry point for the application, `main.py`. POST routes are organized into separate modules within the `routers/` directory.
+
+We name our GET routes using the convention `read_<name>`, where `<name>` is the name of the page, to indicate that they are read-only endpoints that do not modify the database.
 
 We divide our GET routes into authenticated and unauthenticated routes, using commented section headers in our code that look like this:
 
@@ -92,7 +95,9 @@ We divide our GET routes into authenticated and unauthenticated routes, using co
 # -- Authenticated Routes --
 ```
 
-Some of our routes take request parameters, which we pass as keyword arguments to the route handler. These parameters should be type annotated for validation purposes. Some parameters are shared across all authenticated or unauthenticated routes, so we define them in the `common_authenticated_parameters` and `common_unauthenticated_parameters` dependencies defined in `main.py`.
+Some of our routes take request parameters, which we pass as keyword arguments to the route handler. These parameters should be type annotated for validation purposes.
+
+Some parameters are shared across all authenticated or unauthenticated routes, so we define them in the `common_authenticated_parameters` and `common_unauthenticated_parameters` dependencies defined in `main.py`.
 
 ### HTML templating with Jinja2
 
@@ -113,7 +118,7 @@ async def welcome(request: Request):
     )
 ```
 
-In this example, the `welcome.html` template will receive two pieces of context: the user's `request`, which is always passed automatically by FastAPI, and a `username` variable, which we specify as "Alice". We can then use the `{{ username }}` syntax in the `welcome.html` template (or any of its parent or child templates) to insert the value into the HTML.
+In this example, the `welcome.html` template will receive two pieces of context: the user's `request`, which is always passed automatically by FastAPI, and a `username` variable, which we specify as "Alice". We can then use the `{{{ username }}}` syntax in the `welcome.html` template (or any of its parent or child templates) to insert the value into the HTML.
 
 #### Form validation strategy
 

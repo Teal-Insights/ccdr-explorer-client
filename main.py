@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError, HTTPException, StarletteHTTPException
 from sqlmodel import Session
 from routers import authentication, organization, role, user
-from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError
+from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
 from utils.models import User
 from utils.db import get_session, set_up_db
 
@@ -35,6 +35,15 @@ templates = Jinja2Templates(directory="templates")
 
 
 # -- Exception Handling Middlewares --
+
+
+# Handle AuthenticationError by redirecting to login page
+@app.exception_handler(AuthenticationError)
+async def authentication_error_handler(request: Request, exc: AuthenticationError):
+    return RedirectResponse(
+        url="/login",
+        status_code=status.HTTP_303_SEE_OTHER
+    )
 
 
 # Handle NeedsNewTokens by setting new tokens and redirecting to same page
@@ -104,10 +113,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Handle StarletteHTTPException (including 404, 405, etc.) by rendering the error page
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    # Don't handle redirects
-    if exc.status_code in [301, 302, 303, 307, 308]:
-        raise exc
-
     return templates.TemplateResponse(
         request,
         "errors/error.html",

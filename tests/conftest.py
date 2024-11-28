@@ -4,7 +4,7 @@ from sqlmodel import create_engine, Session, delete
 from fastapi.testclient import TestClient
 from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
 from utils.models import User, PasswordResetToken
-from utils.auth import get_password_hash
+from utils.auth import get_password_hash, create_access_token, create_refresh_token
 from main import app
 
 load_dotenv()
@@ -54,22 +54,6 @@ def clean_db(session: Session):
     session.commit()
 
 
-# Test client fixture
-@pytest.fixture()
-def client(session: Session):
-    """
-    Provides a TestClient instance with the session fixture.
-    Overrides the get_session dependency to use the test session.
-    """
-    def get_session_override():
-        return session
-
-    app.dependency_overrides[get_session] = get_session_override
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
-
-
 # Test user fixture
 @pytest.fixture()
 def test_user(session: Session):
@@ -85,3 +69,41 @@ def test_user(session: Session):
     session.commit()
     session.refresh(user)
     return user
+
+
+# Unauthenticated client fixture
+@pytest.fixture()
+def unauth_client(session: Session):
+    """
+    Provides a TestClient instance without authentication.
+    """
+    def get_session_override():
+        return session
+
+    app.dependency_overrides[get_session] = get_session_override
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+# Authenticated client fixture
+@pytest.fixture()
+def auth_client(session: Session, test_user: User):
+    """
+    Provides a TestClient instance with valid authentication tokens.
+    """
+    def get_session_override():
+        return session
+
+    app.dependency_overrides[get_session] = get_session_override
+    client = TestClient(app)
+
+    # Create and set valid tokens
+    access_token = create_access_token({"sub": test_user.email})
+    refresh_token = create_refresh_token({"sub": test_user.email})
+
+    client.cookies.set("access_token", access_token)
+    client.cookies.set("refresh_token", refresh_token)
+
+    yield client
+    app.dependency_overrides.clear()
