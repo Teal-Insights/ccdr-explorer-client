@@ -107,31 +107,6 @@ class RoleUpdate(BaseModel):
         )
 
 
-# -- Helper Functions --
-
-def get_organization_roles(
-    organization_id: int,
-    session: Session,
-    include_deleted: bool = False
-) -> List[Role]:
-    """
-    Retrieve all roles for an organization.
-
-    Args:
-        organization_id: ID of the organization
-        session: Database session
-        include_deleted: Whether to include soft-deleted roles
-
-    Returns:
-        List of Role objects with their associated permissions
-    """
-    query = select(Role).where(Role.organization_id == organization_id)
-    if not include_deleted:
-        query = query.where(Role.deleted == False)
-
-    return list(session.exec(query))
-
-
 # -- Routes --
 
 
@@ -156,7 +131,7 @@ def create_role(
     session.add(db_role)
     session.commit()
 
-    return RedirectResponse(url="/roles", status_code=303)
+    return RedirectResponse(url="/profile", status_code=303)
 
 
 @router.put("/{role_id}", response_class=RedirectResponse)
@@ -186,7 +161,7 @@ def update_role(
 
     session.commit()
     session.refresh(db_role)
-    return RedirectResponse(url=f"/roles/{role.id}", status_code=303)
+    return RedirectResponse(url="/profile", status_code=303)
 
 
 @router.delete("/{role_id}", response_class=RedirectResponse)
@@ -203,4 +178,4 @@ def delete_role(
     db_role.updated_at = utc_time()
     session.add(db_role)
     session.commit()
-    return RedirectResponse(url="/roles", status_code=303)
+    return RedirectResponse(url="/profile", status_code=303)

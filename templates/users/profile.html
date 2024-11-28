@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from 'components/silhouette.html' import render_silhouette %}
+{% from 'components/organizations.html' import render_organizations %}
 
 {% block title %}Profile{% endblock %}
 
@@ -66,6 +67,9 @@
             </form>
         </div>
     </div>
+
+    <!-- Organizations Section - Add this before the Delete Account section -->
+    {{ render_organizations(organizations) }}
 
     <!-- Delete Account -->
     <div class="card mb-4">

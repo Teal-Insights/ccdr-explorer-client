@@ -11,7 +11,7 @@ from routers import authentication, organization, role, user
 from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError
 from utils.models import User
 from utils.db import get_session, set_up_db
-
+from utils.role_org import get_user_organizations, get_organization_roles
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
@@ -242,11 +242,16 @@ async def read_dashboard(
 
 @app.get("/profile")
 async def read_profile(
-    params: dict = Depends(common_authenticated_parameters)
+    params: dict = Depends(common_authenticated_parameters),
+    session: Session = Depends(get_session)
 ):
     if not params["user"]:
-        # Changed to 302
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    # Get user's organizations
+    params["organizations"] = get_user_organizations(
+        params["user"].id, session)
+
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
 
 
