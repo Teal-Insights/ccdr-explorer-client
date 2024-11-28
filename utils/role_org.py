@@ -23,8 +23,7 @@ class InsufficientPermissionsError(HTTPException):
 
 def get_user_organizations(
     user_id: int,
-    session: Session,
-    include_deleted: bool = False
+    session: Session
 ) -> List[Organization]:
     """
     Retrieve all organizations a user is a member of.
@@ -32,7 +31,6 @@ def get_user_organizations(
     Args:
         user_id: ID of the user
         session: Database session
-        include_deleted: Whether to include soft-deleted organizations
 
     Returns:
         List of Organization objects the user belongs to
@@ -42,9 +40,6 @@ def get_user_organizations(
         .join(UserOrganizationLink)
         .where(UserOrganizationLink.user_id == user_id)
     )
-
-    if not include_deleted:
-        query = query.where(Organization.deleted == False)
 
     return list(session.exec(query))
 
@@ -83,7 +78,7 @@ def get_organization(
         raise InsufficientPermissionsError()
 
     db_org = session.get(Organization, org_id)
-    if not db_org or db_org.deleted:
+    if not db_org:
         raise OrganizationNotFoundError()
 
     return db_org
@@ -143,8 +138,7 @@ def check_user_permission(
 
 def get_organization_roles(
     organization_id: int,
-    session: Session,
-    include_deleted: bool = False
+    session: Session
 ) -> List[Role]:
     """
     Retrieve all roles for an organization.
@@ -152,13 +146,10 @@ def get_organization_roles(
     Args:
         organization_id: ID of the organization
         session: Database session
-        include_deleted: Whether to include soft-deleted roles
 
     Returns:
         List of Role objects with their associated permissions
     """
     query = select(Role).where(Role.organization_id == organization_id)
-    if not include_deleted:
-        query = query.where(Role.deleted == False)
 
     return list(session.exec(query))

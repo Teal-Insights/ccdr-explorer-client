@@ -114,7 +114,6 @@ class UserRead(BaseModel):
     organization_id: Optional[int]
     created_at: datetime
     updated_at: datetime
-    deleted: bool
 
 
 # -- Routes --

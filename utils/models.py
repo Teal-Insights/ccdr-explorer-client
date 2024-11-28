@@ -26,8 +26,9 @@ class ValidPermissions(Enum):
 
 class UserOrganizationLink(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
-    organization_id: int = Field(foreign_key="organization.id")
+    user_id: int = Field(foreign_key="user.id", ondelete="CASCADE")
+    organization_id: int = Field(
+        foreign_key="organization.id", ondelete="CASCADE")
     role_id: int = Field(foreign_key="role.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
@@ -50,7 +51,6 @@ class Organization(SQLModel, table=True):
     name: str
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     user_links: List[UserOrganizationLink] = Relationship(
         back_populates="organization")
@@ -67,7 +67,6 @@ class Role(SQLModel, table=True):
     organization_id: int = Field(foreign_key="organization.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     organization: Organization = Relationship(back_populates="roles")
     user_links: List[UserOrganizationLink] = Relationship(
@@ -84,7 +83,6 @@ class Permission(SQLModel, table=True):
         sa_column=Column(SQLAlchemyEnum(ValidPermissions, create_type=False)))
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     roles: List["Role"] = Relationship(
         back_populates="permissions",
@@ -94,7 +92,7 @@ class Permission(SQLModel, table=True):
 
 class PasswordResetToken(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    user_id: Optional[int] = Field(foreign_key="user.id", ondelete="CASCADE")
     token: str = Field(default_factory=lambda: str(
         uuid4()), index=True, unique=True)
     expires_at: datetime = Field(
@@ -113,10 +111,10 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-    deleted: bool = Field(default=False)
 
     organization_links: List[UserOrganizationLink] = Relationship(
-        back_populates="user")
+        back_populates="user"
+    )
     organizations: List["Organization"] = Relationship(
         back_populates="users",
         link_model=UserOrganizationLink

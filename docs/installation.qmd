@@ -20,6 +20,8 @@ If you use VSCode with Docker to develop in a container, the following VSCode De
 
 Simply create a `.devcontainer` folder in the root of the project and add a `devcontainer.json` file in the folder with the above content. VSCode may prompt you to install the Dev Container extension if you haven't already, and/or to open the project in a container. If not, you can manually select "Dev Containers: Reopen in Container" from View > Command Palette.
 
+*IMPORTANT: If using this dev container configuration, you will need to set the `DB_HOST` environment variable to "host.docker.internal" in the `.env` file.*
+
 ## Install development dependencies manually
 
 ### Python and Docker
@@ -103,15 +105,32 @@ Set your desired database name, username, and password in the .env file.
 
 To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
 
+If using the dev container configuration, you will need to set the `DB_HOST` environment variable to "host.docker.internal" in the .env file. Otherwise, set `DB_HOST` to "localhost" for local development. (In production, `DB_HOST` will be set to the hostname of the database server.)
+
 ## Start development database
+
+To start the development database, run the following command in your terminal from the root directory:
 
 ``` bash
 docker compose up -d
 ```
 
+If at any point you change the environment variables in the .env file, you will need to stop the database service *and tear down the volume*:
+
+``` bash
+# Don't forget the -v flag to tear down the volume!
+docker compose down -v
+```
+
+You may also need to restart the terminal session to pick up the new environment variables. You can also add the `--force-recreate` and `--build` flags to the startup command to ensure the container is rebuilt:
+
+``` bash
+docker compose up -d --force-recreate --build
+```
+
 ## Run the development server
 
-Make sure the development database is running and tables and default permissions/roles are created first.
+Before running the development server, make sure the development database is running and tables and default permissions/roles are created first. Then run the following command in your terminal from the root directory:
 
 ``` bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload

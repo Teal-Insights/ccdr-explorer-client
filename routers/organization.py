@@ -83,7 +83,6 @@ class OrganizationRead(BaseModel):
     name: str
     created_at: datetime
     updated_at: datetime
-    deleted: bool
 
 
 class OrganizationUpdate(BaseModel):
@@ -188,12 +187,7 @@ def delete_organization(
     # This will raise appropriate exceptions if org doesn't exist or user lacks access
     organization = get_organization(org_id, user.id, session)
 
-    if not check_user_permission(user.id, org_id, ValidPermissions.DELETE_ORGANIZATION, session):
-        raise InsufficientPermissionsError()
-
-    organization.deleted = True
-    organization.updated_at = utc_time()
-    session.add(organization)
+    session.delete(organization)
     session.commit()
 
     return RedirectResponse(url="/profile", status_code=303)

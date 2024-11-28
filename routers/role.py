@@ -25,7 +25,7 @@ class RoleAlreadyExistsError(HTTPException):
 
 
 class RoleNotFoundError(HTTPException):
-    """Raised when a requested role does not exist or is deleted"""
+    """Raised when a requested role does not exist"""
 
     def __init__(self):
         super().__init__(status_code=404, detail="Role not found")
@@ -70,7 +70,6 @@ class RoleRead(BaseModel):
     name: str
     created_at: datetime
     updated_at: datetime
-    deleted: bool
     permissions: List[ValidPermissions]
 
 
@@ -87,7 +86,7 @@ class RoleUpdate(BaseModel):
         session = info.context.get("session")
         if session:
             role = session.get(Role, id)
-            if not role or not role.id or role.deleted:
+            if not role or not role.id:
                 raise RoleNotFoundError()
         return id
 
@@ -141,7 +140,6 @@ def update_role(
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     db_role: Role | None = session.get(Role, role.id)
-
     role_data = role.model_dump(exclude_unset=True)
     for key, value in role_data.items():
         setattr(db_role, key, value)
@@ -164,6 +162,7 @@ def update_role(
     return RedirectResponse(url="/profile", status_code=303)
 
 
+# TODO: Reject role deletion if anyone in the organization has that role
 @router.delete("/{role_id}", response_class=RedirectResponse)
 def delete_role(
     role_id: int,
@@ -172,10 +171,7 @@ def delete_role(
 ) -> RedirectResponse:
     db_role = session.get(Role, role_id)
     if not db_role:
-        raise RoleNotFoundError()
-
-    db_role.deleted = True
-    db_role.updated_at = utc_time()
-    session.add(db_role)
+        raise HTTPException(status_code=404, detail="Role not found")
+    session.delete(db_role)
     session.commit()
     return RedirectResponse(url="/profile", status_code=303)
