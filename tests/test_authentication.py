@@ -86,9 +86,9 @@ def test_invalid_token_type():
 # --- API Endpoint Tests ---
 
 
-def test_register_endpoint(client: TestClient, session: Session):
-    response = client.post(
-        "/auth/register",
+def test_register_endpoint(unauth_client: TestClient, session: Session):
+    response = unauth_client.post(
+        app.url_path_for("register"),
         data={
             "name": "New User",
             "email": "new@example.com",
@@ -107,9 +107,9 @@ def test_register_endpoint(client: TestClient, session: Session):
     assert verify_password("NewPass123!@#", user.hashed_password)
 
 
-def test_login_endpoint(client: TestClient, test_user: User):
-    response = client.post(
-        "/auth/login",
+def test_login_endpoint(unauth_client: TestClient, test_user: User):
+    response = unauth_client.post(
+        app.url_path_for("login"),
         data={
             "email": test_user.email,
             "password": "Test123!@#"
@@ -124,18 +124,18 @@ def test_login_endpoint(client: TestClient, test_user: User):
     assert "refresh_token" in cookies
 
 
-def test_refresh_token_endpoint(client: TestClient, test_user: User):
-    # Create expired access token and valid refresh token
-    access_token = create_access_token(
+def test_refresh_token_endpoint(auth_client: TestClient, test_user: User):
+    # Override just the access token to be expired, keeping the valid refresh token
+    expired_access_token = create_access_token(
         {"sub": test_user.email},
         timedelta(minutes=-10)
     )
-    refresh_token = create_refresh_token({"sub": test_user.email})
+    auth_client.cookies.set("access_token", expired_access_token)
 
-    client.cookies.set("access_token", access_token)
-    client.cookies.set("refresh_token", refresh_token)
-
-    response = client.post("/auth/refresh", follow_redirects=False)
+    response = auth_client.post(
+        app.url_path_for("refresh_token"),
+        follow_redirects=False
+    )
     assert response.status_code == 303
 
     # Check for new tokens in headers
@@ -155,10 +155,10 @@ def test_refresh_token_endpoint(client: TestClient, test_user: User):
     assert decoded["sub"] == test_user.email
 
 
-def test_password_reset_flow(client: TestClient, session: Session, test_user: User, mock_resend_send):
+def test_password_reset_flow(unauth_client: TestClient, session: Session, test_user: User, mock_resend_send):
     # Test forgot password request
-    response = client.post(
-        "/auth/forgot_password",
+    response = unauth_client.post(
+        app.url_path_for("forgot_password"),
         data={"email": test_user.email},
         follow_redirects=False
     )
@@ -188,8 +188,8 @@ def test_password_reset_flow(client: TestClient, session: Session, test_user: Us
     assert not reset_token.used
 
     # Test password reset
-    response = client.post(
-        "/auth/reset_password",
+    response = unauth_client.post(
+        app.url_path_for("reset_password"),
         data={
             "email": test_user.email,
             "token": reset_token.token,
@@ -207,12 +207,11 @@ def test_password_reset_flow(client: TestClient, session: Session, test_user: Us
     assert reset_token.used
 
 
-def test_logout_endpoint(client: TestClient):
-    # First set some cookies
-    client.cookies.set("access_token", "some_access_token")
-    client.cookies.set("refresh_token", "some_refresh_token")
-
-    response = client.get("/auth/logout", follow_redirects=False)
+def test_logout_endpoint(auth_client: TestClient):
+    response = auth_client.get(
+        app.url_path_for("logout"),
+        follow_redirects=False
+    )
     assert response.status_code == 303
 
     # Check for cookie deletion in headers
@@ -226,9 +225,9 @@ def test_logout_endpoint(client: TestClient):
 # --- Error Case Tests ---
 
 
-def test_register_with_existing_email(client: TestClient, test_user: User):
-    response = client.post(
-        "/auth/register",
+def test_register_with_existing_email(unauth_client: TestClient, test_user: User):
+    response = unauth_client.post(
+        app.url_path_for("register"),
         data={
             "name": "Another User",
             "email": test_user.email,
@@ -239,9 +238,9 @@ def test_register_with_existing_email(client: TestClient, test_user: User):
     assert response.status_code == 400
 
 
-def test_login_with_invalid_credentials(client: TestClient, test_user: User):
-    response = client.post(
-        "/auth/login",
+def test_login_with_invalid_credentials(unauth_client: TestClient, test_user: User):
+    response = unauth_client.post(
+        app.url_path_for("login"),
         data={
             "email": test_user.email,
             "password": "WrongPass123!@#"
@@ -250,9 +249,9 @@ def test_login_with_invalid_credentials(client: TestClient, test_user: User):
     assert response.status_code == 400
 
 
-def test_password_reset_with_invalid_token(client: TestClient, test_user: User):
-    response = client.post(
-        "/auth/reset_password",
+def test_password_reset_with_invalid_token(unauth_client: TestClient, test_user: User):
+    response = unauth_client.post(
+        app.url_path_for("reset_password"),
         data={
             "email": test_user.email,
             "token": "invalid_token",
@@ -263,7 +262,7 @@ def test_password_reset_with_invalid_token(client: TestClient, test_user: User):
     assert response.status_code == 400
 
 
-def test_password_reset_url_generation(client: TestClient):
+def test_password_reset_url_generation(unauth_client: TestClient):
     """
     Tests that the password reset URL is correctly formatted and contains
     the required query parameters.
@@ -290,12 +289,12 @@ def test_password_reset_url_generation(client: TestClient):
     assert query_params["token"][0] == test_token
 
 
-def test_password_reset_email_url(client: TestClient, session: Session, test_user: User, mock_resend_send):
+def test_password_reset_email_url(unauth_client: TestClient, session: Session, test_user: User, mock_resend_send):
     """
     Tests that the password reset email contains a properly formatted reset URL.
     """
-    response = client.post(
-        "/auth/forgot_password",
+    response = unauth_client.post(
+        app.url_path_for("forgot_password"),
         data={"email": test_user.email},
         follow_redirects=False
     )
