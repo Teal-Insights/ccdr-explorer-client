@@ -107,6 +107,31 @@ class RoleUpdate(BaseModel):
         )
 
 
+# -- Helper Functions --
+
+def get_organization_roles(
+    organization_id: int,
+    session: Session,
+    include_deleted: bool = False
+) -> List[Role]:
+    """
+    Retrieve all roles for an organization.
+
+    Args:
+        organization_id: ID of the organization
+        session: Database session
+        include_deleted: Whether to include soft-deleted roles
+
+    Returns:
+        List of Role objects with their associated permissions
+    """
+    query = select(Role).where(Role.organization_id == organization_id)
+    if not include_deleted:
+        query = query.where(Role.deleted == False)
+
+    return list(session.exec(query))
+
+
 # -- Routes --
 
 
@@ -117,7 +142,10 @@ def create_role(
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     # Create role and permissions in a single transaction
-    db_role = Role(name=role.name)
+    db_role = Role(
+        name=role.name,
+        organization_id=user.organization_id  # Add organization ID to role
+    )
 
     # Create RolePermissionLink objects and associate them with the role
     db_role.permissions = [
@@ -129,32 +157,6 @@ def create_role(
     session.commit()
 
     return RedirectResponse(url="/roles", status_code=303)
-
-
-@router.get("/{role_id}", response_model=RoleRead)
-def read_role(
-    role_id: int,
-    user: User = Depends(get_authenticated_user),
-    session: Session = Depends(get_session)
-):
-    db_role: Role | None = session.get(Role, role_id)
-    if not db_role or not db_role.id or db_role.deleted:
-        raise RoleNotFoundError()
-
-    permissions = [
-        ValidPermissions(link.permission.name)
-        for link in db_role.role_permission_links
-        if link.permission is not None
-    ]
-
-    return RoleRead(
-        id=db_role.id,
-        name=db_role.name,
-        created_at=db_role.created_at,
-        updated_at=db_role.updated_at,
-        deleted=db_role.deleted,
-        permissions=permissions
-    )
 
 
 @router.put("/{role_id}", response_class=RedirectResponse)
