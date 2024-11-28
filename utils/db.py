@@ -39,24 +39,51 @@ def get_session():
         yield session
 
 
-def create_roles(session):
+def create_default_roles(session, organization_id: int, check_first: bool = True):
     """
-    Create default roles in the database if they do not exist.
+    Create default roles for an organization in the database if they do not exist.
     """
     roles_in_db = []
     for role_name in default_roles:
         db_role = session.exec(select(Role).where(
-            Role.name == role_name)).first()
+            Role.name == role_name,
+            Role.organization_id == organization_id
+        )).first()
         if not db_role:
-            db_role = Role(name=role_name)
+            db_role = Role(name=role_name, organization_id=organization_id)
             session.add(db_role)
         roles_in_db.append(db_role)
+
+    # Create RolePermissionLink for Owner and Administrator roles
+    for role in roles_in_db[:2]:
+        permissions = session.exec(select(Permission)).all()
+        for permission in permissions:
+            # Check if the role already has the permission
+            if check_first:
+                db_role_permission_link: RolePermissionLink | None = session.exec(select(RolePermissionLink).where(
+                    RolePermissionLink.role_id == role.id,
+                    RolePermissionLink.permission_id == permission.id
+                )).first()
+            else:
+                db_role_permission_link = None
+
+            # Skip giving DELETE_ORGANIZATION permission to Administrator
+            if not db_role_permission_link and not (
+                permission == ValidPermissions.DELETE_ORGANIZATION and
+                role.name == "Administrator"
+            ):
+                role_permission_link = RolePermissionLink(
+                    role_id=role.id,
+                    permission_id=permission.id
+                )
+                session.add(role_permission_link)
+
     return roles_in_db
 
 
-def create_permissions(session, roles_in_db):
+def create_permissions(session):
     """
-    Create default permissions and link them to roles in the database.
+    Create default permissions.
     """
     for permission in ValidPermissions:
         db_permission = session.exec(select(Permission).where(
@@ -64,17 +91,6 @@ def create_permissions(session, roles_in_db):
         if not db_permission:
             db_permission = Permission(name=permission)
             session.add(db_permission)
-
-        # Create RolePermissionLink for Owner and Administrator
-        for role in roles_in_db[:2]:
-            db_role_permission_link = session.exec(select(RolePermissionLink).where(
-                RolePermissionLink.role_id == role.id,
-                RolePermissionLink.permission_id == db_permission.id)).first()
-            if not db_role_permission_link:
-                if not (permission == ValidPermissions.DELETE_ORGANIZATION and role.name == "Administrator"):
-                    role_permission_link = RolePermissionLink(
-                        role_id=role.id, permission_id=db_permission.id)
-                    session.add(role_permission_link)
 
 
 def set_up_db(drop: bool = False):
@@ -85,10 +101,9 @@ def set_up_db(drop: bool = False):
     if drop:
         SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
+    # Create default permissions
     with Session(engine) as session:
-        roles_in_db = create_roles(session)
-        session.commit()
-        create_permissions(session, roles_in_db)
+        create_permissions(session)
         session.commit()
     engine.dispose()
 

@@ -20,7 +20,8 @@ logger.setLevel(logging.DEBUG)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Optional startup logic
-    set_up_db(drop=False)
+    # TODO: Set drop=False in production
+    set_up_db(drop=True)
     yield
     # Optional shutdown logic
 

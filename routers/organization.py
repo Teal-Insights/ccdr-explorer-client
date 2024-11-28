@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
 from utils.auth import get_authenticated_user
-from utils.models import Organization, User, Role, UserOrganizationLink, ValidPermissions, utc_time
+from utils.models import Organization, User, Role, Permission, UserOrganizationLink, ValidPermissions, utc_time
 from datetime import datetime
 from sqlalchemy import and_
 from utils.role_org import get_organization, check_user_permission
@@ -118,6 +118,15 @@ def create_organization(
     session.add(db_org)
     session.commit()
     session.refresh(db_org)
+
+    # Create default roles
+    default_role_names = ["Owner", "Administrator", "Member"]
+    default_roles = []
+    for role_name in default_role_names:
+        role = Role(name=role_name, organization_id=db_org.id)
+        session.add(role)
+        default_roles.append(role)
+    session.commit()
 
     owner_role = session.exec(
         select(Role).where(

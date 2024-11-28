@@ -1,6 +1,6 @@
 from typing import List
 from sqlmodel import Session, select
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from fastapi import HTTPException
 from utils.models import Organization, Role, UserOrganizationLink, RolePermissionLink, Permission, ValidPermissions
 
@@ -150,6 +150,11 @@ def get_organization_roles(
     Returns:
         List of Role objects with their associated permissions
     """
-    query = select(Role).where(Role.organization_id == organization_id)
+    query = select(Role).where(
+        or_(
+            Role.organization_id == organization_id,
+            Role.organization_id == None
+        )
+    )
 
     return list(session.exec(query))

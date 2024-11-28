@@ -62,13 +62,23 @@ class Organization(SQLModel, table=True):
 
 
 class Role(SQLModel, table=True):
+    """
+    Represents a role within an organization.
+
+    Attributes:
+        id: Primary key.
+        name: The name of the role.
+        organization_id: Foreign key to the associated organization.
+        created_at: Timestamp when the role was created.
+        updated_at: Timestamp when the role was last updated.
+    """
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     organization_id: int = Field(foreign_key="organization.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    organization: Organization = Relationship(back_populates="roles")
+    organization: "Organization" = Relationship(back_populates="roles")
     user_links: List[UserOrganizationLink] = Relationship(
         back_populates="role")
     permissions: List["Permission"] = Relationship(
@@ -78,6 +88,9 @@ class Role(SQLModel, table=True):
 
 
 class Permission(SQLModel, table=True):
+    """
+    Represents a permission that can be assigned to a role.
+    """
     id: Optional[int] = Field(default=None, primary_key=True)
     name: ValidPermissions = Field(
         sa_column=Column(SQLAlchemyEnum(ValidPermissions, create_type=False)))
