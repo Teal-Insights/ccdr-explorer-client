@@ -3,7 +3,7 @@ from uuid import uuid4
 from datetime import datetime, UTC, timedelta
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Enum as SQLAlchemyEnum, ForeignKey
+from sqlalchemy import Column, Enum as SQLAlchemyEnum
 
 
 def utc_time():
@@ -13,6 +13,8 @@ def utc_time():
 default_roles = ["Owner", "Administrator", "Member"]
 
 
+# TODO: User with permission to create/edit roles can only assign permissions
+# they themselves have.
 class ValidPermissions(Enum):
     DELETE_ORGANIZATION = "Delete Organization"
     EDIT_ORGANIZATION = "Edit Organization"
@@ -24,23 +26,16 @@ class ValidPermissions(Enum):
     EDIT_ROLE = "Edit Role"
 
 
-class UserOrganizationLink(SQLModel, table=True):
+class UserRoleLink(SQLModel, table=True):
+    """
+    Associates users with roles. This creates a many-to-many relationship
+    between users and roles.
+    """
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    organization_id: int = Field(foreign_key="organization.id")
     role_id: int = Field(foreign_key="role.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
-
-    user: "User" = Relationship(
-        back_populates="organization_links"
-    )
-    organization: "Organization" = Relationship(
-        back_populates="user_links"
-    )
-    role: "Role" = Relationship(
-        back_populates="user_links"
-    )
 
 
 class RolePermissionLink(SQLModel, table=True):
@@ -74,14 +69,20 @@ class Organization(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    user_links: List[UserOrganizationLink] = Relationship(
+    roles: List["Role"] = Relationship(
         back_populates="organization",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
             "passive_deletes": True
         }
     )
-    roles: List["Role"] = Relationship(back_populates="organization")
+
+    @property
+    def users(self) -> List["User"]:
+        """
+        Returns all users in the organization via their roles.
+        """
+        return [role.users for role in self.roles]
 
 
 class Role(SQLModel, table=True):
@@ -101,9 +102,11 @@ class Role(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    organization: "Organization" = Relationship(back_populates="roles")
-    user_links: List[UserOrganizationLink] = Relationship(
-        back_populates="role")
+    organization: Organization = Relationship(back_populates="roles")
+    users: List["User"] = Relationship(
+        back_populates="roles",
+        link_model=UserRoleLink
+    )
     permissions: List["Permission"] = Relationship(
         back_populates="roles",
         link_model=RolePermissionLink
@@ -133,12 +136,9 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    organization_links: List[UserOrganizationLink] = Relationship(
-        back_populates="user",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-            "passive_deletes": True
-        }
+    roles: List[Role] = Relationship(
+        back_populates="users",
+        link_model=UserRoleLink
     )
     password_reset_tokens: List["PasswordResetToken"] = Relationship(
         back_populates="user",
@@ -147,3 +147,10 @@ class User(SQLModel, table=True):
             "passive_deletes": True
         }
     )
+
+    @property
+    def organizations(self) -> List[Organization]:
+        """
+        Returns all organizations the user belongs to via their roles.
+        """
+        return [role.organization for role in self.roles]

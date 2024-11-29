@@ -8,12 +8,13 @@ import resend
 from dotenv import load_dotenv
 from pydantic import field_validator, ValidationInfo
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from fastapi import Depends, Cookie, HTTPException, status
 from utils.db import get_session
-from utils.models import User, PasswordResetToken
+from utils.models import User, Role, PasswordResetToken
 
 load_dotenv()
 logger = logging.getLogger("uvicorn.error")
@@ -339,3 +340,23 @@ def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple
 
     user, reset_token = result
     return user, reset_token
+
+
+def get_user_with_relations(
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session),
+) -> User:
+    """
+    Returns an authenticated user with fully loaded role and organization relationships.
+    """
+    # Refresh the user instance with eagerly loaded relationships
+    eager_user = session.exec(
+        select(User)
+        .where(User.id == user.id)
+        .options(
+            selectinload(User.roles).selectinload(Role.organization),
+            selectinload(User.roles).selectinload(Role.permissions)
+        )
+    ).one()
+
+    return eager_user

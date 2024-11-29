@@ -4,11 +4,9 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
-from utils.auth import get_authenticated_user
-from utils.models import Organization, User, Role, Permission, UserOrganizationLink, ValidPermissions, utc_time
+from utils.auth import get_authenticated_user, get_user_with_relations
+from utils.models import Organization, User, Role, utc_time, default_roles
 from datetime import datetime
-from sqlalchemy import and_
-from utils.role_org import get_organization, check_user_permission
 
 logger = getLogger("uvicorn.error")
 
@@ -20,14 +18,6 @@ class EmptyOrganizationNameError(HTTPException):
         super().__init__(
             status_code=400,
             detail="Organization name cannot be empty"
-        )
-
-
-class OrganizationExistsError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=400,
-            detail="Organization already exists"
         )
 
 
@@ -109,50 +99,35 @@ def create_organization(
     user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
+    # Check if organization already exists
     db_org = session.exec(select(Organization).where(
         Organization.name == org.name)).first()
     if db_org:
-        raise OrganizationExistsError()
+        raise OrganizationNameTakenError()
 
+    # Create organization first
     db_org = Organization(name=org.name)
     session.add(db_org)
+    # This gets us the org ID without committing
+    session.flush()
+
+    # Create default roles with organization_id
+    initial_roles = [
+        Role(name=name, organization_id=db_org.id)
+        for name in default_roles
+    ]
+    session.add_all(initial_roles)
+    session.flush()
+
+    # Get owner role for user assignment
+    owner_role = next(role for role in db_org.roles if role.name == "Owner")
+
+    # Assign user to owner role
+    user.roles.append(owner_role)
+
+    # Commit changes
     session.commit()
     session.refresh(db_org)
-
-    # Create default roles
-    default_role_names = ["Owner", "Administrator", "Member"]
-    default_roles = []
-    for role_name in default_role_names:
-        role = Role(name=role_name, organization_id=db_org.id)
-        session.add(role)
-        default_roles.append(role)
-    session.commit()
-
-    owner_role = session.exec(
-        select(Role).where(
-            and_(
-                Role.organization_id == db_org.id,
-                Role.name == "Owner"
-            )
-        )
-    ).first()
-
-    if not owner_role:
-        owner_role = Role(
-            name="Owner",
-            organization_id=db_org.id
-        )
-        session.add(owner_role)
-        session.commit()
-        session.refresh(owner_role)
-
-    user_org_link = UserOrganizationLink(
-        user_id=user.id,
-        organization_id=db_org.id,
-        role_id=owner_role.id
-    )
-    session.add(user_org_link)
-    session.commit()
 
     return RedirectResponse(url=f"/profile", status_code=303)
 
@@ -160,13 +135,13 @@ def create_organization(
 @router.put("/{org_id}", response_class=RedirectResponse)
 def update_organization(
     org: OrganizationUpdate = Depends(OrganizationUpdate.as_form),
-    user: User = Depends(get_authenticated_user),
+    user: User = Depends(get_user_with_relations),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     # This will raise appropriate exceptions if org doesn't exist or user lacks access
-    organization = get_organization(org.id, user.id, session)
+    organization: Organization = user.organizations.get(org.id)
 
-    if not check_user_permission(user.id, org.id, ValidPermissions.EDIT_ORGANIZATION, session):
+    if not organization or not any(role.permissions.EDIT_ORGANIZATION for role in organization.roles):
         raise InsufficientPermissionsError()
 
     # Check if new name already exists for another organization
@@ -178,11 +153,11 @@ def update_organization(
     if existing_org:
         raise OrganizationNameTakenError()
 
+    # Update organization name
     organization.name = org.name
     organization.updated_at = utc_time()
     session.add(organization)
     session.commit()
-    session.refresh(organization)
 
     return RedirectResponse(url=f"/profile", status_code=303)
 
@@ -190,12 +165,15 @@ def update_organization(
 @router.delete("/{org_id}", response_class=RedirectResponse)
 def delete_organization(
     org_id: int,
-    user: User = Depends(get_authenticated_user),
+    user: User = Depends(get_user_with_relations),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
-    # This will raise appropriate exceptions if org doesn't exist or user lacks access
-    organization = get_organization(org_id, user.id, session)
+    # Check if user has permission to delete organization
+    organization: Organization = user.organizations.get(org_id)
+    if not organization or not any(role.permissions.DELETE_ORGANIZATION for role in organization.roles):
+        raise InsufficientPermissionsError()
 
+    # Delete organization
     session.delete(organization)
     session.commit()
 
