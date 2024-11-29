@@ -119,6 +119,7 @@ class UserRead(BaseModel):
 # -- Routes --
 
 
+# TODO: Use custom error message in the case where the user is already registered
 @router.post("/register", response_class=RedirectResponse)
 async def register(
     user: UserRegister = Depends(UserRegister.as_form),

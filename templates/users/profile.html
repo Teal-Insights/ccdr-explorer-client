@@ -59,7 +59,7 @@
             Change Password
         </div>
         <div class="card-body">
-            <!-- Trigger password reset via email confirmation -->
+            <!-- TODO: Trigger password reset via email confirmation -->
             <form action="{{ url_for('forgot_password') }}" method="post">
                 <input type="hidden" name="email" value="{{ user.email }}">
                 <p>To change your password, please confirm your email. A password reset link will be sent to your email address.</p>
@@ -68,8 +68,8 @@
         </div>
     </div>
 
-    <!-- Organizations Section - Add this before the Delete Account section -->
-    {{ render_organizations(organizations) }}
+    <!-- Organizations Section -->
+    {{ render_organizations(user.roles|map(attribute='organization')|list) }}
 
     <!-- Delete Account -->
     <div class="card mb-4">

@@ -93,7 +93,7 @@ class OrganizationUpdate(BaseModel):
 
 # -- Routes --
 
-@router.post("/", response_class=RedirectResponse)
+@router.post("/create", name="create_organization", response_class=RedirectResponse)
 def create_organization(
     org: OrganizationCreate = Depends(OrganizationCreate.as_form),
     user: User = Depends(get_authenticated_user),
@@ -132,7 +132,7 @@ def create_organization(
     return RedirectResponse(url=f"/profile", status_code=303)
 
 
-@router.put("/{org_id}", response_class=RedirectResponse)
+@router.post("/update/{org_id}", name="update_organization", response_class=RedirectResponse)
 def update_organization(
     org: OrganizationUpdate = Depends(OrganizationUpdate.as_form),
     user: User = Depends(get_user_with_relations),
@@ -162,7 +162,7 @@ def update_organization(
     return RedirectResponse(url=f"/profile", status_code=303)
 
 
-@router.delete("/{org_id}", response_class=RedirectResponse)
+@router.post("/delete/{org_id}", name="delete_organization", response_class=RedirectResponse)
 def delete_organization(
     org_id: int,
     user: User = Depends(get_user_with_relations),

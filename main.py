@@ -229,14 +229,6 @@ async def read_reset_password(
 # Define a dependency for common parameters
 async def common_authenticated_parameters(
     request: Request,
-    user: User = Depends(get_authenticated_user),
-    error_message: Optional[str] = None,
-) -> dict:
-    return {"request": request, "user": user, "error_message": error_message}
-
-
-async def common_authenticated_parameters_with_organizations(
-    request: Request,
     user: User = Depends(get_user_with_relations),
     error_message: Optional[str] = None
 ) -> dict:
@@ -253,9 +245,8 @@ async def read_dashboard(
 
 @app.get("/profile")
 async def read_profile(
-    params: dict = Depends(common_authenticated_parameters_with_organizations)
+    params: dict = Depends(common_authenticated_parameters)
 ):
-    params["organizations"] = params["user"].organizations
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
 
 
