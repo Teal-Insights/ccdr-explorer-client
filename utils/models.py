@@ -3,7 +3,7 @@ from uuid import uuid4
 from datetime import datetime, UTC, timedelta
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Enum as SQLAlchemyEnum
+from sqlalchemy import Column, Enum as SQLAlchemyEnum, ForeignKey
 
 
 def utc_time():
@@ -26,16 +26,21 @@ class ValidPermissions(Enum):
 
 class UserOrganizationLink(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", ondelete="CASCADE")
-    organization_id: int = Field(
-        foreign_key="organization.id", ondelete="CASCADE")
+    user_id: int = Field(foreign_key="user.id")
+    organization_id: int = Field(foreign_key="organization.id")
     role_id: int = Field(foreign_key="role.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    user: "User" = Relationship(back_populates="organization_links")
-    organization: "Organization" = Relationship(back_populates="user_links")
-    role: "Role" = Relationship(back_populates="user_links")
+    user: "User" = Relationship(
+        back_populates="organization_links"
+    )
+    organization: "Organization" = Relationship(
+        back_populates="user_links"
+    )
+    role: "Role" = Relationship(
+        back_populates="user_links"
+    )
 
 
 class RolePermissionLink(SQLModel, table=True):
@@ -46,6 +51,23 @@ class RolePermissionLink(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_time)
 
 
+class Permission(SQLModel, table=True):
+    """
+    Represents a permission that can be assigned to a role. Should not be
+    modified unless the application logic and ValidPermissions enum change.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: ValidPermissions = Field(
+        sa_column=Column(SQLAlchemyEnum(ValidPermissions, create_type=False)))
+    created_at: datetime = Field(default_factory=utc_time)
+    updated_at: datetime = Field(default_factory=utc_time)
+
+    roles: List["Role"] = Relationship(
+        back_populates="permissions",
+        link_model=RolePermissionLink
+    )
+
+
 class Organization(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -53,10 +75,11 @@ class Organization(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_time)
 
     user_links: List[UserOrganizationLink] = Relationship(
-        back_populates="organization")
-    users: List["User"] = Relationship(
-        back_populates="organizations",
-        link_model=UserOrganizationLink
+        back_populates="organization",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }
     )
     roles: List["Role"] = Relationship(back_populates="organization")
 
@@ -87,25 +110,9 @@ class Role(SQLModel, table=True):
     )
 
 
-class Permission(SQLModel, table=True):
-    """
-    Represents a permission that can be assigned to a role.
-    """
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: ValidPermissions = Field(
-        sa_column=Column(SQLAlchemyEnum(ValidPermissions, create_type=False)))
-    created_at: datetime = Field(default_factory=utc_time)
-    updated_at: datetime = Field(default_factory=utc_time)
-
-    roles: List["Role"] = Relationship(
-        back_populates="permissions",
-        link_model=RolePermissionLink
-    )
-
-
 class PasswordResetToken(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: Optional[int] = Field(foreign_key="user.id", ondelete="CASCADE")
+    user_id: Optional[int] = Field(foreign_key="user.id")
     token: str = Field(default_factory=lambda: str(
         uuid4()), index=True, unique=True)
     expires_at: datetime = Field(
@@ -116,6 +123,7 @@ class PasswordResetToken(SQLModel, table=True):
         back_populates="password_reset_tokens")
 
 
+# TODO: Prevent deleting a user who is sole owner of an organization
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -126,11 +134,16 @@ class User(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_time)
 
     organization_links: List[UserOrganizationLink] = Relationship(
-        back_populates="user"
-    )
-    organizations: List["Organization"] = Relationship(
-        back_populates="users",
-        link_model=UserOrganizationLink
+        back_populates="user",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }
     )
     password_reset_tokens: List["PasswordResetToken"] = Relationship(
-        back_populates="user")
+        back_populates="user",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True
+        }
+    )

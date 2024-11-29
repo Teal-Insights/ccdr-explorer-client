@@ -9,7 +9,7 @@ from utils.db import (
     set_up_db,
 )
 from utils.models import Role, Permission, Organization, RolePermissionLink, ValidPermissions
-from sqlalchemy import create_engine
+from sqlalchemy import Engine
 
 
 def test_get_connection_url():
@@ -126,7 +126,7 @@ def test_assign_permissions_to_role_duplicate_check(session: Session, test_organ
     assert len(link_count) == 1
 
 
-def test_set_up_db_creates_tables():
+def test_set_up_db_creates_tables(engine: Engine, session: Session):
     """Test that set_up_db creates all expected tables without warnings"""
     # First tear down any existing tables
     tear_down_db()
@@ -135,7 +135,6 @@ def test_set_up_db_creates_tables():
     set_up_db(drop=False)
 
     # Use SQLAlchemy inspect to check tables
-    engine = create_engine(get_connection_url())
     inspector = inspect(engine)
     table_names = inspector.get_table_names()
 
@@ -145,45 +144,33 @@ def test_set_up_db_creates_tables():
         "organization",
         "role",
         "permission",
-        "role_permission_link",
-        "password_reset_token"
+        "rolepermissionlink",
+        "passwordresettoken"
     }
     assert expected_tables.issubset(set(table_names))
 
     # Verify permissions were created
-    with Session(engine) as session:
-        permissions = session.exec(select(Permission)).all()
-        assert len(permissions) == len(ValidPermissions)
-
-    # Clean up
-    tear_down_db()
-    engine.dispose()
+    permissions = session.exec(select(Permission)).all()
+    assert len(permissions) == len(ValidPermissions)
 
 
-def test_set_up_db_drop_flag():
+def test_set_up_db_drop_flag(engine: Engine, session: Session):
     """Test that set_up_db's drop flag properly recreates tables"""
     # Set up db with drop=True
-    engine = create_engine(get_connection_url())
     set_up_db(drop=True)
 
-    # Create a new session for this test
-    with Session(engine) as session:
-        # Verify valid permissions exist
-        permissions = session.exec(select(Permission)).all()
-        assert len(permissions) == len(ValidPermissions)
+    # Verify valid permissions exist
+    permissions = session.exec(select(Permission)).all()
+    assert len(permissions) == len(ValidPermissions)
 
-        # Create an organization
-        org = Organization(name="Test Organization")
-        session.add(org)
-        session.commit()
+    # Create an organization
+    org = Organization(name="Test Organization")
+    session.add(org)
+    session.commit()
 
-        # Set up db with drop=False
-        set_up_db(drop=False)
+    # Set up db with drop=False
+    set_up_db(drop=False)
 
-        # Verify organization exists
-        assert session.exec(select(Organization).where(
-            Organization.name == "Test Organization")).first() is not None
-
-    # Clean up
-    tear_down_db()
-    engine.dispose()
+    # Verify organization exists
+    assert session.exec(select(Organization).where(
+        Organization.name == "Test Organization")).first() is not None

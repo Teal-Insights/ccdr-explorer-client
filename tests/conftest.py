@@ -1,6 +1,6 @@
 import pytest
 from dotenv import load_dotenv
-from sqlmodel import create_engine, Session, delete
+from sqlmodel import create_engine, Session, select
 from fastapi.testclient import TestClient
 from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
 from utils.models import User, PasswordResetToken, Organization
@@ -47,9 +47,15 @@ def clean_db(session: Session):
     """
     Cleans up the database tables before each test.
     """
-    # Exempt from mypy until SQLModel overload properly supports delete()
-    session.exec(delete(PasswordResetToken))  # type: ignore
-    session.exec(delete(User))  # type: ignore
+    # Delete all PasswordResetTokens
+    tokens = session.exec(select(PasswordResetToken)).all()
+    for token in tokens:
+        session.delete(token)
+
+    # Delete all Users
+    users = session.exec(select(User)).all()
+    for user in users:
+        session.delete(user)
 
     session.commit()
 
