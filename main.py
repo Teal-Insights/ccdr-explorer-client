@@ -8,8 +8,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError, HTTPException, StarletteHTTPException
 from sqlmodel import Session
 from routers import authentication, organization, role, user
-from utils.auth import get_authenticated_user, get_user_with_relations, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
-from utils.models import User
+from utils.auth import get_user_with_relations, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
+from utils.models import User, Organization
 from utils.db import get_session, set_up_db
 
 logger = logging.getLogger("uvicorn.error")
@@ -19,8 +19,7 @@ logger.setLevel(logging.DEBUG)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Optional startup logic
-    # TODO: Set drop=False in production
-    set_up_db(drop=True)
+    set_up_db()
     yield
     # Optional shutdown logic
 
@@ -248,6 +247,24 @@ async def read_profile(
     params: dict = Depends(common_authenticated_parameters)
 ):
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
+
+
+@app.get("/organizations/{org_id}")
+async def read_organization(
+    org_id: int,
+    params: dict = Depends(common_authenticated_parameters)
+):
+    # Get the organization only if the user is a member of it
+    organization: Organization = params["user"].organizations.get(org_id)
+    if not organization:
+        raise organization.OrganizationNotFoundError()
+
+    # Eagerly load roles and users
+    organization.roles
+    organization.users
+    params["organization"] = organization
+
+    return templates.TemplateResponse(params["request"], "users/organization.html", params)
 
 
 # -- Include Routers --

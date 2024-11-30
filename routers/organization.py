@@ -1,6 +1,6 @@
 from logging import getLogger
 from fastapi import APIRouter, Depends, HTTPException, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
@@ -93,7 +93,7 @@ class OrganizationUpdate(BaseModel):
 
 # -- Routes --
 
-@router.post("/create", name="create_organization", response_class=RedirectResponse)
+@router.post("/create", response_class=RedirectResponse)
 def create_organization(
     org: OrganizationCreate = Depends(OrganizationCreate.as_form),
     user: User = Depends(get_authenticated_user),
@@ -129,7 +129,7 @@ def create_organization(
     session.commit()
     session.refresh(db_org)
 
-    return RedirectResponse(url=f"/profile", status_code=303)
+    return RedirectResponse(url=f"/organizations/{db_org.id}", status_code=303)
 
 
 @router.post("/update/{org_id}", name="update_organization", response_class=RedirectResponse)
@@ -162,7 +162,7 @@ def update_organization(
     return RedirectResponse(url=f"/profile", status_code=303)
 
 
-@router.post("/delete/{org_id}", name="delete_organization", response_class=RedirectResponse)
+@router.post("/delete/{org_id}", response_class=RedirectResponse)
 def delete_organization(
     org_id: int,
     user: User = Depends(get_user_with_relations),
