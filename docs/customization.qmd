@@ -274,9 +274,9 @@ graph.write_png('static/schema.png')
 ![Database Schema](static/schema.png)
 
 
-#### Database operations
+#### Database helpers
 
-Database operations are handled by helper functions in `utils/db.py`. Key functions include:
+Database operations are facilitated by helper functions in `utils/db.py`. Key functions include:
 
 - `set_up_db()`: Initializes the database schema and default data (which we do on every application start in `main.py`)
 - `get_connection_url()`: Creates a database connection URL from environment variables in `.env`
@@ -292,3 +292,30 @@ async def get_users(session: Session = Depends(get_session)):
 ```
 
 The session automatically handles transaction management, ensuring that database operations are atomic and consistent.
+
+#### Cascade deletes
+
+Cascade deletes (in which deleting a record from one table deletes related records from another table) can be handled at either the ORM level or the database level. This template handles cascade deletes at the ORM level, via SQLModel relationships. Inside a SQLModel `Relationship`, we set:
+
+```python
+sa_relationship_kwargs={
+    "cascade": "all, delete-orphan"
+}
+```
+
+This tells SQLAlchemy to cascade all operations (e.g., `SELECT`, `INSERT`, `UPDATE`, `DELETE`) to the related table. Since this happens through the ORM, we need to be careful to do all our database operations through the ORM using supported syntax. That generally means loading database records into Python objects and then deleting those objects rather than deleting records in the database directly. 
+
+For example,
+
+```python
+session.exec(delete(Role))
+```
+
+will not trigger the cascade delete. Instead, we need to select the role objects and then delete them:
+
+```python
+for role in session.exec(select(Role)).all():
+    session.delete(role)
+```
+
+This is slower than deleting the records directly, but it makes [many-to-many relationships](https://sqlmodel.tiangolo.com/tutorial/many-to-many/create-models-with-link/#create-the-tables) much easier to manage.

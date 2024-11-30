@@ -31,19 +31,14 @@ class UserRoleLink(SQLModel, table=True):
     Associates users with roles. This creates a many-to-many relationship
     between users and roles.
     """
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
-    role_id: int = Field(foreign_key="role.id")
-    created_at: datetime = Field(default_factory=utc_time)
-    updated_at: datetime = Field(default_factory=utc_time)
+    user_id: Optional[int] = Field(foreign_key="user.id", primary_key=True)
+    role_id: Optional[int] = Field(foreign_key="role.id", primary_key=True)
 
 
 class RolePermissionLink(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    role_id: int = Field(foreign_key="role.id")
-    permission_id: int = Field(foreign_key="permission.id")
-    created_at: datetime = Field(default_factory=utc_time)
-    updated_at: datetime = Field(default_factory=utc_time)
+    role_id: Optional[int] = Field(foreign_key="role.id", primary_key=True)
+    permission_id: Optional[int] = Field(
+        foreign_key="permission.id", primary_key=True)
 
 
 class Permission(SQLModel, table=True):
@@ -72,8 +67,7 @@ class Organization(SQLModel, table=True):
     roles: List["Role"] = Relationship(
         back_populates="organization",
         sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-            "passive_deletes": True
+            "cascade": "all, delete-orphan"
         }
     )
 
@@ -98,7 +92,8 @@ class Role(SQLModel, table=True):
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    organization_id: int = Field(foreign_key="organization.id")
+    organization_id: int = Field(
+        foreign_key="organization.id")
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
@@ -125,6 +120,12 @@ class PasswordResetToken(SQLModel, table=True):
     user: Optional["User"] = Relationship(
         back_populates="password_reset_tokens")
 
+    def is_expired(self) -> bool:
+        """
+        Check if the token has expired
+        """
+        return datetime.now(UTC) > self.expires_at.replace(tzinfo=UTC)
+
 
 # TODO: Prevent deleting a user who is sole owner of an organization
 class User(SQLModel, table=True):
@@ -143,8 +144,7 @@ class User(SQLModel, table=True):
     password_reset_tokens: List["PasswordResetToken"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={
-            "cascade": "all, delete-orphan",
-            "passive_deletes": True
+            "cascade": "all, delete-orphan"
         }
     )
 

@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from sqlmodel import create_engine, Session, select
 from fastapi.testclient import TestClient
 from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
-from utils.models import User, PasswordResetToken, Organization
+from utils.models import User, PasswordResetToken, Organization, Role
 from utils.auth import get_password_hash, create_access_token, create_refresh_token
 from main import app
 
@@ -47,15 +47,9 @@ def clean_db(session: Session):
     """
     Cleans up the database tables before each test.
     """
-    # Delete all PasswordResetTokens
-    tokens = session.exec(select(PasswordResetToken)).all()
-    for token in tokens:
-        session.delete(token)
-
-    # Delete all Users
-    users = session.exec(select(User)).all()
-    for user in users:
-        session.delete(user)
+    for model in (PasswordResetToken, User, Role, Organization):
+        for record in session.exec(select(model)).all():
+            session.delete(record)
 
     session.commit()
 
