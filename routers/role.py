@@ -129,7 +129,7 @@ class RoleDelete(BaseModel):
 # -- Routes --
 
 
-@router.post("/", response_class=RedirectResponse)
+@router.post("/create", response_class=RedirectResponse)
 def create_role(
     role: RoleCreate = Depends(RoleCreate.as_form),
     user: User = Depends(get_authenticated_user),
@@ -168,7 +168,7 @@ def create_role(
     return RedirectResponse(url="/profile", status_code=303)
 
 
-@router.put("/{role_id}", response_class=RedirectResponse)
+@router.post("/update", response_class=RedirectResponse)
 def update_role(
     role: RoleUpdate = Depends(RoleUpdate.as_form),
     user: User = Depends(get_authenticated_user),
@@ -227,7 +227,7 @@ def update_role(
     return RedirectResponse(url="/profile", status_code=303)
 
 
-@router.delete("/{role_id}", response_class=RedirectResponse)
+@router.post("/delete", response_class=RedirectResponse)
 def delete_role(
     role: RoleDelete = Depends(RoleDelete.as_form),
     user: User = Depends(get_authenticated_user),
