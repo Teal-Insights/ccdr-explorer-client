@@ -1,17 +1,24 @@
 import pytest
 from dotenv import load_dotenv
 from sqlmodel import create_engine, Session, select
+from sqlalchemy import Engine
 from fastapi.testclient import TestClient
 from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
-from utils.models import User, PasswordResetToken, Organization, Role
+from utils.models import User, PasswordResetToken, Organization, Role, UserPassword
 from utils.auth import get_password_hash, create_access_token, create_refresh_token
 from main import app
 
 load_dotenv()
 
 
+# Define a custom exception for test setup errors
+class SetupError(Exception):
+    """Exception raised for errors in the test setup process."""
+    pass
+
+
 @pytest.fixture(scope="session")
-def engine():
+def engine() -> Engine:
     """
     Create a new SQLModel engine for the test database.
     Use an in-memory SQLite database for testing.
@@ -63,7 +70,7 @@ def test_user(session: Session):
     user = User(
         name="Test User",
         email="test@example.com",
-        hashed_password=get_password_hash("Test123!@#")
+        password=UserPassword(hashed_password=get_password_hash("Test123!@#"))
     )
     session.add(user)
     session.commit()

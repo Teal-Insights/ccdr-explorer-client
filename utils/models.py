@@ -1,9 +1,14 @@
+from logging import getLogger, DEBUG
 from enum import Enum
 from uuid import uuid4
 from datetime import datetime, UTC, timedelta
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum as SQLAlchemyEnum
+from sqlalchemy.orm import Mapped
+
+logger = getLogger("uvicorn.error")
+logger.setLevel(DEBUG)
 
 
 def utc_time():
@@ -52,7 +57,7 @@ class Permission(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    roles: List["Role"] = Relationship(
+    roles: Mapped[List["Role"]] = Relationship(
         back_populates="permissions",
         link_model=RolePermissionLink
     )
@@ -64,7 +69,7 @@ class Organization(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    roles: List["Role"] = Relationship(
+    roles: Mapped[List["Role"]] = Relationship(
         back_populates="organization",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan"
@@ -76,7 +81,15 @@ class Organization(SQLModel, table=True):
         """
         Returns all users in the organization via their roles.
         """
-        return [role.users for role in self.roles]
+        users = []
+        # Track user IDs to ensure uniqueness
+        user_ids = set()
+        for role in self.roles:
+            for user in role.users:
+                if user.id not in user_ids:
+                    users.append(user)
+                    user_ids.add(user.id)
+        return users
 
 
 class Role(SQLModel, table=True):
@@ -97,12 +110,12 @@ class Role(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    organization: Organization = Relationship(back_populates="roles")
-    users: List["User"] = Relationship(
+    organization: Mapped[Organization] = Relationship(back_populates="roles")
+    users: Mapped[List["User"]] = Relationship(
         back_populates="roles",
         link_model=UserRoleLink
     )
-    permissions: List["Permission"] = Relationship(
+    permissions: Mapped[List["Permission"]] = Relationship(
         back_populates="roles",
         link_model=RolePermissionLink
     )
@@ -117,7 +130,7 @@ class PasswordResetToken(SQLModel, table=True):
         default_factory=lambda: datetime.now(UTC) + timedelta(hours=1))
     used: bool = Field(default=False)
 
-    user: Optional["User"] = Relationship(
+    user: Mapped[Optional["User"]] = Relationship(
         back_populates="password_reset_tokens")
 
     def is_expired(self) -> bool:
@@ -127,25 +140,41 @@ class PasswordResetToken(SQLModel, table=True):
         return datetime.now(UTC) > self.expires_at.replace(tzinfo=UTC)
 
 
+class UserPassword(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(foreign_key="user.id", unique=True)
+    hashed_password: str
+
+    user: Mapped[Optional["User"]] = Relationship(
+        back_populates="password",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "single_parent": True
+        }
+    )
+
+
 # TODO: Prevent deleting a user who is sole owner of an organization
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     email: str = Field(index=True, unique=True)
-    hashed_password: str
     avatar_url: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
-    roles: List[Role] = Relationship(
+    roles: Mapped[List[Role]] = Relationship(
         back_populates="users",
         link_model=UserRoleLink
     )
-    password_reset_tokens: List["PasswordResetToken"] = Relationship(
+    password_reset_tokens: Mapped[List["PasswordResetToken"]] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan"
         }
+    )
+    password: Mapped[Optional[UserPassword]] = Relationship(
+        back_populates="user"
     )
 
     @property
@@ -153,4 +182,19 @@ class User(SQLModel, table=True):
         """
         Returns all organizations the user belongs to via their roles.
         """
-        return [role.organization for role in self.roles]
+        organizations = []
+        organization_ids = set()
+        for role in self.roles:
+            if role.organization_id not in organization_ids:
+                organizations.append(role.organization)
+                organization_ids.add(role.organization_id)
+        return organizations
+
+    def has_permission(self, permission: ValidPermissions, organization: Organization) -> bool:
+        """
+        Check if the user has a specific permission for a given organization.
+        """
+        for role in self.roles:
+            if role.organization_id == organization.id:
+                return permission in [perm.name for perm in role.permissions]
+        return False

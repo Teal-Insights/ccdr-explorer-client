@@ -17,7 +17,7 @@ from utils.auth import (
     validate_token,
     generate_password_reset_url
 )
-
+from .conftest import SetupError
 
 # --- Fixture setup ---
 
@@ -28,7 +28,7 @@ def mock_email_response():
     """
     Returns a mock Email response object
     """
-    return resend.Email(id="6229f547-f3f6-4eb8-b0dc-82c1b09121b6")
+    return resend.Email(id="mock_resend_id")
 
 
 @pytest.fixture
@@ -104,7 +104,12 @@ def test_register_endpoint(unauth_client: TestClient, session: Session):
         User.email == "new@example.com")).first()
     assert user is not None
     assert user.name == "New User"
-    assert verify_password("NewPass123!@#", user.hashed_password)
+
+    # Verify password was hashed and matches
+    if not user.password:
+        raise SetupError(
+            "Test setup failed; user.password is None")
+    assert verify_password("NewPass123!@#", user.password.hashed_password)
 
 
 def test_login_endpoint(unauth_client: TestClient, test_user: User):
@@ -200,10 +205,14 @@ def test_password_reset_flow(unauth_client: TestClient, session: Session, test_u
     )
     assert response.status_code == 303
 
+    if not test_user.password:
+        raise SetupError(
+            "Test setup failed; test_user.password is None")
+
     # Verify password was updated and token was marked as used
     session.refresh(test_user)
     session.refresh(reset_token)
-    assert verify_password("NewPass123!@#", test_user.hashed_password)
+    assert verify_password("NewPass123!@#", test_user.password.hashed_password)
     assert reset_token.used
 
 

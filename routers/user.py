@@ -63,9 +63,15 @@ async def delete_account(
     current_user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ):
+    if not current_user.password:
+        raise HTTPException(
+            status_code=500,
+            detail="User password not found in database; please contact a system administrator"
+        )
+
     if not verify_password(
         user_delete_account.confirm_delete_password,
-        current_user.hashed_password
+        current_user.password.hashed_password
     ):
         raise HTTPException(
             status_code=400,

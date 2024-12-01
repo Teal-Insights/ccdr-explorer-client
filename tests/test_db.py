@@ -1,5 +1,6 @@
 import warnings
 from sqlmodel import Session, select, inspect
+from sqlalchemy import Engine
 from utils.db import (
     get_connection_url,
     assign_permissions_to_role,
@@ -9,7 +10,7 @@ from utils.db import (
     set_up_db,
 )
 from utils.models import Role, Permission, Organization, RolePermissionLink, ValidPermissions
-from sqlalchemy import Engine
+from .conftest import SetupError
 
 
 def test_get_connection_url():
@@ -43,8 +44,12 @@ def test_create_default_roles(session: Session, test_organization: Organization)
     session.commit()
 
     # Create roles for test organization
-    roles = create_default_roles(session, test_organization.id)
-    session.commit()
+    if test_organization.id is not None:
+        roles = create_default_roles(session, test_organization.id)
+        session.commit()
+    else:
+        raise SetupError(
+            "Test setup failed; test_organization.id is None")
 
     # Verify roles were created
     assert len(roles) == 3  # Owner, Administrator, Member

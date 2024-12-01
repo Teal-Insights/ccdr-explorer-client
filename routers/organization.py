@@ -1,11 +1,11 @@
 from logging import getLogger
 from fastapi import APIRouter, Depends, HTTPException, Form
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
 from utils.auth import get_authenticated_user, get_user_with_relations
-from utils.models import Organization, User, Role, utc_time, default_roles
+from utils.models import Organization, User, Role, utc_time, default_roles, ValidPermissions
 from datetime import datetime
 
 logger = getLogger("uvicorn.error")
@@ -139,9 +139,11 @@ def update_organization(
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     # This will raise appropriate exceptions if org doesn't exist or user lacks access
-    organization: Organization = user.organizations.get(org.id)
+    organization: Organization | None = next(
+        (org for org in user.organizations if org.id == org.id), None)
 
-    if not organization or not any(role.permissions.EDIT_ORGANIZATION for role in organization.roles):
+    # Check if user has permission to edit organization
+    if not organization or not user.has_permission(ValidPermissions.EDIT_ORGANIZATION, organization):
         raise InsufficientPermissionsError()
 
     # Check if new name already exists for another organization
@@ -169,7 +171,8 @@ def delete_organization(
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     # Check if user has permission to delete organization
-    organization: Organization = user.organizations.get(org_id)
+    organization: Organization | None = next(
+        (org for org in user.organizations if org.id == org_id), None)
     if not organization or not any(role.permissions.DELETE_ORGANIZATION for role in organization.roles):
         raise InsufficientPermissionsError()
 

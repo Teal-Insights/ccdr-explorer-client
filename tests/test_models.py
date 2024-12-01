@@ -1,4 +1,5 @@
-import pytest
+from datetime import timedelta, datetime, UTC
+from typing import Optional
 from sqlmodel import select, Session
 from utils.models import (
     Permission,
@@ -8,9 +9,9 @@ from utils.models import (
     ValidPermissions,
     User,
     UserRoleLink,
-    PasswordResetToken,
+    PasswordResetToken
 )
-from datetime import timedelta, datetime, UTC
+from .conftest import SetupError
 
 
 def test_permissions_persist_after_role_deletion(session: Session):
@@ -102,10 +103,9 @@ def test_organization_users_property(session: Session, test_user: User, test_org
     session.refresh(test_organization)
 
     # Test the users property
-    users_list = test_organization.users
+    users_list: list[User] = test_organization.users
     assert len(users_list) == 1
-    # users_list is a list of lists due to the property implementation
-    assert test_user in users_list[0]
+    assert test_user in users_list
 
 
 def test_cascade_delete_organization(session: Session, test_user: User, test_organization: Organization):
@@ -185,3 +185,46 @@ def test_password_reset_token_is_expired(session: Session, test_user: User):
     # Verify expiration states
     assert expired_token.is_expired()
     assert not valid_token.is_expired()
+
+
+def test_user_has_permission(session: Session, test_user: User, test_organization: Organization):
+    """
+    Test that User.has_permission method correctly checks if a user has a specific
+    permission for a given organization.
+    """
+    # Create a role with specific permissions in the test organization
+    role = Role(name="Test Role", organization_id=test_organization.id)
+    session.add(role)
+    session.commit()
+    session.refresh(role)
+
+    # Assign permissions to the role
+    delete_org_permission: Optional[Permission] = session.exec(
+        select(Permission).where(Permission.name ==
+                                 ValidPermissions.DELETE_ORGANIZATION)
+    ).first()
+    edit_org_permission: Optional[Permission] = session.exec(
+        select(Permission).where(Permission.name ==
+                                 ValidPermissions.EDIT_ORGANIZATION)
+    ).first()
+
+    if delete_org_permission is not None and edit_org_permission is not None:
+        role.permissions.append(delete_org_permission)
+        role.permissions.append(edit_org_permission)
+    else:
+        raise SetupError(
+            "Test setup failed; permission not found in database")
+    session.commit()
+
+    # Link the user to the role
+    test_user.roles.append(role)
+    session.commit()
+    session.refresh(test_user)
+
+    # Test the has_permission method
+    assert test_user.has_permission(
+        ValidPermissions.DELETE_ORGANIZATION, test_organization) is True
+    assert test_user.has_permission(
+        ValidPermissions.EDIT_ORGANIZATION, test_organization) is True
+    assert test_user.has_permission(
+        ValidPermissions.INVITE_USER, test_organization) is False

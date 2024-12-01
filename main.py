@@ -255,14 +255,14 @@ async def read_organization(
     params: dict = Depends(common_authenticated_parameters)
 ):
     # Get the organization only if the user is a member of it
-    organization: Organization = params["user"].organizations.get(org_id)
-    if not organization:
+    org: Organization = params["user"].organizations.get(org_id)
+    if not org:
         raise organization.OrganizationNotFoundError()
 
     # Eagerly load roles and users
-    organization.roles
-    organization.users
-    params["organization"] = organization
+    org.roles
+    org.users
+    params["organization"] = org
 
     return templates.TemplateResponse(params["request"], "users/organization.html", params)
 
