@@ -8,18 +8,20 @@ import resend
 from dotenv import load_dotenv
 from pydantic import field_validator, ValidationInfo
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from fastapi import Depends, Cookie, HTTPException, status
 from utils.db import get_session
-from utils.models import User, PasswordResetToken
+from utils.models import User, Role, PasswordResetToken
 
 load_dotenv()
 logger = logging.getLogger("uvicorn.error")
 
 
-# --- AUTH ---
+# --- Constants ---
+
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -27,12 +29,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 
-# Define the oauth2 scheme to get the token from the cookie
-def oauth2_scheme_cookie(
-    access_token: Optional[str] = Cookie(None, alias="access_token"),
-    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
-) -> tuple[Optional[str], Optional[str]]:
-    return access_token, refresh_token
+# --- Custom Exceptions ---
+
+
+class AuthenticationError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/login"}
+        )
 
 
 class PasswordValidationError(HTTPException):
@@ -52,6 +57,25 @@ class PasswordMismatchError(PasswordValidationError):
             field=field,
             message="The passwords you entered do not match"
         )
+
+
+class InsufficientPermissionsError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=403,
+            detail="You don't have permission to perform this action"
+        )
+
+
+# --- Helpers ---
+
+
+# Define the oauth2 scheme to get the token from the cookie
+def oauth2_scheme_cookie(
+    access_token: Optional[str] = Cookie(None, alias="access_token"),
+    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
+) -> tuple[Optional[str], Optional[str]]:
+    return access_token, refresh_token
 
 
 def create_password_validator(field_name: str = "password"):
@@ -216,14 +240,6 @@ def get_user_from_tokens(
     return None, None, None
 
 
-class AuthenticationError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": "/login"}
-        )
-
-
 def get_authenticated_user(
     tokens: tuple[Optional[str], Optional[str]
                   ] = Depends(oauth2_scheme_cookie),
@@ -339,3 +355,23 @@ def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple
 
     user, reset_token = result
     return user, reset_token
+
+
+def get_user_with_relations(
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session),
+) -> User:
+    """
+    Returns an authenticated user with fully loaded role and organization relationships.
+    """
+    # Refresh the user instance with eagerly loaded relationships
+    eager_user = session.exec(
+        select(User)
+        .where(User.id == user.id)
+        .options(
+            selectinload(User.roles).selectinload(Role.organization),
+            selectinload(User.roles).selectinload(Role.permissions)
+        )
+    ).one()
+
+    return eager_user

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
-from utils.models import User
+from utils.models import User, UserPassword
 from utils.auth import (
     get_session,
     get_user_from_reset_token,
@@ -119,20 +119,25 @@ class UserRead(BaseModel):
 # -- Routes --
 
 
+# TODO: Use custom error message in the case where the user is already registered
 @router.post("/register", response_class=RedirectResponse)
 async def register(
     user: UserRegister = Depends(UserRegister.as_form),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    # Check if the email is already registered
     db_user = session.exec(select(User).where(
         User.email == user.email)).first()
 
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Hash the password
     hashed_password = get_password_hash(user.password)
+
+    # Create the user
     db_user = User(name=user.name, email=user.email,
-                   hashed_password=hashed_password)
+                   password=UserPassword(hashed_password=hashed_password))
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
@@ -154,9 +159,11 @@ async def login(
     user: UserLogin = Depends(UserLogin.as_form),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    # Check if the email is registered
     db_user = session.exec(select(User).where(
         User.email == user.email)).first()
-    if not db_user or not verify_password(user.password, db_user.hashed_password):
+
+    if not db_user or not db_user.password or not verify_password(user.password, db_user.password.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
 
     # Create access token
@@ -258,7 +265,17 @@ async def reset_password(
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
     # Update password and mark token as used
-    authorized_user.hashed_password = get_password_hash(user.new_password)
+    if authorized_user.password:
+        authorized_user.password.hashed_password = get_password_hash(
+            user.new_password
+        )
+    else:
+        logger.warning(
+            "User password not found during password reset; creating new password for user")
+        authorized_user.password = UserPassword(
+            hashed_password=get_password_hash(user.new_password)
+        )
+
     reset_token.used = True
     session.commit()
     session.refresh(authorized_user)

@@ -8,10 +8,9 @@ from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError, HTTPException, StarletteHTTPException
 from sqlmodel import Session
 from routers import authentication, organization, role, user
-from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
-from utils.models import User
+from utils.auth import get_user_with_relations, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
+from utils.models import User, Organization
 from utils.db import get_session, set_up_db
-
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
@@ -20,7 +19,7 @@ logger.setLevel(logging.DEBUG)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Optional startup logic
-    set_up_db(drop=False)
+    set_up_db()
     yield
     # Optional shutdown logic
 
@@ -229,8 +228,8 @@ async def read_reset_password(
 # Define a dependency for common parameters
 async def common_authenticated_parameters(
     request: Request,
-    user: User = Depends(get_authenticated_user),
-    error_message: Optional[str] = None,
+    user: User = Depends(get_user_with_relations),
+    error_message: Optional[str] = None
 ) -> dict:
     return {"request": request, "user": user, "error_message": error_message}
 
@@ -240,8 +239,6 @@ async def common_authenticated_parameters(
 async def read_dashboard(
     params: dict = Depends(common_authenticated_parameters)
 ):
-    if not params["user"]:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse(params["request"], "dashboard/index.html", params)
 
 
@@ -249,10 +246,25 @@ async def read_dashboard(
 async def read_profile(
     params: dict = Depends(common_authenticated_parameters)
 ):
-    if not params["user"]:
-        # Changed to 302
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
+
+
+@app.get("/organizations/{org_id}")
+async def read_organization(
+    org_id: int,
+    params: dict = Depends(common_authenticated_parameters)
+):
+    # Get the organization only if the user is a member of it
+    org: Organization = params["user"].organizations.get(org_id)
+    if not org:
+        raise organization.OrganizationNotFoundError()
+
+    # Eagerly load roles and users
+    org.roles
+    org.users
+    params["organization"] = org
+
+    return templates.TemplateResponse(params["request"], "users/organization.html", params)
 
 
 # -- Include Routers --

@@ -1,0 +1,44 @@
+{% macro render_organizations(organizations) %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        Organizations
+        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="collapse" data-bs-target="#newOrgForm">
+            Create Organization
+        </button>
+    </div>
+    <div class="card-body">
+        <!-- New Organization Form -->
+        <div class="collapse mb-3" id="newOrgForm">
+            <form action="/organizations/create" method="post" class="border rounded p-3 bg-light">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Organization Name</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="name" 
+                           name="name" 
+                           required 
+                           pattern=".{3,}"
+                           title="Organization name must be at least 3 characters long">
+                </div>
+                <button type="submit" class="btn btn-primary">Create</button>
+            </form>
+        </div>
+
+        <!-- Existing Organizations List -->
+        {% if organizations %}
+            <div class="list-group">
+                {% for org in organizations %}
+                    <a href="/organizations/{{ org.id }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ org.name }}</h5>
+                            <small>Joined {{ org.created_at.strftime('%Y-%m-%d') }}</small>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted">You are not a member of any organizations.</p>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

@@ -1,17 +1,24 @@
 import pytest
 from dotenv import load_dotenv
-from sqlmodel import create_engine, Session, delete
+from sqlmodel import create_engine, Session, select
+from sqlalchemy import Engine
 from fastapi.testclient import TestClient
 from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
-from utils.models import User, PasswordResetToken
+from utils.models import User, PasswordResetToken, Organization, Role, UserPassword
 from utils.auth import get_password_hash, create_access_token, create_refresh_token
 from main import app
 
 load_dotenv()
 
 
+# Define a custom exception for test setup errors
+class SetupError(Exception):
+    """Exception raised for errors in the test setup process."""
+    pass
+
+
 @pytest.fixture(scope="session")
-def engine():
+def engine() -> Engine:
     """
     Create a new SQLModel engine for the test database.
     Use an in-memory SQLite database for testing.
@@ -47,9 +54,9 @@ def clean_db(session: Session):
     """
     Cleans up the database tables before each test.
     """
-    # Exempt from mypy until SQLModel overload properly supports delete()
-    session.exec(delete(PasswordResetToken))  # type: ignore
-    session.exec(delete(User))  # type: ignore
+    for model in (PasswordResetToken, User, Role, Organization):
+        for record in session.exec(select(model)).all():
+            session.delete(record)
 
     session.commit()
 
@@ -63,7 +70,7 @@ def test_user(session: Session):
     user = User(
         name="Test User",
         email="test@example.com",
-        hashed_password=get_password_hash("Test123!@#")
+        password=UserPassword(hashed_password=get_password_hash("Test123!@#"))
     )
     session.add(user)
     session.commit()
@@ -107,3 +114,12 @@ def auth_client(session: Session, test_user: User):
 
     yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def test_organization(session: Session):
+    """Create a test organization for use in tests"""
+    organization = Organization(name="Test Organization")
+    session.add(organization)
+    session.commit()
+    return organization
