@@ -2,6 +2,7 @@ import os
 import logging
 from typing import Generator, Union, Sequence
 from dotenv import load_dotenv
+from fastapi import HTTPException
 from sqlalchemy.engine import URL
 from sqlmodel import create_engine, Session, SQLModel, select
 from utils.models import Role, Permission, RolePermissionLink, default_roles, ValidPermissions
@@ -57,7 +58,12 @@ def get_session() -> Generator[Session, None, None]:
         yield session
 
 
-def assign_permissions_to_role(session: Session, role: Role, permissions: Union[list[Permission], Sequence[Permission]], check_first: bool = False) -> None:
+def assign_permissions_to_role(
+        session: Session,
+        role: Role,
+        permissions: Union[list[Permission], Sequence[Permission]],
+        check_first: bool = False
+) -> None:
     """
     Assigns permissions to a role in the database.
 

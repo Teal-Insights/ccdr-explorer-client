@@ -2,7 +2,8 @@ from logging import getLogger, DEBUG
 from enum import Enum
 from uuid import uuid4
 from datetime import datetime, UTC, timedelta
-from typing import Optional, List
+from typing import Optional, List, Union
+from fastapi import HTTPException
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped
@@ -11,15 +12,35 @@ logger = getLogger("uvicorn.error")
 logger.setLevel(DEBUG)
 
 
+# --- Helper functions ---
+
+
 def utc_time():
     return datetime.now(UTC)
+
+
+# --- Custom exceptions ---
+
+
+class DataIntegrityError(HTTPException):
+    def __init__(
+            self,
+            resource: str = "Database resource"
+    ):
+        super().__init__(
+            status_code=500,
+            detail=(
+                f"{resource} is in a broken state; please contact a system administrator"
+            )
+        )
+
+
+# --- Database models ---
 
 
 default_roles = ["Owner", "Administrator", "Member"]
 
 
-# TODO: User with permission to create/edit roles can only assign permissions
-# they themselves have.
 class ValidPermissions(Enum):
     DELETE_ORGANIZATION = "Delete Organization"
     EDIT_ORGANIZATION = "Edit Organization"
@@ -190,11 +211,20 @@ class User(SQLModel, table=True):
                 organization_ids.add(role.organization_id)
         return organizations
 
-    def has_permission(self, permission: ValidPermissions, organization: Organization) -> bool:
+    def has_permission(self, permission: ValidPermissions, organization: Union[Organization, int]) -> bool:
         """
         Check if the user has a specific permission for a given organization.
         """
+        organization_id: Optional[int] = None
+        if isinstance(organization, Organization):
+            organization_id = organization.id
+        else:
+            organization_id = organization
+
+        if not organization_id:
+            raise DataIntegrityError(resource="Organization ID")
+
         for role in self.roles:
-            if role.organization_id == organization.id:
+            if role.organization_id == organization_id:
                 return permission in [perm.name for perm in role.permissions]
         return False

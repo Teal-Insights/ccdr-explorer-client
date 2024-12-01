@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
-from utils.auth import get_authenticated_user, get_user_with_relations
+from utils.auth import get_authenticated_user, get_user_with_relations, InsufficientPermissionsError
 from utils.models import Organization, User, Role, utc_time, default_roles, ValidPermissions
 from datetime import datetime
 
@@ -34,14 +34,6 @@ class OrganizationNameTakenError(HTTPException):
         super().__init__(
             status_code=400,
             detail="Organization name already taken"
-        )
-
-
-class InsufficientPermissionsError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=403,
-            detail="You don't have permission to perform this action"
         )
 
 
@@ -173,7 +165,11 @@ def delete_organization(
     # Check if user has permission to delete organization
     organization: Organization | None = next(
         (org for org in user.organizations if org.id == org_id), None)
-    if not organization or not any(role.permissions.DELETE_ORGANIZATION for role in organization.roles):
+    if not organization or not any(
+        p.name == ValidPermissions.DELETE_ORGANIZATION
+        for role in organization.roles
+        for p in role.permissions
+    ):
         raise InsufficientPermissionsError()
 
     # Delete organization
