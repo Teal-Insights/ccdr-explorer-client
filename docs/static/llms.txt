@@ -105,6 +105,8 @@ To use password recovery, register a [Resend](https://resend.com/) account, veri
 
 ### Start development database
 
+To start the development database, run the following command in your terminal from the root directory:
+
 ``` bash
 docker compose up -d
 ```
@@ -515,6 +517,8 @@ If you use VSCode with Docker to develop in a container, the following VSCode De
 
 Simply create a `.devcontainer` folder in the root of the project and add a `devcontainer.json` file in the folder with the above content. VSCode may prompt you to install the Dev Container extension if you haven't already, and/or to open the project in a container. If not, you can manually select "Dev Containers: Reopen in Container" from View > Command Palette.
 
+*IMPORTANT: If using this dev container configuration, you will need to set the `DB_HOST` environment variable to "host.docker.internal" in the `.env` file.*
+
 ## Install development dependencies manually
 
 ### Python and Docker
@@ -598,15 +602,32 @@ Set your desired database name, username, and password in the .env file.
 
 To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
 
+If using the dev container configuration, you will need to set the `DB_HOST` environment variable to "host.docker.internal" in the .env file. Otherwise, set `DB_HOST` to "localhost" for local development. (In production, `DB_HOST` will be set to the hostname of the database server.)
+
 ## Start development database
+
+To start the development database, run the following command in your terminal from the root directory:
 
 ``` bash
 docker compose up -d
 ```
 
+If at any point you change the environment variables in the .env file, you will need to stop the database service *and tear down the volume*:
+
+``` bash
+# Don't forget the -v flag to tear down the volume!
+docker compose down -v
+```
+
+You may also need to restart the terminal session to pick up the new environment variables. You can also add the `--force-recreate` and `--build` flags to the startup command to ensure the container is rebuilt:
+
+``` bash
+docker compose up -d --force-recreate --build
+```
+
 ## Run the development server
 
-Make sure the development database is running and tables and default permissions/roles are created first.
+Before running the development server, make sure the development database is running and tables and default permissions/roles are created first. Then run the following command in your terminal from the root directory:
 
 ``` bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
@@ -646,7 +667,8 @@ The following fixtures, defined in `tests/conftest.py`, are available in the tes
 - `set_up_database`: Sets up the test database before running the test suite by dropping all tables and recreating them to ensure a clean state.
 - `session`: Provides a session for database operations in tests.
 - `clean_db`: Cleans up the database tables before each test by deleting all entries in the `PasswordResetToken` and `User` tables.
-- `client`: Provides a `TestClient` instance with the session fixture, overriding the `get_session` dependency to use the test session.
+- `auth_client`: Provides a `TestClient` instance with access and refresh token cookies set, overriding the `get_session` dependency to use the `session` fixture.
+- `unauth_client`: Provides a `TestClient` instance without authentication cookies set, overriding the `get_session` dependency to use the `session` fixture.
 - `test_user`: Creates a test user in the database with a predefined name, email, and hashed password.
 
 To run the tests, use these commands:
@@ -661,10 +683,10 @@ To run the tests, use these commands:
 The project uses type annotations and mypy for static type checking. To run mypy, use this command from the root directory:
 
 ```bash
-mypy
+mypy .
 ```
 
-We find that mypy is an enormous time-saver, catching many errors early and greatly reducing time spent debugging unit tests. However, note that mypy requires you type annotate every variable, function, and method in your code base, so taking advantage of it is a lifestyle change!
+We find that mypy is an enormous time-saver, catching many errors early and greatly reducing time spent debugging unit tests. However, note that mypy requires you type annotate every variable, function, and method in your code base, so taking advantage of it requires a lifestyle change!
 
 ### Developing with LLMs
 
@@ -705,7 +727,9 @@ We also create POST endpoints, which accept form submissions so the user can cre
 
 #### Routing patterns in this template
 
-In this template, GET routes are defined in the main entry point for the application, `main.py`. POST routes are organized into separate modules within the `routers/` directory. We name our GET routes using the convention `read_<name>`, where `<name>` is the name of the page, to indicate that they are read-only endpoints that do not modify the database.
+In this template, GET routes are defined in the main entry point for the application, `main.py`. POST routes are organized into separate modules within the `routers/` directory.
+
+We name our GET routes using the convention `read_<name>`, where `<name>` is the name of the page, to indicate that they are read-only endpoints that do not modify the database.
 
 We divide our GET routes into authenticated and unauthenticated routes, using commented section headers in our code that look like this:
 
@@ -713,7 +737,9 @@ We divide our GET routes into authenticated and unauthenticated routes, using co
 # -- Authenticated Routes --
 ```
 
-Some of our routes take request parameters, which we pass as keyword arguments to the route handler. These parameters should be type annotated for validation purposes. Some parameters are shared across all authenticated or unauthenticated routes, so we define them in the `common_authenticated_parameters` and `common_unauthenticated_parameters` dependencies defined in `main.py`.
+Some of our routes take request parameters, which we pass as keyword arguments to the route handler. These parameters should be type annotated for validation purposes.
+
+Some parameters are shared across all authenticated or unauthenticated routes, so we define them in the `common_authenticated_parameters` and `common_unauthenticated_parameters` dependencies defined in `main.py`.
 
 ### HTML templating with Jinja2
 
@@ -734,7 +760,7 @@ async def welcome(request: Request):
     )
 ```
 
-In this example, the `welcome.html` template will receive two pieces of context: the user's `request`, which is always passed automatically by FastAPI, and a `username` variable, which we specify as "Alice". We can then use the `{{ username }}` syntax in the `welcome.html` template (or any of its parent or child templates) to insert the value into the HTML.
+In this example, the `welcome.html` template will receive two pieces of context: the user's `request`, which is always passed automatically by FastAPI, and a `username` variable, which we specify as "Alice". We can then use the `{{{ username }}}` syntax in the `welcome.html` template (or any of its parent or child templates) to insert the value into the HTML.
 
 #### Form validation strategy
 
@@ -890,9 +916,9 @@ graph.write_png('static/schema.png')
 ![Database Schema](static/schema.png)
 
 
-#### Database operations
+#### Database helpers
 
-Database operations are handled by helper functions in `utils/db.py`. Key functions include:
+Database operations are facilitated by helper functions in `utils/db.py`. Key functions include:
 
 - `set_up_db()`: Initializes the database schema and default data (which we do on every application start in `main.py`)
 - `get_connection_url()`: Creates a database connection URL from environment variables in `.env`
@@ -908,6 +934,33 @@ async def get_users(session: Session = Depends(get_session)):
 ```
 
 The session automatically handles transaction management, ensuring that database operations are atomic and consistent.
+
+#### Cascade deletes
+
+Cascade deletes (in which deleting a record from one table deletes related records from another table) can be handled at either the ORM level or the database level. This template handles cascade deletes at the ORM level, via SQLModel relationships. Inside a SQLModel `Relationship`, we set:
+
+```python
+sa_relationship_kwargs={
+    "cascade": "all, delete-orphan"
+}
+```
+
+This tells SQLAlchemy to cascade all operations (e.g., `SELECT`, `INSERT`, `UPDATE`, `DELETE`) to the related table. Since this happens through the ORM, we need to be careful to do all our database operations through the ORM using supported syntax. That generally means loading database records into Python objects and then deleting those objects rather than deleting records in the database directly. 
+
+For example,
+
+```python
+session.exec(delete(Role))
+```
+
+will not trigger the cascade delete. Instead, we need to select the role objects and then delete them:
+
+```python
+for role in session.exec(select(Role)).all():
+    session.delete(role)
+```
+
+This is slower than deleting the records directly, but it makes [many-to-many relationships](https://sqlmodel.tiangolo.com/tutorial/many-to-many/create-models-with-link/#create-the-tables) much easier to manage.
 
 
 # Deployment
