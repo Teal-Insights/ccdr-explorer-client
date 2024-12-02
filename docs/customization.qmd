@@ -15,6 +15,8 @@ The project uses Poetry to manage dependencies:
 - Install dependencies: `poetry install`
 - Update all dependencies: `poetry update`
 
+If you are using VSCode or Cursor as your IDE, you will need to select the Poetry-managed Python version as your interpreter for the project. To find the location of the Poetry-managed Python interpreter, run `poetry env info` and look for the `Path` field. Then, in VSCode, go to `View > Command Palette`, search for `Python: Select Interpreter`, and either select Poetry's Python version from the list (if it has been auto-detected) or "Enter interpreter path" manually.
+
 ### Testing
 
 The project uses Pytest for unit testing. It's highly recommended to write and run tests before committing code to ensure nothing is broken!
@@ -96,7 +98,7 @@ We name our GET routes using the convention `read_<name>`, where `<name>` is the
 We divide our GET routes into authenticated and unauthenticated routes, using commented section headers in our code that look like this:
 
 ```python
-# -- Authenticated Routes --
+# --- Authenticated Routes ---
 ```
 
 Some of our routes take request parameters, which we pass as keyword arguments to the route handler. These parameters should be type annotated for validation purposes.
@@ -243,11 +245,16 @@ SQLModel is an Object-Relational Mapping (ORM) library that allows us to interac
 Our database models are defined in `utils/models.py`. Each model is a Python class that inherits from `SQLModel` and represents a database table. The key models are:
 
 - `Organization`: Represents a company or team
-- `User`: Represents a user account
-- `Role`: Represents a discrete set of user permissions within an organization
-- `Permission`: Represents specific actions a user can perform
-- `RolePermissionLink`: Maps roles to their allowed permissions
-- `PasswordResetToken`: Manages password reset functionality
+- `User`: Represents a user account with name, email, and avatar
+- `Role`: Represents a set of permissions within an organization
+- `Permission`: Represents specific actions a user can perform (defined by ValidPermissions enum)
+- `PasswordResetToken`: Manages password reset functionality with expiration
+- `UserPassword`: Stores hashed user passwords separately from user data
+
+Two additional models are used by SQLModel to manage many-to-many relationships; you generally will not need to interact with them directly:
+
+- `UserRoleLink`: Maps users to their roles (many-to-many relationship)
+- `RolePermissionLink`: Maps roles to their permissions (many-to-many relationship)
 
 Here's an entity-relationship diagram (ERD) of the current database schema, automatically generated from our SQLModel definitions:
 
@@ -296,6 +303,17 @@ async def get_users(session: Session = Depends(get_session)):
 ```
 
 The session automatically handles transaction management, ensuring that database operations are atomic and consistent.
+
+There is also a helper method on the `User` model that checks if a user has a specific permission for a given organization. Its first argument must be a `ValidPermissions` enum value (from `utils/models.py`), and its second argument must be an `Organization` object or an `int` representing an organization ID:
+
+```python
+permission = ValidPermissions.CREATE_ROLE
+organization = session.exec(select(Organization).where(Organization.name == "Acme Inc.")).first()
+
+user.has_permission(permission, organization)
+```
+
+You should create custom `ValidPermissions` enum values for your application and validate that users have the necessary permissions before allowing them to modify organization data resources.
 
 #### Cascade deletes
 
