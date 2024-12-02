@@ -12,17 +12,24 @@ from sqlalchemy.orm import selectinload
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
+from jinja2.environment import Template
+from fastapi.templating import Jinja2Templates
 from fastapi import Depends, Cookie, HTTPException, status
 from utils.db import get_session
 from utils.models import User, Role, PasswordResetToken
 
 load_dotenv()
-logger = logging.getLogger("uvicorn.error")
+resend.api_key = os.environ["RESEND_API_KEY"]
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
 
 
 # --- Constants ---
 
 
+templates = Jinja2Templates(directory="templates")
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -294,9 +301,9 @@ def generate_password_reset_url(email: str, token: str) -> str:
     return f"{base_url}/auth/reset_password?email={email}&token={token}"
 
 
-def send_reset_email(email: str, session: Session):
+def send_reset_email(email: str, session: Session) -> None:
     # Check for an existing unexpired token
-    user = session.exec(select(User).where(
+    user: Optional[User] = session.exec(select(User).where(
         User.email == email
     )).first()
     if user:
@@ -314,17 +321,24 @@ def send_reset_email(email: str, session: Session):
             return
 
         # Generate a new token
-        token = str(uuid.uuid4())
-        reset_token = PasswordResetToken(user_id=user.id, token=token)
+        token: str = str(uuid.uuid4())
+        reset_token: PasswordResetToken = PasswordResetToken(
+            user_id=user.id, token=token)
         session.add(reset_token)
 
         try:
-            reset_url = generate_password_reset_url(email, token)
+            reset_url: str = generate_password_reset_url(email, token)
+
+            # Render the email template
+            template: Template = templates.get_template(
+                "emails/reset_email.html")
+            html_content: str = template.render({"reset_url": reset_url})
+
             params: resend.Emails.SendParams = {
                 "from": "noreply@promptlytechnologies.com",
                 "to": [email],
                 "subject": "Password Reset Request",
-                "html": f"<p>Click <a href='{reset_url}'>here</a> to reset your password.</p>",
+                "html": html_content,
             }
 
             sent_email: resend.Email = resend.Emails.send(params)

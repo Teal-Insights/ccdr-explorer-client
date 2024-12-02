@@ -54,6 +54,7 @@ jobs:
           echo "DB_NAME=test_db" >> $GITHUB_ENV
           echo "SECRET_KEY=$(openssl rand -base64 32)" >> $GITHUB_ENV
           echo "BASE_URL=http://localhost:8000" >> $GITHUB_ENV
+          echo "RESEND_API_KEY=resend_api_key" >> $GITHUB_ENV
         
       - name: Verify environment variables
         run: |
@@ -63,7 +64,8 @@ jobs:
           [ -n "$DB_HOST" ] && \
           [ -n "$DB_PORT" ] && \
           [ -n "$DB_NAME" ] && \
-          [ -n "$SECRET_KEY" ]
+          [ -n "$SECRET_KEY" ] && \
+          [ -n "$RESEND_API_KEY" ]
 
       - name: Run type checking with mypy
         run: poetry run mypy .
