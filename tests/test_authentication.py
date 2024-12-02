@@ -6,6 +6,7 @@ from datetime import timedelta
 from unittest.mock import patch
 import resend
 from urllib.parse import urlparse, parse_qs
+from html import unescape
 
 from main import app
 from utils.models import User, PasswordResetToken
@@ -321,12 +322,13 @@ def test_password_reset_email_url(unauth_client: TestClient, session: Session, t
     mock_resend_send.assert_called_once()
     call_args = mock_resend_send.call_args[0][0]
     html_content = call_args["html"]
+    print(html_content)
 
     # Extract URL from HTML
     import re
-    url_match = re.search(r'href=[\'"]([^\'"]*)[\'"]', html_content)
+    url_match = re.search(r'<a[^>]*href=[\'"]([^\'"]*)[\'"]', html_content)
     assert url_match is not None
-    reset_url = url_match.group(1)
+    reset_url = unescape(url_match.group(1))
 
     # Parse and verify the URL
     parsed = urlparse(reset_url)
