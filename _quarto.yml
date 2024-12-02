@@ -1,9 +1,6 @@
 project:
   type: website
   output-dir: _docs
-  post-render:
-    - "cp docs/static/llms.txt _docs/docs/static/llms.txt"
-    - "cp docs/static/documentation.txt _docs/docs/static/documentation.txt"
 
 website:
   title: "FastAPI Webapp Template"
