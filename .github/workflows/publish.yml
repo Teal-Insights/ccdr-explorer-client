@@ -1,28 +1,69 @@
-on:
-    workflow_dispatch:
-    push:
-      branches: main
+name: Publish-and-Render
 
-  name: Quarto Publish
-  
-  jobs:
-    build-deploy:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Check out repository
-          uses: actions/checkout@v4 
-  
-        - name: Set up Quarto
-          uses: quarto-dev/quarto-actions/setup@v2
-  
-        - name: Render and Publish 
-          uses: quarto-dev/quarto-actions/publish@v2
-          with:
-            target: quarto-pub
-            QUARTO_PUB_AUTH_TOKEN: ${{ secrets.QUARTO_PUB_AUTH_TOKEN }}
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+        poetry-version: [latest]
+        os: [ubuntu-latest]
+    
+    runs-on: ${{ matrix.os }}
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set env variables for quarto
+        run: |
+          echo "DB_USER=postgres" >> $GITHUB_ENV
+          echo "DB_PASSWORD=postgres" >> $GITHUB_ENV
+          echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+          echo "DB_PORT=5432" >> $GITHUB_ENV
+          echo "DB_NAME=test_db" >> $GITHUB_ENV
+          echo "SECRET_KEY=$(openssl rand -base64 32)" >> $GITHUB_ENV
+          echo "BASE_URL=http://localhost:8000" >> $GITHUB_ENV
         
-#        - name: Traditionally Render & Publish
-#          run: |
-#          quarto publish
-#          quarto render index.qmd --output-dir . --output README.md --to gfm
-#          unlink index.html  # Can skip this step if we add/commit/push only the README rather than all changed files
+      - name: Verify environment variables for quarto
+        run: |
+          echo "Checking if required environment variables are set..."
+          [ -n "$DB_USER" ] && \
+          [ -n "$DB_PASSWORD" ] && \
+          [ -n "$DB_HOST" ] && \
+          [ -n "$DB_PORT" ] && \
+          [ -n "$DB_NAME" ] && \
+          [ -n "$SECRET_KEY" ]
+
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Publish 
+        uses: quarto-dev/quarto-actions/publish@v2
+      
+      - name: Render
+        uses: quarto-dev/quarto-actions/render@v2
