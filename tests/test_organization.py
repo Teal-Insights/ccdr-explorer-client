@@ -1,61 +1,68 @@
 # test_organization.py
 
-import pytest
-from utils.models import Organization
+from utils.models import Organization, Role
+from sqlmodel import select
 
-def test_organization_creation():
-    """Test basic organization creation"""
-    org = Organization("Test Org", "Test Description")
-    assert org.name == "Test Org"
-    assert org.description == "Test Description"
-    assert org.roles == []
-    assert org.members == []
+def test_create_organization_success(auth_client, session, test_user):
+    """Test successful organization creation"""
+    response = auth_client.post(
+        "/organizations/create",
+        data={"name": "New Test Organization"},
+        follow_redirects=False
+    )
 
-def test_organization_add_role():
-    """Test adding a role to organization"""
-    org = Organization("Test Org", "Test Description")
-    role = {"name": "Admin", "permissions": ["read", "write"]}
-    org.add_role(role)
-    assert len(org.roles) == 1
-    assert org.roles[0] == role
+    # Check response
+    assert response.status_code == 303  # Redirect status code
+    assert "/organizations/" in response.headers["location"]
 
-def test_organization_add_member():
-    """Test adding a member to organization"""
-    org = Organization("Test Org", "Test Description")
-    member = {"id": 1, "name": "John Doe"}
-    org.add_member(member)
-    assert len(org.members) == 1
-    assert org.members[0] == member
+    # Verify database state
+    org = session.exec(
+        select(Organization)
+        .where(Organization.name == "New Test Organization")
+    ).first()
+    
+    assert org is not None
+    assert org.name == "New Test Organization"
 
-def test_organization_remove_member():
-    """Test removing a member from organization"""
-    org = Organization("Test Org", "Test Description")
-    member = {"id": 1, "name": "John Doe"}
-    org.add_member(member)
-    org.remove_member(1)
-    assert len(org.members) == 0
+    # Verify default roles were created
+    roles = session.exec(
+        select(Role)
+        .where(Role.organization_id == org.id)
+    ).all()
+    
+    assert len(roles) > 0
+    assert any(role.name == "Owner" for role in roles)
 
-def test_organization_get_member():
-    """Test getting a member from organization"""
-    org = Organization("Test Org", "Test Description")
-    member = {"id": 1, "name": "John Doe"}
-    org.add_member(member)
-    retrieved_member = org.get_member(1)
-    assert retrieved_member == member
+    # Verify test_user was assigned as owner
+    owner_role = next(role for role in roles if role.name == "Owner")
+    assert test_user in owner_role.users
 
-def test_organization_get_nonexistent_member():
-    """Test getting a non-existent member"""
-    org = Organization("Test Org", "Test Description")
-    assert org.get_member(1) is None
+def test_create_organization_empty_name(auth_client):
+    """Test organization creation with empty name"""
+    response = auth_client.post(
+        "/organizations/create",
+        data={"name": "   "}  # Empty or whitespace name
+    )
+    
+    assert response.status_code == 400
+    assert "Organization name cannot be empty" in response.text
 
-# Additional tests for organization.py
+def test_create_organization_duplicate_name(auth_client, test_organization):
+    """Test organization creation with duplicate name"""
+    response = auth_client.post(
+        "/organizations/create",
+        data={"name": test_organization.name}
+    )
+    
+    assert response.status_code == 400
+    assert "Organization name already taken" in response.text
 
-def test_organization_invalid_name():
-    """Test organization creation with invalid name"""
-    with pytest.raises(ValueError):
-        Organization("", "Description")
-
-def test_organization_none_name():
-    """Test organization creation with None name"""
-    with pytest.raises(ValueError):
-        Organization(None, "Description")
+def test_create_organization_unauthenticated(unauth_client):
+    """Test organization creation without authentication"""
+    response = unauth_client.post(
+        "/organizations/create",
+        data={"name": "Unauthorized Org"},
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 303  # Unauthorized
