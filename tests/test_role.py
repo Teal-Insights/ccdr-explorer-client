@@ -1,60 +1,105 @@
 # test_role.py
 
 import pytest
-from utils.models import Role
+from utils.models import Role, Permission, ValidPermissions, User
+from sqlmodel import Session, select
 
-def test_role_creation():
-    """Test basic role creation"""
-    role = Role("Admin", ["read", "write"])
-    assert role.name == "Admin"
-    assert role.permissions == ["read", "write"]
 
-def test_role_add_permission():
-    """Test adding a permission to role"""
-    role = Role("Admin", ["read"])
-    role.add_permission("write")
-    assert "write" in role.permissions
-    assert len(role.permissions) == 2
+@pytest.fixture
+def admin_user(session: Session, test_user: User, test_organization):
+    """Create an admin user with CREATE_ROLE permission"""
+    admin_role = Role(
+        name="Admin",
+        organization_id=test_organization.id
+    )
+    create_role_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.CREATE_ROLE)
+    ).first()
+    admin_role.permissions.append(create_role_permission)
+    session.add(admin_role)
+    
+    test_user.roles.append(admin_role)
+    session.commit()
+    return test_user
 
-def test_role_remove_permission():
-    """Test removing a permission from role"""
-    role = Role("Admin", ["read", "write"])
-    role.remove_permission("write")
-    assert "write" not in role.permissions
-    assert len(role.permissions) == 1
 
-def test_role_has_permission():
-    """Test checking if role has specific permission"""
-    role = Role("Admin", ["read", "write"])
-    assert role.has_permission("read") is True
-    assert role.has_permission("delete") is False
+def test_create_role_success(auth_client, admin_user, test_organization, session: Session):
+    """Test successful role creation"""
+    response = auth_client.post(
+        "/roles/create",
+        data={
+            "name": "Test Role",
+            "organization_id": test_organization.id,
+            "permissions": [ValidPermissions.EDIT_ROLE.value]
+        },
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 303
+    
+    # Verify role was created in database
+    created_role = session.exec(
+        select(Role).where(
+            Role.name == "Test Role",
+            Role.organization_id == test_organization.id
+        )
+    ).first()
+    
+    assert created_role is not None
+    assert created_role.name == "Test Role"
+    assert len(created_role.permissions) == 1
+    assert created_role.permissions[0].name == ValidPermissions.EDIT_ROLE
 
-def test_role_add_existing_permission():
-    """Test adding a permission that already exists"""
-    role = Role("Admin", ["read"])
-    role.add_permission("read")
-    assert len(role.permissions) == 1
 
-def test_role_remove_nonexistent_permission():
-    """Test removing a permission that doesn't exist"""
-    role = Role("Admin", ["read"])
-    role.remove_permission("write")
-    assert len(role.permissions) == 1
-    assert role.permissions == ["read"]
+def test_create_role_unauthorized(auth_client, test_user, test_organization):
+    """Test role creation without proper permissions"""
+    response = auth_client.post(
+        "/roles/create",
+        data={
+            "name": "Test Role",
+            "organization_id": test_organization.id,
+            "permissions": [ValidPermissions.EDIT_ROLE.value]
+        },
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 403
 
-# Additional tests for role.py
 
-def test_role_invalid_name():
-    """Test role creation with invalid name"""
-    with pytest.raises(ValueError):
-        Role("", ["read"])
+def test_create_duplicate_role(auth_client, admin_user, test_organization, session: Session):
+    """Test creating a role with a name that already exists in the organization"""
+    # Create initial role
+    existing_role = Role(
+        name="Existing Role",
+        organization_id=test_organization.id
+    )
+    session.add(existing_role)
+    session.commit()
+    
+    # Attempt to create role with same name
+    response = auth_client.post(
+        "/roles/create",
+        data={
+            "name": "Existing Role",
+            "organization_id": test_organization.id,
+            "permissions": [ValidPermissions.EDIT_ROLE.value]
+        },
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 400
 
-def test_role_none_permissions():
-    """Test role creation with None permissions"""
-    with pytest.raises(ValueError):
-        Role("Admin", None)
 
-def test_role_empty_permissions():
-    """Test role creation with empty permissions list"""
-    role = Role("Admin", [])
-    assert len(role.permissions) == 0
+def test_create_role_unauthenticated(unauth_client, test_organization):
+    """Test role creation without authentication"""
+    response = unauth_client.post(
+        "/roles/create",
+        data={
+            "name": "Test Role",
+            "organization_id": test_organization.id,
+            "permissions": [ValidPermissions.EDIT_ROLE.value]
+        },
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 303
