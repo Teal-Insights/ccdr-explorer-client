@@ -8,18 +8,24 @@ from sqlmodel import Session, select
 @pytest.fixture
 def admin_user(session: Session, test_user: User, test_organization):
     """Create an admin user with CREATE_ROLE permission"""
-    admin_role = Role(
+    admin_role: Role = Role(
         name="Admin",
         organization_id=test_organization.id
     )
-    create_role_permission = session.exec(
+
+    create_role_permission: Permission | None = session.exec(
         select(Permission).where(Permission.name == ValidPermissions.CREATE_ROLE)
     ).first()
+
+    if create_role_permission is None:
+        raise ValueError("Error during test setup: CREATE_ROLE permission not found")
+    
     admin_role.permissions.append(create_role_permission)
     session.add(admin_role)
-    
+
     test_user.roles.append(admin_role)
     session.commit()
+
     return test_user
 
 
@@ -34,9 +40,9 @@ def test_create_role_success(auth_client, admin_user, test_organization, session
         },
         follow_redirects=False
     )
-    
+
     assert response.status_code == 303
-    
+
     # Verify role was created in database
     created_role = session.exec(
         select(Role).where(
@@ -44,7 +50,7 @@ def test_create_role_success(auth_client, admin_user, test_organization, session
             Role.organization_id == test_organization.id
         )
     ).first()
-    
+
     assert created_role is not None
     assert created_role.name == "Test Role"
     assert len(created_role.permissions) == 1
@@ -62,7 +68,7 @@ def test_create_role_unauthorized(auth_client, test_user, test_organization):
         },
         follow_redirects=False
     )
-    
+
     assert response.status_code == 403
 
 
@@ -75,7 +81,7 @@ def test_create_duplicate_role(auth_client, admin_user, test_organization, sessi
     )
     session.add(existing_role)
     session.commit()
-    
+
     # Attempt to create role with same name
     response = auth_client.post(
         "/roles/create",
@@ -86,7 +92,7 @@ def test_create_duplicate_role(auth_client, admin_user, test_organization, sessi
         },
         follow_redirects=False
     )
-    
+
     assert response.status_code == 400
 
 
@@ -101,5 +107,5 @@ def test_create_role_unauthenticated(unauth_client, test_organization):
         },
         follow_redirects=False
     )
-    
+
     assert response.status_code == 303
