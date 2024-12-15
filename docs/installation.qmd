@@ -61,6 +61,8 @@ pipx install poetry
 poetry install
 ```
 
+(Note: if `psycopg2` installation fails with a `ChefBuildError`, you just need to install the PostgreSQL headers first and then try again.)
+
 3.  Activate shell
 
 ``` bash
