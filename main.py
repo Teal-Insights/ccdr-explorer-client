@@ -255,7 +255,10 @@ async def read_organization(
     params: dict = Depends(common_authenticated_parameters)
 ):
     # Get the organization only if the user is a member of it
-    org: Organization = params["user"].organizations.get(org_id)
+    org = next(
+        (org for org in params["user"].organizations if org.id == org_id),
+        None
+    )
     if not org:
         raise organization.OrganizationNotFoundError()
 
