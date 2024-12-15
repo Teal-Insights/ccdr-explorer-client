@@ -4,18 +4,23 @@ title: "Customization"
 
 ## Development workflow
 
-### Dependency management with Poetry
+### Dependency management with `uv`
 
-The project uses Poetry to manage dependencies:
+The project uses `uv` to manage dependencies:
 
-- Add new dependency: `poetry add <dependency>`
-- Add development dependency: `poetry add --dev <dependency>`
-- Remove dependency: `poetry remove <dependency>`
-- Update lock file: `poetry lock`
-- Install dependencies: `poetry install`
-- Update all dependencies: `poetry update`
+- Add new dependency: `uv add <dependency>`
+- Add development dependency: `uv add --dev <dependency>`
+- Remove dependency: `uv remove <dependency>`
+- Update lock file: `uv lock`
+- Install all dependencies: `uv sync`
+- Install only production dependencies: `uv sync --no-dev`
+- Upgrade dependencies: `uv lock --upgrade`
 
-If you are using VSCode or Cursor as your IDE, you will need to select the Poetry-managed Python version as your interpreter for the project. To find the location of the Poetry-managed Python interpreter, run `poetry env info` and look for the `Path` field. Then, in VSCode, go to `View > Command Palette`, search for `Python: Select Interpreter`, and either select Poetry's Python version from the list (if it has been auto-detected) or "Enter interpreter path" manually.
+### IDE configuration
+
+If you are using VSCode or Cursor as your IDE, you will need to select the `uv`-managed Python version as your interpreter for the project. Go to `View > Command Palette`, search for `Python: Select Interpreter`, and select the Python version labeled `('.venv':venv)`.
+
+If your IDE does not automatically detect and display this option, you can manually select the interpreter by selecting "Enter interpreter path" and then navigating to the `.venv/bin/python` subfolder in your project directory.
 
 ### Testing
 

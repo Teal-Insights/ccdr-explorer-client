@@ -16,7 +16,7 @@ logger = getLogger("uvicorn.error")
 router = APIRouter(prefix="/roles", tags=["roles"])
 
 
-# -- Custom Exceptions --
+# --- Custom Exceptions ---
 
 
 class InvalidPermissionError(HTTPException):
@@ -53,7 +53,7 @@ class RoleHasUsersError(HTTPException):
         )
 
 
-# -- Server Request Models --
+# --- Server Request Models ---
 
 class RoleCreate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -126,7 +126,7 @@ class RoleDelete(BaseModel):
         return cls(id=id, organization_id=organization_id)
 
 
-# -- Routes --
+# --- Routes ---
 
 
 @router.post("/create", response_class=RedirectResponse)

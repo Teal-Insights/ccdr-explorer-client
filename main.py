@@ -33,7 +33,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-# -- Exception Handling Middlewares --
+# --- Exception Handling Middlewares ---
 
 
 # Handle AuthenticationError by redirecting to login page
@@ -137,7 +137,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# -- Unauthenticated Routes --
+# --- Unauthenticated Routes ---
 
 
 # Define a dependency for common parameters
@@ -222,7 +222,7 @@ async def read_reset_password(
     return templates.TemplateResponse(params["request"], "authentication/reset_password.html", params)
 
 
-# -- Authenticated Routes --
+# --- Authenticated Routes ---
 
 
 # Define a dependency for common parameters
@@ -270,7 +270,7 @@ async def read_organization(
     return templates.TemplateResponse(params["request"], "users/organization.html", params)
 
 
-# -- Include Routers --
+# --- Include Routers ---
 
 
 app.include_router(authentication.router)

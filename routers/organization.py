@@ -10,7 +10,7 @@ from datetime import datetime
 
 logger = getLogger("uvicorn.error")
 
-# -- Custom Exceptions --
+# --- Custom Exceptions ---
 
 
 class EmptyOrganizationNameError(HTTPException):
@@ -40,7 +40,7 @@ class OrganizationNameTakenError(HTTPException):
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
-# -- Server Request and Response Models --
+# --- Server Request and Response Models ---
 
 
 class OrganizationCreate(BaseModel):
@@ -83,7 +83,7 @@ class OrganizationUpdate(BaseModel):
         return cls(id=id, name=name)
 
 
-# -- Routes --
+# --- Routes ---
 
 @router.post("/create", response_class=RedirectResponse)
 def create_organization(

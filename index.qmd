@@ -37,7 +37,7 @@ The design philosophy of the template is to prefer low-level, best-in-class open
 
 **Additional technologies:**
 
-- [Poetry](https://python-poetry.org/): Python dependency manager
+- [uv](https://docs.astral.sh/uv/): Python dependency manager
 - [Pytest](https://docs.pytest.org/en/7.4.x/): testing framework
 - [Docker](https://www.docker.com/): development containerization
 - [Github Actions](https://docs.github.com/en/actions): CI/CD pipeline
@@ -50,10 +50,34 @@ The design philosophy of the template is to prefer low-level, best-in-class open
 
 For comprehensive installation instructions, see the [installation page](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/installation.html).
 
-### Python and Docker
+### uv
 
-- [Python 3.12 or higher](https://www.python.org/downloads/)
-- [Docker and Docker Compose](https://docs.docker.com/get-docker/)
+MacOS and Linux:
+
+``` bash
+wget -qO- https://astral.sh/uv/install.sh | sh
+```
+
+Windows:
+
+``` bash
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+See the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for more information.
+
+### Python
+
+Install Python 3.12 or higher from either the official [downloads page](https://www.python.org/downloads/) or using uv:
+
+``` bash
+# Installs the latest version
+uv python install
+```
+
+### Docker and Docker Compose
+
+Install Docker Desktop and Coker Compose for your operating system by following the [instructions in the documentation](https://docs.docker.com/compose/install/).
 
 ### PostgreSQL headers
 
@@ -75,27 +99,14 @@ For Windows:
 
 ### Python dependencies
 
-1.  Install Poetry
+From the root directory, run:
 
 ``` bash
-pipx install poetry
+uv venv
+uv sync
 ```
 
-2.  Install project dependencies
-
-``` bash
-poetry install
-```
-
-(Note: if `psycopg2` installation fails with a `ChefBuildError`, you just need to install the PostgreSQL headers first and then try again.)
-
-3.  Activate shell
-
-``` bash
-poetry shell
-```
-
-(Note: You will need to activate the shell every time you open a new terminal session. Alternatively, you can use the `poetry run` prefix before other commands to run them without activating the shell.)
+This will create an in-project virtual environment and install all dependencies.
 
 ### Set environment variables
 
