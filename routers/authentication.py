@@ -26,7 +26,7 @@ logger = getLogger("uvicorn.error")
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# -- Server Request and Response Models --
+# --- Server Request and Response Models ---
 
 
 class UserRegister(BaseModel):
@@ -102,7 +102,7 @@ class UserResetPassword(BaseModel):
                    new_password=new_password, confirm_new_password=confirm_new_password)
 
 
-# -- DB Request and Response Models --
+# --- DB Request and Response Models ---
 
 
 class UserRead(BaseModel):
@@ -116,7 +116,7 @@ class UserRead(BaseModel):
     updated_at: datetime
 
 
-# -- Routes --
+# --- Routes ---
 
 
 # TODO: Use custom error message in the case where the user is already registered

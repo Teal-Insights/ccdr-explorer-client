@@ -9,7 +9,7 @@ from utils.auth import get_session, get_authenticated_user, verify_password, Pas
 router = APIRouter(prefix="/user", tags=["user"])
 
 
-# -- Server Request and Response Models --
+# --- Server Request and Response Models ---
 
 
 class UpdateProfile(BaseModel):
@@ -52,7 +52,7 @@ class UserDeleteAccount(BaseModel):
         return cls(confirm_delete_password=confirm_delete_password)
 
 
-# -- Routes --
+# --- Routes ---
 
 
 @router.post("/update_profile", response_class=RedirectResponse)
