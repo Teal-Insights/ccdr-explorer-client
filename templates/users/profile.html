@@ -18,8 +18,8 @@
             <p><strong>Email:</strong> {{ user.email }}</p>
             <!-- Display user avatar or silhouette if no avatar is available -->
             <div class="mb-3">
-                {% if user.avatar_url %}
-                    <img src="{{ user.avatar_url }}" alt="User Avatar" class="img-thumbnail" width="150">
+                {% if user.avatar_data %}
+                    <img src="{{ url_for('get_avatar') }}" alt="User Avatar" class="img-thumbnail" width="150">
                 {% else %}
                     {{ render_silhouette(width=150, height=150) }}
                 {% endif %}
@@ -35,7 +35,7 @@
             Edit Profile
         </div>
         <div class="card-body">
-            <form action="{{ url_for('update_profile') }}" method="post">
+            <form action="{{ url_for('update_profile') }}" method="post" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="name" class="form-label">Name</label>
                     <input type="text" class="form-control" id="name" name="name" value="{{ user.name }}">
@@ -45,8 +45,8 @@
                     <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}">
                 </div>
                 <div class="mb-3">
-                    <label for="avatar_url" class="form-label">Avatar URL</label>
-                    <input type="url" class="form-control" id="avatar_url" name="avatar_url" value="{{ user.avatar_url }}">
+                    <label for="avatar_file" class="form-label">Avatar</label>
+                    <input type="file" class="form-control" id="avatar_file" name="avatar_file" accept="image/*">
                 </div>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
             </form>

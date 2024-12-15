@@ -5,7 +5,7 @@ from datetime import datetime, UTC, timedelta
 from typing import Optional, List, Union
 from fastapi import HTTPException
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Enum as SQLAlchemyEnum
+from sqlalchemy import Column, Enum as SQLAlchemyEnum, LargeBinary
 from sqlalchemy.orm import Mapped
 
 logger = getLogger("uvicorn.error")
@@ -180,7 +180,9 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     email: str = Field(index=True, unique=True)
-    avatar_url: Optional[str] = None
+    avatar_data: Optional[bytes] = Field(
+        default=None, sa_column=Column(LargeBinary))
+    avatar_content_type: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 

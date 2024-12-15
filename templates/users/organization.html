@@ -63,11 +63,7 @@
                             {% for user in role.users %}
                             <tr>
                                 <td class="text-center" style="width: 50px;">
-                                    {% if user.avatar_url %}
-                                        <img src="{{ user.avatar_url }}" alt="User Avatar" class="rounded-circle" width="40" height="40">
-                                    {% else %}
-                                        {{ render_silhouette(width=40, height=40) }}
-                                    {% endif %}
+                                    {{ render_silhouette(width=40, height=40) }}
                                 </td>
                                 <td>{{ user.name }}</td>
                                 <td>{{ user.email }}</td>
