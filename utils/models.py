@@ -180,7 +180,6 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     email: str = Field(index=True, unique=True)
-    avatar_url: Optional[str] = None
     avatar_data: Optional[bytes] = Field(
         default=None, sa_column=Column(LargeBinary))
     avatar_content_type: Optional[str] = None
