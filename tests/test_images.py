@@ -6,8 +6,7 @@ from utils.images import (
     InvalidImageError,
     MAX_FILE_SIZE,
     MIN_DIMENSION,
-    MAX_DIMENSION,
-    TARGET_SIZE
+    MAX_DIMENSION
 )
 
 def create_test_image(width: int, height: int, format: str = 'PNG') -> bytes:
@@ -28,7 +27,7 @@ def test_valid_square_image():
     
     # Verify the processed image
     processed_image = Image.open(io.BytesIO(processed_data))
-    assert processed_image.size == (TARGET_SIZE, TARGET_SIZE)
+    assert processed_image.size == (500, 500)
     assert content_type == 'image/png'
 
 def test_valid_rectangular_image():
@@ -38,7 +37,7 @@ def test_valid_rectangular_image():
     
     # Verify the processed image
     processed_image = Image.open(io.BytesIO(processed_data))
-    assert processed_image.size == (TARGET_SIZE, TARGET_SIZE)
+    assert processed_image.size == (600, 600)
     assert content_type == 'image/png'
 
 def test_minimum_size_image():
@@ -47,7 +46,7 @@ def test_minimum_size_image():
     processed_data, content_type = validate_and_process_image(image_data, 'image/png')
     
     processed_image = Image.open(io.BytesIO(processed_data))
-    assert processed_image.size == (TARGET_SIZE, TARGET_SIZE)
+    assert processed_image.size == (100, 100)
 
 def test_too_small_image():
     """Test that too small images are rejected"""
@@ -99,6 +98,6 @@ def test_different_image_formats():
         
         # Verify the processed image
         processed_image = Image.open(io.BytesIO(processed_data))
-        assert processed_image.size == (TARGET_SIZE, TARGET_SIZE)
+        assert processed_image.size == (500, 500)
         # Output should match input format
         assert result_type == content_type

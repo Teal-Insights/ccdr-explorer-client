@@ -165,7 +165,9 @@ Before running the development server, make sure the development database is run
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Navigate to http://localhost:8000/
+Navigate to http://localhost:8000/.
+
+(Note: If startup fails with a sqlalchemy/psycopg2 connection error, make sure that Docker Desktop and the database service are running and that the environment variables in the `.env` file are correctly populated, and then try again.)
 
 ## Lint types with mypy
 

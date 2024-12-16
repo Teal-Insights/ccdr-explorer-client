@@ -13,7 +13,6 @@ ALLOWED_CONTENT_TYPES = {
 }
 MIN_DIMENSION = 100
 MAX_DIMENSION = 2000
-TARGET_SIZE = 500
 
 
 class InvalidImageError(HTTPException):
@@ -30,6 +29,7 @@ def validate_and_process_image(
     """
     Validates and processes an image file.
     Returns a tuple of (processed_image_data, content_type).
+    Ensures the image is square by center-cropping.
     
     Raises:
         InvalidImageError: If the image is invalid or doesn't meet requirements
@@ -67,7 +67,7 @@ def validate_and_process_image(
             message=f"Image too large. Maximum dimension is {MAX_DIMENSION}px"
         )
 
-    # Crop to square and resize
+    # Crop to square
     min_dim = min(width, height)
     left = (width - min_dim) // 2
     top = (height - min_dim) // 2
@@ -75,7 +75,6 @@ def validate_and_process_image(
     bottom = top + min_dim
     
     image = image.crop((left, top, right, bottom))
-    image = image.resize((TARGET_SIZE, TARGET_SIZE), Image.Resampling.LANCZOS)
 
     # Get the format from the content type
     output_format = ALLOWED_CONTENT_TYPES[content_type]
