@@ -1,39 +1,13 @@
-from fastapi import APIRouter, Depends, Form, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, Form, UploadFile, File
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session
 from typing import Optional
 from utils.models import User, DataIntegrityError
 from utils.auth import get_session, get_authenticated_user, verify_password, PasswordValidationError
-from PIL import Image
-import io
+from utils.images import validate_and_process_image
 
 router = APIRouter(prefix="/user", tags=["user"])
-
-
-# --- Constants ---
-
-
-# 2MB in bytes
-MAX_FILE_SIZE = 2 * 1024 * 1024
-ALLOWED_CONTENT_TYPES = {
-    'image/jpeg',
-    'image/png',
-    'image/webp'
-}
-MIN_DIMENSION = 100
-MAX_DIMENSION = 2000
-TARGET_SIZE = 500
-
-
-# --- Custom Exceptions ---
-
-
-class InvalidImageError(HTTPException):
-    """Raised when an invalid image is uploaded"""
-
-    def __init__(self, message: str = "Invalid image file"):
-        super().__init__(status_code=400, detail=message)
 
 
 # --- Server Request and Response Models ---
@@ -90,55 +64,12 @@ async def update_profile(
 ):
     # Handle avatar update
     if user_profile.avatar_file:
-        # Check file size
-        if len(user_profile.avatar_file) > MAX_FILE_SIZE:
-            raise InvalidImageError(
-                message="File too large (max 2MB)"
-            )
-
-        # Check file type
-        if user_profile.avatar_content_type not in ALLOWED_CONTENT_TYPES:
-            raise InvalidImageError(
-                message="Invalid file type. Must be JPEG, PNG, or WebP"
-            )
-
-        try:
-            # Open and validate image
-            image = Image.open(io.BytesIO(user_profile.avatar_file))
-            width, height = image.size
-
-            # Check minimum dimensions
-            if width < MIN_DIMENSION or height < MIN_DIMENSION:
-                raise InvalidImageError(
-                    message=f"Image too small. Minimum dimension is {MIN_DIMENSION}px"
-                )
-
-            # Check maximum dimensions
-            if width > MAX_DIMENSION or height > MAX_DIMENSION:
-                raise InvalidImageError(
-                    message=f"Image too large. Maximum dimension is {MAX_DIMENSION}px"
-                )
-
-            # Crop to square and resize
-            min_dim = min(width, height)
-            left = (width - min_dim) // 2
-            top = (height - min_dim) // 2
-            right = left + min_dim
-            bottom = top + min_dim
-            
-            image = image.crop((left, top, right, bottom))
-            image = image.resize((TARGET_SIZE, TARGET_SIZE), Image.Resampling.LANCZOS)
-
-            # Convert back to bytes
-            output = io.BytesIO()
-            image.save(output, format='PNG')
-            user_profile.avatar_file = output.getvalue()
-            user_profile.avatar_content_type = 'image/png'
-
-        except Exception as e:
-            raise InvalidImageError(
-                message="Invalid image file"
-            )
+        processed_image, content_type = validate_and_process_image(
+            user_profile.avatar_file,
+            user_profile.avatar_content_type
+        )
+        user_profile.avatar_file = processed_image
+        user_profile.avatar_content_type = content_type
 
     # Update user details
     user.name = user_profile.name

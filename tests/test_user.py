@@ -1,9 +1,15 @@
 from fastapi.testclient import TestClient
 from httpx import Response
 from sqlmodel import Session
+from unittest.mock import patch
 
 from main import app
 from utils.models import User
+from utils.images import InvalidImageError
+
+# Mock data for consistent testing
+MOCK_IMAGE_DATA = b"processed fake image data"
+MOCK_CONTENT_TYPE = "image/png"
 
 
 def test_update_profile_unauthorized(unauth_client: TestClient):
@@ -23,11 +29,12 @@ def test_update_profile_unauthorized(unauth_client: TestClient):
     assert response.headers["location"] == app.url_path_for("read_login")
 
 
-def test_update_profile_authorized(auth_client: TestClient, test_user: User, session: Session):
+@patch('routers.user.validate_and_process_image')
+def test_update_profile_authorized(mock_validate, auth_client: TestClient, test_user: User, session: Session):
     """Test that authorized users can edit their profile"""
     
-    # Create test image data
-    test_image_data = b"fake image data"
+    # Configure mock to return processed image data
+    mock_validate.return_value = (MOCK_IMAGE_DATA, MOCK_CONTENT_TYPE)
     
     # Update profile
     response: Response = auth_client.post(
@@ -37,7 +44,7 @@ def test_update_profile_authorized(auth_client: TestClient, test_user: User, ses
             "email": "updated@example.com",
         },
         files={
-            "avatar_file": ("test_avatar.jpg", test_image_data, "image/jpeg")
+            "avatar_file": ("test_avatar.jpg", b"fake image data", "image/jpeg")
         },
         follow_redirects=False
     )
@@ -48,8 +55,11 @@ def test_update_profile_authorized(auth_client: TestClient, test_user: User, ses
     session.refresh(test_user)
     assert test_user.name == "Updated Name"
     assert test_user.email == "updated@example.com"
-    assert test_user.avatar_data == test_image_data
-    assert test_user.avatar_content_type == "image/jpeg"
+    assert test_user.avatar_data == MOCK_IMAGE_DATA
+    assert test_user.avatar_content_type == MOCK_CONTENT_TYPE
+
+    # Verify mock was called correctly
+    mock_validate.assert_called_once()
 
 
 def test_update_profile_without_avatar(auth_client: TestClient, test_user: User, session: Session):
@@ -110,10 +120,13 @@ def test_delete_account_success(auth_client: TestClient, test_user: User, sessio
     assert user is None
 
 
-def test_get_avatar_authorized(auth_client: TestClient, test_user: User):
+@patch('routers.user.validate_and_process_image')
+def test_get_avatar_authorized(mock_validate, auth_client: TestClient, test_user: User):
     """Test getting user avatar"""
+    # Configure mock to return processed image data
+    mock_validate.return_value = (MOCK_IMAGE_DATA, MOCK_CONTENT_TYPE)
+
     # First upload an avatar
-    test_image_data = b"fake image data"
     auth_client.post(
         app.url_path_for("update_profile"),
         data={
@@ -121,7 +134,7 @@ def test_get_avatar_authorized(auth_client: TestClient, test_user: User):
             "email": test_user.email,
         },
         files={
-            "avatar_file": ("test_avatar.jpg", test_image_data, "image/jpeg")
+            "avatar_file": ("test_avatar.jpg", b"fake image data", "image/jpeg")
         },
     )
 
@@ -130,8 +143,8 @@ def test_get_avatar_authorized(auth_client: TestClient, test_user: User):
         app.url_path_for("get_avatar")
     )
     assert response.status_code == 200
-    assert response.content == test_image_data
-    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content == MOCK_IMAGE_DATA
+    assert response.headers["content-type"] == MOCK_CONTENT_TYPE
 
 
 def test_get_avatar_unauthorized(unauth_client: TestClient):
@@ -142,3 +155,24 @@ def test_get_avatar_unauthorized(unauth_client: TestClient):
     )
     assert response.status_code == 303
     assert response.headers["location"] == app.url_path_for("read_login")
+
+
+# Add new test for invalid image
+@patch('routers.user.validate_and_process_image')
+def test_update_profile_invalid_image(mock_validate, auth_client: TestClient):
+    """Test that invalid images are rejected"""
+    # Configure mock to raise InvalidImageError
+    mock_validate.side_effect = InvalidImageError("Invalid test image")
+    
+    response: Response = auth_client.post(
+        app.url_path_for("update_profile"),
+        data={
+            "name": "Updated Name",
+            "email": "updated@example.com",
+        },
+        files={
+            "avatar_file": ("test_avatar.jpg", b"invalid image data", "image/jpeg")
+        },
+    )
+    assert response.status_code == 400
+    assert "Invalid test image" in response.text
