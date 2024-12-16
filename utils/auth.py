@@ -34,6 +34,13 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+PASSWORD_PATTERN = re.compile(
+    r"(?=.*\d)"                   # At least one digit
+    r"(?=.*[a-z])"               # At least one lowercase letter
+    r"(?=.*[A-Z])"               # At least one uppercase letter
+    r"(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/])"  # At least one special character
+    r"[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/]{8,}"  # At least 8 characters long
+)
 
 
 # --- Custom Exceptions ---
@@ -105,11 +112,8 @@ def create_password_validator(field_name: str = "password"):
         - At least 8 characters long
         """
         logger.debug(f"Validating password for {field_name}")
-        pattern = re.compile(
-            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/]{8,}")
-        if not pattern.match(v):
-            logger.debug(f"Password for {
-                         field_name} does not satisfy the security policy")
+        if not PASSWORD_PATTERN.match(v):
+            logger.debug(f"Password for {field_name} does not satisfy the security policy")
             raise PasswordValidationError(
                 field=field_name,
                 message=f"{field_name} does not satisfy the security policy"
