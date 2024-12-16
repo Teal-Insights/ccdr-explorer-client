@@ -11,6 +11,7 @@ from routers import authentication, organization, role, user
 from utils.auth import get_user_with_relations, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
 from utils.models import User, Organization
 from utils.db import get_session, set_up_db
+from utils.images import MAX_FILE_SIZE, MIN_DIMENSION, MAX_DIMENSION, ALLOWED_CONTENT_TYPES
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
@@ -246,6 +247,13 @@ async def read_dashboard(
 async def read_profile(
     params: dict = Depends(common_authenticated_parameters)
 ):
+    # Add image constraints to the template context
+    params.update({
+        "max_file_size_mb": MAX_FILE_SIZE / (1024 * 1024),  # Convert bytes to MB
+        "min_dimension": MIN_DIMENSION,
+        "max_dimension": MAX_DIMENSION,
+        "allowed_formats": list(ALLOWED_CONTENT_TYPES.keys())
+    })
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
 
 

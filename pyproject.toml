@@ -20,6 +20,7 @@ dependencies = [
     "resend<3.0.0,>=2.4.0",
     "bcrypt<5.0.0,>=4.2.0",
     "fastapi<1.0.0,>=0.115.5",
+    "pillow>=11.0.0",
 ]
 
 [dependency-groups]

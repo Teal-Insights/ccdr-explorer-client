@@ -10,7 +10,7 @@ If you use VSCode with Docker to develop in a container, the following VSCode De
 {
 	"name": "Python 3",
 	"image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
-	"postCreateCommand": "sudo apt update && sudo apt install -y python3-dev libpq-dev graphviz && uv venv && uv sync",
+	"postCreateCommand": "sudo apt update && sudo apt install -y python3-dev libpq-dev graphviz libwebp-dev && uv venv && uv sync",
 	"features": {
 		"ghcr.io/va-h/devcontainers-features/uv:1": {
 			"version": "latest"
@@ -61,7 +61,7 @@ Install Docker Desktop and Docker Compose for your operating system by following
 For Ubuntu/Debian:
 
 ``` bash
-sudo apt update && sudo apt install -y python3-dev libpq-dev
+sudo apt update && sudo apt install -y python3-dev libpq-dev libwebp-dev
 ```
 
 For macOS:
@@ -165,7 +165,9 @@ Before running the development server, make sure the development database is run
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Navigate to http://localhost:8000/
+Navigate to http://localhost:8000/.
+
+(Note: If startup fails with a sqlalchemy/psycopg2 connection error, make sure that Docker Desktop and the database service are running and that the environment variables in the `.env` file are correctly populated, and then try again.)
 
 ## Lint types with mypy
 

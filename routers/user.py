@@ -5,6 +5,7 @@ from sqlmodel import Session
 from typing import Optional
 from utils.models import User, DataIntegrityError
 from utils.auth import get_session, get_authenticated_user, verify_password, PasswordValidationError
+from utils.images import validate_and_process_image
 
 router = APIRouter(prefix="/user", tags=["user"])
 
@@ -61,11 +62,19 @@ async def update_profile(
     user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ):
+    # Handle avatar update
+    if user_profile.avatar_file:
+        processed_image, content_type = validate_and_process_image(
+            user_profile.avatar_file,
+            user_profile.avatar_content_type
+        )
+        user_profile.avatar_file = processed_image
+        user_profile.avatar_content_type = content_type
+
     # Update user details
     user.name = user_profile.name
     user.email = user_profile.email
-
-    # Handle avatar update
+    
     if user_profile.avatar_file:
         user.avatar_data = user_profile.avatar_file
         user.avatar_content_type = user_profile.avatar_content_type
