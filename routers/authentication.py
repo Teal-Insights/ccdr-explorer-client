@@ -81,11 +81,10 @@ class UserForgotPassword(BaseModel):
 
 class UserResetPassword(BaseModel):
     email: EmailStr
-    token: str
+    token: Optional[str]
     new_password: str
     confirm_new_password: str
 
-    # Use the factory with a different field name
     validate_password_strength = create_password_validator("new_password")
     validate_passwords_match = create_passwords_match_validator(
         "new_password", "confirm_new_password")
@@ -94,12 +93,16 @@ class UserResetPassword(BaseModel):
     async def as_form(
         cls,
         email: EmailStr = Form(...),
-        token: str = Form(...),
+        token: str = Form(None),
         new_password: str = Form(...),
         confirm_new_password: str = Form(...)
     ):
-        return cls(email=email, token=token,
-                   new_password=new_password, confirm_new_password=confirm_new_password)
+        return cls(
+            email=email,
+            token=token,
+            new_password=new_password,
+            confirm_new_password=confirm_new_password
+        )
 
 
 # --- DB Request and Response Models ---
@@ -256,8 +259,39 @@ async def forgot_password(
 @router.post("/reset_password")
 async def reset_password(
     user: UserResetPassword = Depends(UserResetPassword.as_form),
+    tokens: tuple[Optional[str], Optional[str]] = Depends(oauth2_scheme_cookie),
     session: Session = Depends(get_session)
 ):
+    access_token, _ = tokens
+    
+    # Handle authenticated user
+    if access_token:
+        try:
+            decoded_token = validate_token(access_token)
+            if decoded_token and decoded_token.get("sub") == user.email:
+                # User is authenticated and changing their own password
+                db_user = session.exec(select(User).where(
+                    User.email == user.email)).first()
+                if not db_user:
+                    raise HTTPException(status_code=404, detail="User not found")
+                
+                # Update password
+                if db_user.password:
+                    db_user.password.hashed_password = get_password_hash(user.new_password)
+                else:
+                    db_user.password = UserPassword(
+                        hashed_password=get_password_hash(user.new_password)
+                    )
+                session.commit()
+                return RedirectResponse(url="/settings", status_code=303)
+            
+        except Exception as e:
+            logger.error(f"Error validating token: {e}")
+    
+    # Handle unauthenticated user with reset token
+    if not user.token:
+        raise HTTPException(status_code=400, detail="Reset token required for unauthenticated password reset")
+    
     authorized_user, reset_token = get_user_from_reset_token(
         user.email, user.token, session)
 
@@ -270,16 +304,13 @@ async def reset_password(
             user.new_password
         )
     else:
-        logger.warning(
-            "User password not found during password reset; creating new password for user")
         authorized_user.password = UserPassword(
             hashed_password=get_password_hash(user.new_password)
         )
 
     reset_token.used = True
     session.commit()
-    session.refresh(authorized_user)
-
+    
     return RedirectResponse(url="/login", status_code=303)
 
 
