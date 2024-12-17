@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from 'components/silhouette.html' import render_silhouette %}
+{% from 'components/organizations.html' import render_organizations %}
 
 {% block title %}Profile{% endblock %}
 
@@ -17,8 +18,8 @@
             <p><strong>Email:</strong> {{ user.email }}</p>
             <!-- Display user avatar or silhouette if no avatar is available -->
             <div class="mb-3">
-                {% if user.avatar_url %}
-                    <img src="{{ user.avatar_url }}" alt="User Avatar" class="img-thumbnail" width="150">
+                {% if user.avatar_data %}
+                    <img src="{{ url_for('get_avatar') }}" alt="User Avatar" class="img-thumbnail" width="150">
                 {% else %}
                     {{ render_silhouette(width=150, height=150) }}
                 {% endif %}
@@ -34,7 +35,7 @@
             Edit Profile
         </div>
         <div class="card-body">
-            <form action="{{ url_for('edit_profile') }}" method="post">
+            <form action="{{ url_for('update_profile') }}" method="post" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="name" class="form-label">Name</label>
                     <input type="text" class="form-control" id="name" name="name" value="{{ user.name }}">
@@ -44,8 +45,17 @@
                     <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}">
                 </div>
                 <div class="mb-3">
-                    <label for="avatar_url" class="form-label">Avatar URL</label>
-                    <input type="url" class="form-control" id="avatar_url" name="avatar_url" value="{{ user.avatar_url }}">
+                    <label for="avatar_file" class="form-label">Avatar</label>
+                    <input type="file" class="form-control" id="avatar_file" name="avatar_file" accept="image/*">
+                    <div class="form-text">
+                        <ul class="mb-0">
+                            <li>Maximum file size: {{ max_file_size_mb }} MB</li>
+                            <li>Minimum dimension: {{ min_dimension }}x{{ min_dimension }} pixels</li>
+                            <li>Maximum dimension: {{ max_dimension }}x{{ max_dimension }} pixels</li>
+                            <li>Allowed formats: {{ allowed_formats|join(', ') }}</li>
+                            <li>Image will be cropped to a square</li>
+                        </ul>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
             </form>
@@ -58,7 +68,7 @@
             Change Password
         </div>
         <div class="card-body">
-            <!-- Trigger password reset via email confirmation -->
+            <!-- TODO: Trigger password reset via email confirmation -->
             <form action="{{ url_for('forgot_password') }}" method="post">
                 <input type="hidden" name="email" value="{{ user.email }}">
                 <p>To change your password, please confirm your email. A password reset link will be sent to your email address.</p>
@@ -66,6 +76,9 @@
             </form>
         </div>
     </div>
+
+    <!-- Organizations Section -->
+    {{ render_organizations(user.roles|map(attribute='organization')|list) }}
 
     <!-- Delete Account -->
     <div class="card mb-4">
@@ -99,5 +112,53 @@
             editProfile.style.display = 'block';
         }
     }
+
+    document.getElementById('avatar_file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Get constraints from your template variables
+        const maxSizeMB = "{{ max_file_size_mb }}";
+        const minDimension = "{{ min_dimension }}";
+        const maxDimension = "{{ max_dimension }}";
+        const allowedFormats = "{{ allowed_formats }}";
+
+
+        // Check file size
+        const fileSizeMB = file.size / (1024 * 1024);
+        if (fileSizeMB > maxSizeMB) {
+            alert(`File size must be less than ${maxSizeMB}MB`);
+            this.value = '';
+            return;
+        }
+
+        // Check file format
+        const fileFormat = file.type.split('/')[1];
+        if (!allowedFormats.includes(fileFormat)) {
+            alert(`File format must be one of: ${allowedFormats.join(', ')}`);
+            this.value = '';
+            return;
+        }
+
+        // Check dimensions
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        
+        img.onload = function() {
+            URL.revokeObjectURL(this.src);
+            
+            if (this.width < minDimension || this.height < minDimension) {
+                alert(`Image dimensions must be at least ${minDimension}x${minDimension} pixels`);
+                e.target.value = '';
+                return;
+            }
+            
+            if (this.width > maxDimension || this.height > maxDimension) {
+                alert(`Image dimensions must not exceed ${maxDimension}x${maxDimension} pixels`);
+                e.target.value = '';
+                return;
+            }
+        };
+    });
 </script>
 {% endblock %}

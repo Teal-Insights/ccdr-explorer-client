@@ -8,31 +8,43 @@ import resend
 from dotenv import load_dotenv
 from pydantic import field_validator, ValidationInfo
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
+from jinja2.environment import Template
+from fastapi.templating import Jinja2Templates
 from fastapi import Depends, Cookie, HTTPException, status
 from utils.db import get_session
-from utils.models import User, PasswordResetToken
+from utils.models import User, Role, PasswordResetToken
 
 load_dotenv()
-logger = logging.getLogger("uvicorn.error")
+resend.api_key = os.environ["RESEND_API_KEY"]
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
 
 
-# --- AUTH ---
+# --- Constants ---
 
+
+templates = Jinja2Templates(directory="templates")
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 
-# Define the oauth2 scheme to get the token from the cookie
-def oauth2_scheme_cookie(
-    access_token: Optional[str] = Cookie(None, alias="access_token"),
-    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
-) -> tuple[Optional[str], Optional[str]]:
-    return access_token, refresh_token
+# --- Custom Exceptions ---
+
+
+class AuthenticationError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/login"}
+        )
 
 
 class PasswordValidationError(HTTPException):
@@ -52,6 +64,25 @@ class PasswordMismatchError(PasswordValidationError):
             field=field,
             message="The passwords you entered do not match"
         )
+
+
+class InsufficientPermissionsError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=403,
+            detail="You don't have permission to perform this action"
+        )
+
+
+# --- Helpers ---
+
+
+# Define the oauth2 scheme to get the token from the cookie
+def oauth2_scheme_cookie(
+    access_token: Optional[str] = Cookie(None, alias="access_token"),
+    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
+) -> tuple[Optional[str], Optional[str]]:
+    return access_token, refresh_token
 
 
 def create_password_validator(field_name: str = "password"):
@@ -75,7 +106,7 @@ def create_password_validator(field_name: str = "password"):
         """
         logger.debug(f"Validating password for {field_name}")
         pattern = re.compile(
-            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~]{8,}")
+            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/]{8,}")
         if not pattern.match(v):
             logger.debug(f"Password for {
                          field_name} does not satisfy the security policy")
@@ -180,7 +211,8 @@ def validate_token_and_get_user(
     if decoded_token:
         user_email = decoded_token.get("sub")
         user = session.exec(select(User).where(
-            User.email == user_email)).first()
+            User.email == user_email
+        )).first()
         if user:
             if token_type == "refresh":
                 new_access_token = create_access_token(
@@ -228,11 +260,7 @@ def get_authenticated_user(
             raise NeedsNewTokens(user, new_access_token, new_refresh_token)
         return user
 
-    # If both tokens are invalid or missing, redirect to login
-    raise HTTPException(
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={"Location": "/login"}
-    )
+    raise AuthenticationError()
 
 
 def get_optional_user(
@@ -273,9 +301,11 @@ def generate_password_reset_url(email: str, token: str) -> str:
     return f"{base_url}/auth/reset_password?email={email}&token={token}"
 
 
-def send_reset_email(email: str, session: Session):
+def send_reset_email(email: str, session: Session) -> None:
     # Check for an existing unexpired token
-    user = session.exec(select(User).where(User.email == email)).first()
+    user: Optional[User] = session.exec(select(User).where(
+        User.email == email
+    )).first()
     if user:
         existing_token = session.exec(
             select(PasswordResetToken)
@@ -291,17 +321,24 @@ def send_reset_email(email: str, session: Session):
             return
 
         # Generate a new token
-        token = str(uuid.uuid4())
-        reset_token = PasswordResetToken(user_id=user.id, token=token)
+        token: str = str(uuid.uuid4())
+        reset_token: PasswordResetToken = PasswordResetToken(
+            user_id=user.id, token=token)
         session.add(reset_token)
 
         try:
-            reset_url = generate_password_reset_url(email, token)
+            reset_url: str = generate_password_reset_url(email, token)
+
+            # Render the email template
+            template: Template = templates.get_template(
+                "emails/reset_email.html")
+            html_content: str = template.render({"reset_url": reset_url})
+
             params: resend.Emails.SendParams = {
                 "from": "noreply@promptlytechnologies.com",
                 "to": [email],
                 "subject": "Password Reset Request",
-                "html": f"<p>Click <a href='{reset_url}'>here</a> to reset your password.</p>",
+                "html": html_content,
             }
 
             sent_email: resend.Email = resend.Emails.send(params)
@@ -316,18 +353,39 @@ def send_reset_email(email: str, session: Session):
 
 
 def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple[Optional[User], Optional[PasswordResetToken]]:
-    reset_token = session.exec(select(PasswordResetToken).where(
-        PasswordResetToken.token == token,
-        PasswordResetToken.expires_at > datetime.now(UTC),
-        PasswordResetToken.used == False
-    )).first()
+    result = session.exec(
+        select(User, PasswordResetToken)
+        .where(
+            User.email == email,
+            PasswordResetToken.token == token,
+            PasswordResetToken.expires_at > datetime.now(UTC),
+            PasswordResetToken.used == False,
+            PasswordResetToken.user_id == User.id
+        )
+    ).first()
 
-    if not reset_token:
+    if not result:
         return None, None
 
-    user = session.exec(select(User).where(
-        User.email == email,
-        User.id == reset_token.user_id
-    )).first()
-
+    user, reset_token = result
     return user, reset_token
+
+
+def get_user_with_relations(
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session),
+) -> User:
+    """
+    Returns an authenticated user with fully loaded role and organization relationships.
+    """
+    # Refresh the user instance with eagerly loaded relationships
+    eager_user = session.exec(
+        select(User)
+        .where(User.id == user.id)
+        .options(
+            selectinload(User.roles).selectinload(Role.organization),
+            selectinload(User.roles).selectinload(Role.permissions)
+        )
+    ).one()
+
+    return eager_user

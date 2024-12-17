@@ -8,10 +8,10 @@ from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError, HTTPException, StarletteHTTPException
 from sqlmodel import Session
 from routers import authentication, organization, role, user
-from utils.auth import get_authenticated_user, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError
-from utils.models import User
+from utils.auth import get_user_with_relations, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
+from utils.models import User, Organization
 from utils.db import get_session, set_up_db
-
+from utils.images import MAX_FILE_SIZE, MIN_DIMENSION, MAX_DIMENSION, ALLOWED_CONTENT_TYPES
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
@@ -20,7 +20,7 @@ logger.setLevel(logging.DEBUG)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Optional startup logic
-    set_up_db(drop=False)
+    set_up_db()
     yield
     # Optional shutdown logic
 
@@ -34,7 +34,16 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-# -- Exception Handling Middlewares --
+# --- Exception Handling Middlewares ---
+
+
+# Handle AuthenticationError by redirecting to login page
+@app.exception_handler(AuthenticationError)
+async def authentication_error_handler(request: Request, exc: AuthenticationError):
+    return RedirectResponse(
+        url="/login",
+        status_code=status.HTTP_303_SEE_OTHER
+    )
 
 
 # Handle NeedsNewTokens by setting new tokens and redirecting to same page
@@ -104,10 +113,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Handle StarletteHTTPException (including 404, 405, etc.) by rendering the error page
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    # Don't handle redirects
-    if exc.status_code in [301, 302, 303, 307, 308]:
-        raise exc
-
     return templates.TemplateResponse(
         request,
         "errors/error.html",
@@ -133,7 +138,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# -- Unauthenticated Routes --
+# --- Unauthenticated Routes ---
 
 
 # Define a dependency for common parameters
@@ -218,14 +223,14 @@ async def read_reset_password(
     return templates.TemplateResponse(params["request"], "authentication/reset_password.html", params)
 
 
-# -- Authenticated Routes --
+# --- Authenticated Routes ---
 
 
 # Define a dependency for common parameters
 async def common_authenticated_parameters(
     request: Request,
-    user: User = Depends(get_authenticated_user),
-    error_message: Optional[str] = None,
+    user: User = Depends(get_user_with_relations),
+    error_message: Optional[str] = None
 ) -> dict:
     return {"request": request, "user": user, "error_message": error_message}
 
@@ -235,8 +240,6 @@ async def common_authenticated_parameters(
 async def read_dashboard(
     params: dict = Depends(common_authenticated_parameters)
 ):
-    if not params["user"]:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse(params["request"], "dashboard/index.html", params)
 
 
@@ -244,13 +247,38 @@ async def read_dashboard(
 async def read_profile(
     params: dict = Depends(common_authenticated_parameters)
 ):
-    if not params["user"]:
-        # Changed to 302
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    # Add image constraints to the template context
+    params.update({
+        "max_file_size_mb": MAX_FILE_SIZE / (1024 * 1024),  # Convert bytes to MB
+        "min_dimension": MIN_DIMENSION,
+        "max_dimension": MAX_DIMENSION,
+        "allowed_formats": list(ALLOWED_CONTENT_TYPES.keys())
+    })
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
 
 
-# -- Include Routers --
+@app.get("/organizations/{org_id}")
+async def read_organization(
+    org_id: int,
+    params: dict = Depends(common_authenticated_parameters)
+):
+    # Get the organization only if the user is a member of it
+    org = next(
+        (org for org in params["user"].organizations if org.id == org_id),
+        None
+    )
+    if not org:
+        raise organization.OrganizationNotFoundError()
+
+    # Eagerly load roles and users
+    org.roles
+    org.users
+    params["organization"] = org
+
+    return templates.TemplateResponse(params["request"], "users/organization.html", params)
+
+
+# --- Include Routers ---
 
 
 app.include_router(authentication.router)

@@ -37,7 +37,7 @@ The design philosophy of the template is to prefer low-level, best-in-class open
 
 **Additional technologies:**
 
-- [Poetry](https://python-poetry.org/): Python dependency manager
+- [uv](https://docs.astral.sh/uv/): Python dependency manager
 - [Pytest](https://docs.pytest.org/en/7.4.x/): testing framework
 - [Docker](https://www.docker.com/): development containerization
 - [Github Actions](https://docs.github.com/en/actions): CI/CD pipeline
@@ -50,17 +50,41 @@ The design philosophy of the template is to prefer low-level, best-in-class open
 
 For comprehensive installation instructions, see the [installation page](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/installation.html).
 
-### Python and Docker
+### uv
 
-- [Python 3.12 or higher](https://www.python.org/downloads/)
-- [Docker and Docker Compose](https://docs.docker.com/get-docker/)
+MacOS and Linux:
+
+``` bash
+wget -qO- https://astral.sh/uv/install.sh | sh
+```
+
+Windows:
+
+``` bash
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+See the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for more information.
+
+### Python
+
+Install Python 3.12 or higher from either the official [downloads page](https://www.python.org/downloads/) or using uv:
+
+``` bash
+# Installs the latest version
+uv python install
+```
+
+### Docker and Docker Compose
+
+Install Docker Desktop and Coker Compose for your operating system by following the [instructions in the documentation](https://docs.docker.com/compose/install/).
 
 ### PostgreSQL headers
 
 For Ubuntu/Debian:
 
 ``` bash
-sudo apt update && sudo apt install -y python3-dev libpq-dev
+sudo apt update && sudo apt install -y python3-dev libpq-dev libwebp-dev
 ```
 
 For macOS:
@@ -75,29 +99,18 @@ For Windows:
 
 ### Python dependencies
 
-1.  Install Poetry
+From the root directory, run:
 
 ``` bash
-pipx install poetry
+uv venv
+uv sync
 ```
 
-2.  Install project dependencies
-
-``` bash
-poetry install
-```
-
-3.  Activate shell
-
-``` bash
-poetry shell
-```
-
-(Note: You will need to activate the shell every time you open a new terminal session. Alternatively, you can use the `poetry run` prefix before other commands to run them without activating the shell.)
+This will create an in-project virtual environment and install all dependencies.
 
 ### Set environment variables
 
-Copy .env.example to .env with `cp .env.example .env`.
+Copy `.env.example` to `.env` with `cp .env.example .env`.
 
 Generate a 256 bit secret key with `openssl rand -base64 32` and paste it into the .env file.
 
@@ -106,6 +119,8 @@ Set your desired database name, username, and password in the .env file.
 To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
 
 ### Start development database
+
+To start the development database, run the following command in your terminal from the root directory:
 
 ``` bash
 docker compose up -d
@@ -127,10 +142,81 @@ Navigate to http://localhost:8000/
 mypy .
 ```
 
-### Contributing
+## Developing with LLMs
+
+``` {python}
+#| echo: false
+#| include: false
+import re
+from pathlib import Path
+
+
+def extract_file_paths(quarto_yml_path):
+    """
+    Extract href paths from _quarto.yml file.
+    Returns a list of .qmd file paths.
+    """
+    with open(quarto_yml_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Find all href entries that point to .qmd files
+    pattern = r'^\s*-\s*href:\s*(.*?\.qmd)\s*$'
+    matches = re.findall(pattern, content, re.MULTILINE)
+    return matches
+
+
+def process_qmd_content(file_path):
+    """
+    Process a .qmd file by converting YAML frontmatter to markdown heading.
+    Returns the processed content as a string.
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Replace YAML frontmatter with markdown heading
+    pattern = r'^---\s*\ntitle:\s*"([^"]+)"\s*\n---'
+    processed_content = re.sub(pattern, r'# \1', content)
+    return processed_content
+
+
+# Get the current working directory
+base_dir = Path.cwd()
+quarto_yml_path = base_dir / '_quarto.yml'
+
+# Extract file paths from _quarto.yml
+qmd_files = extract_file_paths(quarto_yml_path)
+
+# Process each .qmd file and collect contents
+processed_contents = []
+for qmd_file in qmd_files:
+    file_path = base_dir / qmd_file
+    if file_path.exists():
+        processed_content = process_qmd_content(file_path)
+        processed_contents.append(processed_content)
+
+# Concatenate all contents with double newline separator
+final_content = '\n\n'.join(processed_contents)
+
+# Ensure the output directory exists
+output_dir = base_dir / 'docs' / 'static'
+output_dir.mkdir(parents=True, exist_ok=True)
+
+# Write the concatenated content to the output file
+output_path = output_dir / 'documentation.txt'
+with open(output_path, 'w', encoding='utf-8') as f:
+    f.write(final_content)
+```
+
+In line with the [llms.txt standard](https://llmstxt.org/), we have provided a Markdown-formatted prompt—designed to help LLM agents understand how to work with this template—as a text file: [llms.txt](docs/static/llms.txt).
+
+One use case for this file, if using the Cursor IDE, is to rename it to `.cursorrules` and place it in your project directory (see the [Cursor docs](https://docs.cursor.com/context/rules-for-ai) on this for more information). Alternatively, you could use it as a custom system prompt in the web interface for ChatGPT, Claude, or the LLM of your choice.
+
+We have also exposed the full Markdown-formatted project documentation as a [single text file](docs/static/documentation.txt) for easy downloading and embedding for RAG workflows.
+
+## Contributing
 
 Your contributions are welcome! See the [issues page](https://github.com/promptly-technologies-llc/fastapi-jinja2-postgres-webapp/issues) for ideas. Fork the repository, create a new branch, make your changes, and submit a pull request.
 
-### License
+## License
 
 This project is created and maintained by [Promptly Technologies, LLC](https://promptlytechnologies.com/) and licensed under the MIT License. See the LICENSE file for more details.
