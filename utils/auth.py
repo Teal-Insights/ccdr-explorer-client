@@ -35,11 +35,11 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 PASSWORD_PATTERN = re.compile(
-    r"(?=.*\d)"                   # At least one digit
-    r"(?=.*[a-z])"               # At least one lowercase letter
-    r"(?=.*[A-Z])"               # At least one uppercase letter
-    r"(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/])"  # At least one special character
-    r"[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/]{8,}"  # At least 8 characters long
+    r"(?=.*?\d)"                   # At least one digit
+    r"(?=.*?[a-z])"               # At least one lowercase letter
+    r"(?=.*?[A-Z])"               # At least one uppercase letter
+    r"(?=.*?[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/\^])"  # At least one special character
+    r".{8,}"  # At least 8 characters long
 )
 
 
