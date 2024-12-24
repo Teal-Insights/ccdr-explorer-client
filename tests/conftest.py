@@ -64,7 +64,6 @@ def clean_db(session: Session) -> None:
     session.commit()
 
 
-# Test user fixture
 @pytest.fixture()
 def test_user(session: Session) -> User:
     """
@@ -81,7 +80,6 @@ def test_user(session: Session) -> User:
     return user
 
 
-# Unauthenticated client fixture
 @pytest.fixture()
 def unauth_client(session: Session) -> Generator[TestClient, None, None]:
     """
@@ -96,7 +94,6 @@ def unauth_client(session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-# Authenticated client fixture
 @pytest.fixture()
 def auth_client(session: Session, test_user: User) -> Generator[TestClient, None, None]:
     """
