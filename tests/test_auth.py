@@ -12,7 +12,7 @@ from utils.auth import (
     get_password_hash,
     validate_token,
     generate_password_reset_url,
-    PASSWORD_PATTERN
+    COMPILED_PASSWORD_PATTERN
 )
 
 
@@ -99,43 +99,40 @@ def test_password_pattern():
         "lowercase": lowercase_letters,
         "digit": digits
     }
-    required_length = 8
 
-    # Randomized valid password tests
-    for _ in range(50):
-        password = ""
-        for element in required_elements:
-            n = random.randint(required_length // len(required_elements), required_length)
-            password += ''.join(
-                random.choice(required_elements[element])
-                for _ in range(n)
-            )
+    # Valid password tests
+    for element in required_elements:
+        for c in required_elements[element]:
+            password = c + "test"
+            for element in required_elements:
+                if element != element:
+                    password += random.choice(required_elements[element])
         # Randomize the order of the characters in the string
         password = ''.join(random.sample(password, len(password)))
-        assert re.match(PASSWORD_PATTERN, password) is not None
+        assert re.match(COMPILED_PASSWORD_PATTERN, password) is not None, f"Password {password} does not match the pattern"
 
     # Invalid password tests
 
     # Empty password
     password = ""
-    assert re.match(PASSWORD_PATTERN, password) is None
+    assert re.match(COMPILED_PASSWORD_PATTERN, password) is None
 
     # Too short
     password = "aA1!aA1"
-    assert re.match(PASSWORD_PATTERN, password) is None
+    assert re.match(COMPILED_PASSWORD_PATTERN, password) is None
 
     # No uppercase letter
     password = "a1!" * 3
-    assert re.match(PASSWORD_PATTERN, password) is None
+    assert re.match(COMPILED_PASSWORD_PATTERN, password) is None
 
     # No lowercase letter
     password = "A1!" * 3
-    assert re.match(PASSWORD_PATTERN, password) is None
+    assert re.match(COMPILED_PASSWORD_PATTERN, password) is None
 
     # No digit
     password = "aA!" * 3
-    assert re.match(PASSWORD_PATTERN, password) is None
+    assert re.match(COMPILED_PASSWORD_PATTERN, password) is None
 
     # No special character
     password = "aA1" * 3
-    assert re.match(PASSWORD_PATTERN, password) is None
+    assert re.match(COMPILED_PASSWORD_PATTERN, password) is None

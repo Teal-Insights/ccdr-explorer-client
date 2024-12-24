@@ -8,8 +8,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError, HTTPException, StarletteHTTPException
 from sqlmodel import Session
 from routers import authentication, organization, role, user
-from utils.auth import get_user_with_relations, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
-from utils.models import User, Organization
+from utils.auth import PASSWORD_PATTERN, get_user_with_relations, get_optional_user, NeedsNewTokens, get_user_from_reset_token, PasswordValidationError, AuthenticationError
+from utils.models import User
 from utils.db import get_session, set_up_db
 from utils.images import MAX_FILE_SIZE, MIN_DIMENSION, MAX_DIMENSION, ALLOWED_CONTENT_TYPES
 
@@ -174,6 +174,8 @@ async def read_register(
 ):
     if params["user"]:
         return RedirectResponse(url="/dashboard", status_code=302)
+
+    params["password_pattern"] = PASSWORD_PATTERN
     return templates.TemplateResponse(params["request"], "authentication/register.html", params)
 
 
