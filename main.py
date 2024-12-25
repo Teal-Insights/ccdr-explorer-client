@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     # Optional shutdown logic
 
 
-app = FastAPI(lifespan=lifespan)
+app: FastAPI = FastAPI(lifespan=lifespan)
 
 # Mount static files (e.g., CSS, JS)
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
 from utils.models import User, UserPassword
 from utils.auth import (
+    AuthenticationError,
     get_session,
     get_user_from_reset_token,
     create_password_validator,
@@ -18,7 +19,10 @@ from utils.auth import (
     create_access_token,
     create_refresh_token,
     validate_token,
-    send_reset_email
+    send_reset_email,
+    send_email_update_confirmation,
+    get_user_from_email_update_token,
+    get_authenticated_user
 )
 
 logger = getLogger("uvicorn.error")
@@ -100,6 +104,17 @@ class UserResetPassword(BaseModel):
     ):
         return cls(email=email, token=token,
                    new_password=new_password, confirm_new_password=confirm_new_password)
+
+
+class UpdateEmail(BaseModel):
+    new_email: EmailStr
+
+    @classmethod
+    async def as_form(
+        cls,
+        new_email: EmailStr = Form(...)
+    ):
+        return cls(new_email=new_email)
 
 
 # --- DB Request and Response Models ---
@@ -289,3 +304,72 @@ def logout():
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     return response
+
+
+@router.post("/update_email")
+async def request_email_update(
+    update: UpdateEmail = Depends(UpdateEmail.as_form),
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session)
+):
+    # Check if the new email is already registered
+    existing_user = session.exec(
+        select(User).where(User.email == update.new_email)
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="This email is already registered"
+        )
+
+    if not user or not user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="User not found"
+        )
+
+    # Send confirmation email
+    send_email_update_confirmation(
+        current_email=user.email,
+        new_email=update.new_email,
+        user_id=user.id,
+        session=session
+    )
+
+    return RedirectResponse(
+        url="/settings?email_update_requested=true",
+        status_code=303
+    )
+
+
+@router.get("/confirm_email_update")
+async def confirm_email_update(
+    user_id: int,
+    token: str,
+    new_email: str,
+    session: Session = Depends(get_session)
+):
+    user, update_token = get_user_from_email_update_token(
+        user_id, token, session
+    )
+
+    if not user or not update_token:
+        raise AuthenticationError()
+
+    # Get the new email from the most recent unconfirmed token
+    if update_token.is_expired():
+        raise HTTPException(
+            status_code=400,
+            detail="Token has expired"
+        )
+
+    # Update email and mark token as used
+    user.email = new_email
+    update_token.used = True
+    session.commit()
+
+    return RedirectResponse(
+        url="/settings?email_updated=true",
+        status_code=303
+    )

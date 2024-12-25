@@ -17,7 +17,7 @@ from utils.auth import (
 )
 
 
-def test_convert_python_regex_to_html():
+def test_convert_python_regex_to_html() -> None:
     PYTHON_SPECIAL_CHARS = r"(?=.*[\[\]\\@$!%*?&{}<>.,'#\-_=+\(\):;|~/\^])"
     HTML_EQUIVALENT = r"(?=.*[\[\]\\@$!%*?&\{\}\<\>\.\,\\'#\-_=\+\(\):;\|~\/\^])"
 
@@ -26,14 +26,14 @@ def test_convert_python_regex_to_html():
     assert PYTHON_SPECIAL_CHARS == HTML_EQUIVALENT
 
 
-def test_password_hashing():
+def test_password_hashing() -> None:
     password = "Test123!@#"
     hashed = get_password_hash(password)
     assert verify_password(password, hashed)
     assert not verify_password("wrong_password", hashed)
 
 
-def test_token_creation_and_validation():
+def test_token_creation_and_validation() -> None:
     data = {"sub": "test@example.com"}
 
     # Test access token
@@ -51,7 +51,7 @@ def test_token_creation_and_validation():
     assert decoded["type"] == "refresh"
 
 
-def test_expired_token():
+def test_expired_token() -> None:
     data = {"sub": "test@example.com"}
     expired_delta = timedelta(minutes=-10)
     expired_token = create_access_token(data, expired_delta)
@@ -59,13 +59,13 @@ def test_expired_token():
     assert decoded is None
 
 
-def test_invalid_token_type():
+def test_invalid_token_type() -> None:
     data = {"sub": "test@example.com"}
     access_token = create_access_token(data)
     decoded = validate_token(access_token, "refresh")
     assert decoded is None
 
-def test_password_reset_url_generation():
+def test_password_reset_url_generation() -> None:
     """
     Tests that the password reset URL is correctly formatted and contains
     the required query parameters.
@@ -91,7 +91,7 @@ def test_password_reset_url_generation():
     assert query_params["email"][0] == test_email
     assert query_params["token"][0] == test_token
 
-def test_password_pattern():
+def test_password_pattern() -> None:
     """
     Tests that the password pattern is correctly defined. to require at least
     one uppercase letter, one lowercase letter, one digit, and one special
