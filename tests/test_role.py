@@ -1,6 +1,7 @@
 # test_role.py
 
 import pytest
+from conftest import SetupError
 from utils.models import Role, Permission, ValidPermissions, User
 from sqlmodel import Session, select
 
@@ -154,6 +155,9 @@ def test_update_role_success(auth_client, editor_user, test_organization, sessio
     perm_create = session.exec(
         select(Permission).where(Permission.name == ValidPermissions.CREATE_ROLE)
     ).first()
+    if not perm_create:
+        raise SetupError("Test setup failed; CREATE_ROLE permission not found.")
+
     existing_role.permissions.append(perm_create)
     session.commit()
 
