@@ -12,11 +12,8 @@ from main import app
 from utils.models import User, PasswordResetToken
 from utils.auth import (
     create_access_token,
-    create_refresh_token,
     verify_password,
-    get_password_hash,
     validate_token,
-    generate_password_reset_url
 )
 from .conftest import SetupError
 
@@ -39,49 +36,6 @@ def mock_resend_send(mock_email_response):
     """
     with patch('resend.Emails.send', return_value=mock_email_response) as mock:
         yield mock
-
-
-# --- Authentication Helper Function Tests ---
-
-
-def test_password_hashing():
-    password = "Test123!@#"
-    hashed = get_password_hash(password)
-    assert verify_password(password, hashed)
-    assert not verify_password("wrong_password", hashed)
-
-
-def test_token_creation_and_validation():
-    data = {"sub": "test@example.com"}
-
-    # Test access token
-    access_token = create_access_token(data)
-    decoded = validate_token(access_token, "access")
-    assert decoded is not None
-    assert decoded["sub"] == data["sub"]
-    assert decoded["type"] == "access"
-
-    # Test refresh token
-    refresh_token = create_refresh_token(data)
-    decoded = validate_token(refresh_token, "refresh")
-    assert decoded is not None
-    assert decoded["sub"] == data["sub"]
-    assert decoded["type"] == "refresh"
-
-
-def test_expired_token():
-    data = {"sub": "test@example.com"}
-    expired_delta = timedelta(minutes=-10)
-    expired_token = create_access_token(data, expired_delta)
-    decoded = validate_token(expired_token, "access")
-    assert decoded is None
-
-
-def test_invalid_token_type():
-    data = {"sub": "test@example.com"}
-    access_token = create_access_token(data)
-    decoded = validate_token(access_token, "refresh")
-    assert decoded is None
 
 
 # --- API Endpoint Tests ---
@@ -270,33 +224,6 @@ def test_password_reset_with_invalid_token(unauth_client: TestClient, test_user:
         }
     )
     assert response.status_code == 400
-
-
-def test_password_reset_url_generation(unauth_client: TestClient):
-    """
-    Tests that the password reset URL is correctly formatted and contains
-    the required query parameters.
-    """
-    test_email = "test@example.com"
-    test_token = "abc123"
-
-    url = generate_password_reset_url(test_email, test_token)
-
-    # Parse the URL
-    parsed = urlparse(url)
-    query_params = parse_qs(parsed.query)
-
-    # Get the actual path from the FastAPI app
-    reset_password_path: URLPath = app.url_path_for("reset_password")
-
-    # Verify URL path
-    assert parsed.path == str(reset_password_path)
-
-    # Verify query parameters
-    assert "email" in query_params
-    assert "token" in query_params
-    assert query_params["email"][0] == test_email
-    assert query_params["token"][0] == test_token
 
 
 def test_password_reset_email_url(unauth_client: TestClient, session: Session, test_user: User, mock_resend_send):

@@ -34,6 +34,54 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+PASSWORD_PATTERN_COMPONENTS = [
+    r"(?=.*\d)",                   # At least one digit
+    r"(?=.*[a-z])",               # At least one lowercase letter
+    r"(?=.*[A-Z])",               # At least one uppercase letter
+    r"(?=.*[\[\]\\@$!%*?&{}<>.,'#\-_=+\(\):;|~/\^])",  # At least one special character
+    r".{8,}"  # At least 8 characters long
+]
+COMPILED_PASSWORD_PATTERN = re.compile(r"".join(PASSWORD_PATTERN_COMPONENTS))
+
+
+def convert_python_regex_to_html(regex: str) -> str:
+    """
+    Replace each special character with its escaped version only when inside character classes.
+    Ensures that the single quote "'" is doubly escaped.
+    """
+    # Map each special char to its escaped form
+    special_map = {
+        '{': r'\{',
+        '}': r'\}',
+        '<': r'\<',
+        '>': r'\>',
+        '.': r'\.',
+        '+': r'\+',
+        '|': r'\|',
+        ',': r'\,',
+        "'": r"\\'",  # doubly escaped single quote
+        "/": r"\/",
+    }
+
+    # Regex to match the entire character class [ ... ]
+    pattern = r"\[((?:\\.|[^\]])*)\]"
+
+    def replacer(match: re.Match) -> str:
+        """
+        For the matched character class, replace all special characters inside it.
+        """
+        inside = match.group(1)  # the contents inside [ ... ]
+        for ch, escaped in special_map.items():
+            inside = inside.replace(ch, escaped)
+        return f"[{inside}]"
+
+    # Use re.sub with a function to ensure we only replace inside the character class
+    return re.sub(pattern, replacer, regex)
+
+
+HTML_PASSWORD_PATTERN = "".join(
+    convert_python_regex_to_html(component) for component in PASSWORD_PATTERN_COMPONENTS
+)
 
 
 # --- Custom Exceptions ---
@@ -105,11 +153,8 @@ def create_password_validator(field_name: str = "password"):
         - At least 8 characters long
         """
         logger.debug(f"Validating password for {field_name}")
-        pattern = re.compile(
-            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~/]{8,}")
-        if not pattern.match(v):
-            logger.debug(f"Password for {
-                         field_name} does not satisfy the security policy")
+        if not COMPILED_PASSWORD_PATTERN.match(v):
+            logger.debug(f"Password for {field_name} does not satisfy the security policy")
             raise PasswordValidationError(
                 field=field_name,
                 message=f"{field_name} does not satisfy the security policy"
