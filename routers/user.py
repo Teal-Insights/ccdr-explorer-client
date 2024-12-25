@@ -16,7 +16,6 @@ router = APIRouter(prefix="/user", tags=["user"])
 class UpdateProfile(BaseModel):
     """Request model for updating user profile information"""
     name: str
-    email: EmailStr
     avatar_file: Optional[bytes] = None
     avatar_content_type: Optional[str] = None
 
@@ -24,7 +23,6 @@ class UpdateProfile(BaseModel):
     async def as_form(
         cls,
         name: str = Form(...),
-        email: EmailStr = Form(...),
         avatar_file: Optional[UploadFile] = File(None),
     ):
         avatar_data = None
@@ -36,7 +34,6 @@ class UpdateProfile(BaseModel):
 
         return cls(
             name=name,
-            email=email,
             avatar_file=avatar_data,
             avatar_content_type=avatar_content_type
         )
@@ -73,7 +70,6 @@ async def update_profile(
 
     # Update user details
     user.name = user_profile.name
-    user.email = user_profile.email
     
     if user_profile.avatar_file:
         user.avatar_data = user_profile.avatar_file
