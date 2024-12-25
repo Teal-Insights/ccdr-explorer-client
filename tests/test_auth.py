@@ -12,8 +12,18 @@ from utils.auth import (
     get_password_hash,
     validate_token,
     generate_password_reset_url,
-    COMPILED_PASSWORD_PATTERN
+    COMPILED_PASSWORD_PATTERN,
+    convert_python_regex_to_html
 )
+
+
+def test_convert_python_regex_to_html():
+    PYTHON_SPECIAL_CHARS = r"(?=.*[\[\]\\@$!%*?&{}<>.,'#\-_=+\(\):;|~/\^])"
+    HTML_EQUIVALENT = r"(?=.*[\[\]\\@$!%*?&\{\}\<\>\.\,\\'#\-_=\+\(\):;\|~\/\^])"
+
+    PYTHON_SPECIAL_CHARS = convert_python_regex_to_html(PYTHON_SPECIAL_CHARS)
+
+    assert PYTHON_SPECIAL_CHARS == HTML_EQUIVALENT
 
 
 def test_password_hashing():
@@ -104,11 +114,11 @@ def test_password_pattern():
     for element in required_elements:
         for c in required_elements[element]:
             password = c + "test"
-            for element in required_elements:
-                if element != element:
-                    password += random.choice(required_elements[element])
-        # Randomize the order of the characters in the string
-        password = ''.join(random.sample(password, len(password)))
+            for other_element in required_elements:
+                if other_element != element:
+                    password += random.choice(required_elements[other_element])
+            # Randomize the order of the characters in the string
+            password = ''.join(random.sample(password, len(password)))
         assert re.match(COMPILED_PASSWORD_PATTERN, password) is not None, f"Password {password} does not match the pattern"
 
     # Invalid password tests

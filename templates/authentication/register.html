@@ -25,7 +25,7 @@
         <div class="mb-3">
             <label for="password" class="form-label">Password</label>
             <input type="password" class="form-control" id="password" name="password" 
-                   pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&\{\}\<\>\.\,\\\\'#\-_=\+\(\)\[\]:;\|~\/]).{8,}"
+                   pattern="{{ password_pattern }}"
                    title="Must contain at least one number, one uppercase and lowercase letter, one special character, and at least 8 or more characters" 
                    placeholder="Enter your password" required
                    autocomplete="new-password">
