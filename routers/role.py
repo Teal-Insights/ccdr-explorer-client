@@ -85,16 +85,6 @@ class RoleUpdate(BaseModel):
     organization_id: int
     permissions: List[ValidPermissions]
 
-    @field_validator("id")
-    @classmethod
-    def validate_role_exists(cls, id: int, info):
-        session = info.context.get("session")
-        if session:
-            role = session.get(Role, id)
-            if not role or not role.id:
-                raise RoleNotFoundError()
-        return id
-
     @classmethod
     async def as_form(
         cls,
