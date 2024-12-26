@@ -338,7 +338,7 @@ async def request_email_update(
     )
 
     return RedirectResponse(
-        url="/settings?email_update_requested=true",
+        url="/profile?email_update_requested=true",
         status_code=303
     )
 
@@ -370,6 +370,6 @@ async def confirm_email_update(
     session.commit()
 
     return RedirectResponse(
-        url="/settings?email_updated=true",
+        url="/login?email_updated=true",
         status_code=303
     )

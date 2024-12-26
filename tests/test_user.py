@@ -17,8 +17,7 @@ def test_update_profile_unauthorized(unauth_client: TestClient):
     response: Response = unauth_client.post(
         app.url_path_for("update_profile"),
         data={
-            "name": "New Name",
-            "email": "new@example.com",
+            "name": "New Name"
         },
         files={
             "avatar_file": ("test_avatar.jpg", b"fake image data", "image/jpeg")
@@ -40,8 +39,7 @@ def test_update_profile_authorized(mock_validate, auth_client: TestClient, test_
     response: Response = auth_client.post(
         app.url_path_for("update_profile"),
         data={
-            "name": "Updated Name",
-            "email": "updated@example.com",
+            "name": "Updated Name"
         },
         files={
             "avatar_file": ("test_avatar.jpg", b"fake image data", "image/jpeg")
@@ -54,7 +52,6 @@ def test_update_profile_authorized(mock_validate, auth_client: TestClient, test_
     # Verify changes in database
     session.refresh(test_user)
     assert test_user.name == "Updated Name"
-    assert test_user.email == "updated@example.com"
     assert test_user.avatar_data == MOCK_IMAGE_DATA
     assert test_user.avatar_content_type == MOCK_CONTENT_TYPE
 
@@ -67,8 +64,7 @@ def test_update_profile_without_avatar(auth_client: TestClient, test_user: User,
     response: Response = auth_client.post(
         app.url_path_for("update_profile"),
         data={
-            "name": "Updated Name",
-            "email": "updated@example.com",
+            "name": "Updated Name"
         },
         follow_redirects=False
     )
@@ -78,7 +74,6 @@ def test_update_profile_without_avatar(auth_client: TestClient, test_user: User,
     # Verify changes in database
     session.refresh(test_user)
     assert test_user.name == "Updated Name"
-    assert test_user.email == "updated@example.com"
 
 
 def test_delete_account_unauthorized(unauth_client: TestClient):
@@ -130,8 +125,7 @@ def test_get_avatar_authorized(mock_validate, auth_client: TestClient, test_user
     auth_client.post(
         app.url_path_for("update_profile"),
         data={
-            "name": test_user.name,
-            "email": test_user.email,
+            "name": test_user.name
         },
         files={
             "avatar_file": ("test_avatar.jpg", b"fake image data", "image/jpeg")
@@ -167,8 +161,7 @@ def test_update_profile_invalid_image(mock_validate, auth_client: TestClient):
     response: Response = auth_client.post(
         app.url_path_for("update_profile"),
         data={
-            "name": "Updated Name",
-            "email": "updated@example.com",
+            "name": "Updated Name"
         },
         files={
             "avatar_file": ("test_avatar.jpg", b"invalid image data", "image/jpeg")

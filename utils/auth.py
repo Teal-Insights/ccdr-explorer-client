@@ -473,7 +473,7 @@ def send_email_update_confirmation(
             user_id, token.token, new_email)
 
         # Render the email template
-        template = templates.get_template("emails/update_email.html")
+        template = templates.get_template("emails/update_email_email.html")
         html_content = template.render({
             "confirmation_url": confirmation_url,
             "current_email": current_email,

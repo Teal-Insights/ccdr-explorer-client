@@ -169,10 +169,12 @@ async def read_home(
 
 @app.get("/login")
 async def read_login(
-    params: dict = Depends(common_unauthenticated_parameters)
+    params: dict = Depends(common_unauthenticated_parameters),
+    email_updated: Optional[str] = "false"
 ):
     if params["user"]:
         return RedirectResponse(url="/dashboard", status_code=302)
+    params["email_updated"] = email_updated
     return templates.TemplateResponse(params["request"], "authentication/login.html", params)
 
 
@@ -256,14 +258,16 @@ async def read_dashboard(
 
 @app.get("/profile")
 async def read_profile(
-    params: dict = Depends(common_authenticated_parameters)
+    params: dict = Depends(common_authenticated_parameters),
+    email_update_requested: Optional[str] = "false"
 ):
     # Add image constraints to the template context
     params.update({
         "max_file_size_mb": MAX_FILE_SIZE / (1024 * 1024),  # Convert bytes to MB
         "min_dimension": MIN_DIMENSION,
         "max_dimension": MAX_DIMENSION,
-        "allowed_formats": list(ALLOWED_CONTENT_TYPES.keys())
+        "allowed_formats": list(ALLOWED_CONTENT_TYPES.keys()),
+        "email_update_requested": email_update_requested
     })
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
 

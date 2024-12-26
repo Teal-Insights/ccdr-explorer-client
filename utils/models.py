@@ -215,6 +215,12 @@ class User(SQLModel, table=True):
             "cascade": "all, delete-orphan"
         }
     )
+    email_update_tokens: Mapped[List["EmailUpdateToken"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan"
+        }
+    )
     password: Mapped[Optional[UserPassword]] = Relationship(
         back_populates="user"
     )

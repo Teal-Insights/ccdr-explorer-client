@@ -8,6 +8,12 @@
 <div class="container mt-5">
     <h1 class="mb-4">User Profile</h1>
     
+    {% if email_update_requested == "true" %}
+    <div class="alert alert-info" role="alert">
+        Please check your current email address for a confirmation link to complete the email update.
+    </div>
+    {% endif %}
+
     <!-- Basic Information -->
     <div class="card mb-4" id="basic-info">
         <div class="card-header">
@@ -102,7 +108,7 @@
                 <p class="text-danger">This action cannot be undone. Please confirm your password to delete your account.</p>
                 <div class="mb-3">
                     <label for="confirm_delete_password" class="form-label">Password</label>
-                    <input type="password" class="form-control" id="confirm_delete_password" name="confirm_delete_password">
+                    <input type="password" class="form-control" id="confirm_delete_password" name="confirm_delete_password" autocomplete="off">
                 </div>
                 <button type="submit" class="btn btn-danger">Delete Account</button>
             </form>

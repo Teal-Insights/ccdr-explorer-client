@@ -6,6 +6,13 @@
 
 {% block auth_content %}
 <div class="login-form">
+
+    {% if email_updated == "true" %}
+    <div class="alert alert-success" role="alert">
+        Your email address has been successfully updated. Please login with your new email address.
+    </div>
+    {% endif %}
+
     <form method="POST" action="{{ url_for('login') }}" class="needs-validation" novalidate>
         <!-- Email Input -->
         <div class="mb-3">
