@@ -14,6 +14,12 @@
     </div>
     {% endif %}
 
+    {% if email_updated == "true" %}
+    <div class="alert alert-success" role="alert">
+        Your email address has been successfully updated.
+    </div>
+    {% endif %}
+
     <!-- Basic Information -->
     <div class="card mb-4" id="basic-info">
         <div class="card-header">

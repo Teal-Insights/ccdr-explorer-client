@@ -357,19 +357,31 @@ async def confirm_email_update(
     if not user or not update_token:
         raise AuthenticationError()
 
-    # Get the new email from the most recent unconfirmed token
-    if update_token.is_expired():
-        raise HTTPException(
-            status_code=400,
-            detail="Token has expired"
-        )
-
     # Update email and mark token as used
     user.email = new_email
     update_token.used = True
     session.commit()
 
-    return RedirectResponse(
-        url="/login?email_updated=true",
+    # Create new tokens with the updated email
+    access_token = create_access_token(data={"sub": new_email})
+    refresh_token = create_refresh_token(data={"sub": new_email})
+
+    response = RedirectResponse(
+        url="/profile?email_updated=true",
         status_code=303
     )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
+    return response
