@@ -215,9 +215,9 @@ def test_send_email_update_confirmation(mock_send: MagicMock) -> None:
     # Test existing token case
     session.reset_mock()
     session.exec.return_value.first.return_value = EmailUpdateToken()  # Existing token
-    
+
     send_email_update_confirmation(current_email, new_email, user_id, session)
-    
+
     # Verify no new token was created or email sent
     assert not session.add.called
     assert not session.commit.called
@@ -228,7 +228,7 @@ def test_get_user_from_email_update_token() -> None:
     Tests retrieving a user using an email update token.
     """
     session = MagicMock()
-    
+
     # Test valid token
     mock_user = User(id=1, email="test@example.com")
     mock_token = EmailUpdateToken(

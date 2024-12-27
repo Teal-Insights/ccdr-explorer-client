@@ -6,9 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
-from utils.models import User, UserPassword
+from utils.models import User, UserPassword, DataIntegrityError
 from utils.auth import (
-    AuthenticationError,
     get_session,
     get_user_from_reset_token,
     create_password_validator,
@@ -28,6 +27,40 @@ from utils.auth import (
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# --- Custom Exceptions ---
+
+
+class EmailAlreadyRegisteredError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=409,
+            detail="This email is already registered"
+        )
+
+
+class InvalidCredentialsError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+
+class InvalidResetTokenError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=401,
+            detail="Invalid or expired password reset token; please request a new one"
+        )
+
+
+class InvalidEmailUpdateTokenError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=401,
+            detail="Invalid or expired email update token; please request a new one"
+        )
 
 
 # --- Server Request and Response Models ---
@@ -145,7 +178,7 @@ async def register(
         User.email == user.email)).first()
 
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise EmailAlreadyRegisteredError()
 
     # Hash the password
     hashed_password = get_password_hash(user.password)
@@ -179,7 +212,7 @@ async def login(
         User.email == user.email)).first()
 
     if not db_user or not db_user.password or not verify_password(user.password, db_user.password.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise InvalidCredentialsError()
 
     # Create access token
     access_token = create_access_token(
@@ -277,7 +310,7 @@ async def reset_password(
         user.email, user.token, session)
 
     if not authorized_user or not reset_token:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        raise InvalidResetTokenError()
 
     # Update password and mark token as used
     if authorized_user.password:
@@ -318,16 +351,10 @@ async def request_email_update(
     ).first()
 
     if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="This email is already registered"
-        )
+        raise EmailAlreadyRegisteredError()
 
-    if not user or not user.id:
-        raise HTTPException(
-            status_code=400,
-            detail="User not found"
-        )
+    if not user.id:
+        raise DataIntegrityError(resource="User id")
 
     # Send confirmation email
     send_email_update_confirmation(
@@ -355,7 +382,7 @@ async def confirm_email_update(
     )
 
     if not user or not update_token:
-        raise AuthenticationError()
+        raise InvalidResetTokenError()
 
     # Update email and mark token as used
     user.email = new_email

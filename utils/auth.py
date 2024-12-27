@@ -87,6 +87,13 @@ HTML_PASSWORD_PATTERN = "".join(
 # --- Custom Exceptions ---
 
 
+class NeedsNewTokens(Exception):
+    def __init__(self, user: User, access_token: str, refresh_token: str):
+        self.user = user
+        self.access_token = access_token
+        self.refresh_token = refresh_token
+
+
 class AuthenticationError(HTTPException):
     def __init__(self):
         super().__init__(
@@ -322,13 +329,6 @@ def get_optional_user(
         return user
 
     return None
-
-
-class NeedsNewTokens(Exception):
-    def __init__(self, user: User, access_token: str, refresh_token: str):
-        self.user = user
-        self.access_token = access_token
-        self.refresh_token = refresh_token
 
 
 def generate_password_reset_url(email: str, token: str) -> str:
