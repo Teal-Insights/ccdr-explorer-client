@@ -195,9 +195,20 @@ async def register(
     refresh_token = create_refresh_token(data={"sub": db_user.email})
     # Set cookie
     response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(key="access_token", value=access_token, httponly=True)
-    response.set_cookie(key="refresh_token",
-                        value=refresh_token, httponly=True)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
 
     return response
 
@@ -390,25 +401,28 @@ async def confirm_email_update(
     session.commit()
 
     # Create new tokens with the updated email
-    access_token = create_access_token(data={"sub": new_email})
+    access_token = create_access_token(data={"sub": new_email, "fresh": True})
     refresh_token = create_refresh_token(data={"sub": new_email})
 
+    # Set cookies before redirecting
     response = RedirectResponse(
         url="/profile?email_updated=true",
         status_code=303
     )
+
+    # Add secure cookie attributes
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         secure=True,
-        samesite="strict"
+        samesite="lax"
     )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
         secure=True,
-        samesite="strict"
+        samesite="lax"
     )
     return response

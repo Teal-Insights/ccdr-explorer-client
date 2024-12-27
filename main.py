@@ -259,7 +259,8 @@ async def read_dashboard(
 @app.get("/profile")
 async def read_profile(
     params: dict = Depends(common_authenticated_parameters),
-    email_update_requested: Optional[str] = "false"
+    email_update_requested: Optional[str] = "false",
+    email_updated: Optional[str] = "false"
 ):
     # Add image constraints to the template context
     params.update({
@@ -267,7 +268,8 @@ async def read_profile(
         "min_dimension": MIN_DIMENSION,
         "max_dimension": MAX_DIMENSION,
         "allowed_formats": list(ALLOWED_CONTENT_TYPES.keys()),
-        "email_update_requested": email_update_requested
+        "email_update_requested": email_update_requested,
+        "email_updated": email_updated
     })
     return templates.TemplateResponse(params["request"], "users/profile.html", params)
 
