@@ -9,11 +9,12 @@ from urllib.parse import urlparse, parse_qs
 from html import unescape
 
 from main import app
-from utils.models import User, PasswordResetToken
+from utils.models import User, PasswordResetToken, UserPassword, EmailUpdateToken
 from utils.auth import (
     create_access_token,
     verify_password,
     validate_token,
+    get_password_hash
 )
 from .conftest import SetupError
 
@@ -199,7 +200,7 @@ def test_register_with_existing_email(unauth_client: TestClient, test_user: User
             "confirm_password": "Test123!@#"
         }
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
 
 
 def test_login_with_invalid_credentials(unauth_client: TestClient, test_user: User):
@@ -210,7 +211,7 @@ def test_login_with_invalid_credentials(unauth_client: TestClient, test_user: Us
             "password": "WrongPass123!@#"
         }
     )
-    assert response.status_code == 400
+    assert response.status_code == 401
 
 
 def test_password_reset_with_invalid_token(unauth_client: TestClient, test_user: User):
@@ -223,7 +224,7 @@ def test_password_reset_with_invalid_token(unauth_client: TestClient, test_user:
             "confirm_new_password": "NewPass123!@#"
         }
     )
-    assert response.status_code == 400
+    assert response.status_code == 401
 
 
 def test_password_reset_email_url(unauth_client: TestClient, session: Session, test_user: User, mock_resend_send):
@@ -264,3 +265,144 @@ def test_password_reset_email_url(unauth_client: TestClient, session: Session, t
     assert parsed.path == str(reset_password_path)
     assert query_params["email"][0] == test_user.email
     assert query_params["token"][0] == reset_token.token
+
+
+def test_request_email_update_success(auth_client: TestClient, test_user: User, mock_resend_send):
+    """Test successful email update request"""
+    new_email = "newemail@example.com"
+    
+    response = auth_client.post(
+        app.url_path_for("request_email_update"),
+        data={"new_email": new_email},
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 303
+    assert "profile?email_update_requested=true" in response.headers["location"]
+    
+    # Verify email was "sent"
+    mock_resend_send.assert_called_once()
+    call_args = mock_resend_send.call_args[0][0]
+    
+    # Verify email content
+    assert call_args["to"] == [test_user.email]
+    assert call_args["from"] == "noreply@promptlytechnologies.com"
+    assert "Confirm Email Update" in call_args["subject"]
+    assert "confirm_email_update" in call_args["html"]
+    assert new_email in call_args["html"]
+
+
+def test_request_email_update_already_registered(auth_client: TestClient, session: Session, test_user: User):
+    """Test email update request with already registered email"""
+    # Create another user with the target email
+    existing_email = "existing@example.com"
+    existing_user = User(
+        name="Existing User",
+        email=existing_email,
+        password=UserPassword(hashed_password=get_password_hash("Test123!@#"))
+    )
+    session.add(existing_user)
+    session.commit()
+    
+    response = auth_client.post(
+        app.url_path_for("request_email_update"),
+        data={"new_email": existing_email}
+    )
+    
+    assert response.status_code == 409
+    assert "already registered" in response.text
+
+
+def test_request_email_update_unauthenticated(unauth_client: TestClient):
+    """Test email update request without authentication"""
+    response = unauth_client.post(
+        app.url_path_for("request_email_update"),
+        data={"new_email": "new@example.com"},
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 303  # Redirect to login
+
+
+def test_confirm_email_update_success(unauth_client: TestClient, session: Session, test_user: User):
+    """Test successful email update confirmation"""
+    new_email = "updated@example.com"
+    
+    # Create an email update token
+    update_token = EmailUpdateToken(user_id=test_user.id)
+    session.add(update_token)
+    session.commit()
+    
+    response = unauth_client.get(
+        app.url_path_for("confirm_email_update"),
+        params={
+            "user_id": test_user.id,
+            "token": update_token.token,
+            "new_email": new_email
+        },
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 303
+    assert "profile?email_updated=true" in response.headers["location"]
+    
+    # Verify email was updated
+    session.refresh(test_user)
+    assert test_user.email == new_email
+    
+    # Verify token was marked as used
+    session.refresh(update_token)
+    assert update_token.used
+    
+    # Verify new auth cookies were set
+    cookies = response.cookies
+    assert "access_token" in cookies
+    assert "refresh_token" in cookies
+
+
+def test_confirm_email_update_invalid_token(unauth_client: TestClient, session: Session, test_user: User):
+    """Test email update confirmation with invalid token"""
+    response = unauth_client.get(
+        app.url_path_for("confirm_email_update"),
+        params={
+            "user_id": test_user.id,
+            "token": "invalid_token",
+            "new_email": "new@example.com"
+        }
+    )
+    
+    assert response.status_code == 401
+    assert "Invalid or expired" in response.text
+    
+    # Verify email was not updated
+    session.refresh(test_user)
+    assert test_user.email == "test@example.com"
+
+
+def test_confirm_email_update_used_token(unauth_client: TestClient, session: Session, test_user: User):
+    """Test email update confirmation with already used token"""
+    # Create an already used token
+    used_token = PasswordResetToken(
+        user_id=test_user.id,
+        token="test_used_token",
+        used=True,
+        token_type="email_update"
+    )
+    session.add(used_token)
+    session.commit()
+    
+    response = unauth_client.get(
+        app.url_path_for("confirm_email_update"),
+        params={
+            "user_id": test_user.id,
+            "token": used_token.token,
+            "new_email": "new@example.com"
+        }
+    )
+    
+    assert response.status_code == 401
+    assert "Invalid or expired" in response.text
+    
+    # Verify email was not updated
+    session.refresh(test_user)
+    assert test_user.email == "test@example.com"

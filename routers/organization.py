@@ -10,6 +10,8 @@ from datetime import datetime
 
 logger = getLogger("uvicorn.error")
 
+router = APIRouter(prefix="/organizations", tags=["organizations"])
+
 # --- Custom Exceptions ---
 
 
@@ -35,9 +37,6 @@ class OrganizationNameTakenError(HTTPException):
             status_code=400,
             detail="Organization name already taken"
         )
-
-
-router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
 # --- Server Request and Response Models ---
