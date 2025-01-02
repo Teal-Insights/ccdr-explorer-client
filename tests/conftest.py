@@ -1,4 +1,5 @@
 import pytest
+from typing import Generator
 from dotenv import load_dotenv
 from sqlmodel import create_engine, Session, select
 from sqlalchemy import Engine
@@ -14,7 +15,9 @@ load_dotenv()
 # Define a custom exception for test setup errors
 class SetupError(Exception):
     """Exception raised for errors in the test setup process."""
-    pass
+    def __init__(self, message="An error occurred during test setup"):
+        self.message = message
+        super().__init__(self.message)
 
 
 @pytest.fixture(scope="session")
@@ -30,7 +33,7 @@ def engine() -> Engine:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def set_up_database(engine):
+def set_up_database(engine) -> Generator[None, None, None]:
     """
     Set up the test database before running the test suite.
     Drop all tables and recreate them to ensure a clean state.
@@ -41,7 +44,7 @@ def set_up_database(engine):
 
 
 @pytest.fixture
-def session(engine):
+def session(engine) -> Generator[Session, None, None]:
     """
     Provide a session for database operations in tests.
     """
@@ -50,7 +53,7 @@ def session(engine):
 
 
 @pytest.fixture(autouse=True)
-def clean_db(session: Session):
+def clean_db(session: Session) -> None:
     """
     Cleans up the database tables before each test.
     """
@@ -61,9 +64,8 @@ def clean_db(session: Session):
     session.commit()
 
 
-# Test user fixture
 @pytest.fixture()
-def test_user(session: Session):
+def test_user(session: Session) -> User:
     """
     Creates a test user in the database.
     """
@@ -78,9 +80,8 @@ def test_user(session: Session):
     return user
 
 
-# Unauthenticated client fixture
 @pytest.fixture()
-def unauth_client(session: Session):
+def unauth_client(session: Session) -> Generator[TestClient, None, None]:
     """
     Provides a TestClient instance without authentication.
     """
@@ -93,9 +94,8 @@ def unauth_client(session: Session):
     app.dependency_overrides.clear()
 
 
-# Authenticated client fixture
 @pytest.fixture()
-def auth_client(session: Session, test_user: User):
+def auth_client(session: Session, test_user: User) -> Generator[TestClient, None, None]:
     """
     Provides a TestClient instance with valid authentication tokens.
     """
@@ -117,7 +117,7 @@ def auth_client(session: Session, test_user: User):
 
 
 @pytest.fixture
-def test_organization(session: Session):
+def test_organization(session: Session) -> Organization:
     """Create a test organization for use in tests"""
     organization = Organization(name="Test Organization")
     session.add(organization)

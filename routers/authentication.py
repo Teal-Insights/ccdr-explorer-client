@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
-from utils.models import User, UserPassword
+from utils.models import User, UserPassword, DataIntegrityError
 from utils.auth import (
     get_session,
     get_user_from_reset_token,
@@ -18,12 +18,49 @@ from utils.auth import (
     create_access_token,
     create_refresh_token,
     validate_token,
-    send_reset_email
+    send_reset_email,
+    send_email_update_confirmation,
+    get_user_from_email_update_token,
+    get_authenticated_user
 )
 
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# --- Custom Exceptions ---
+
+
+class EmailAlreadyRegisteredError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=409,
+            detail="This email is already registered"
+        )
+
+
+class InvalidCredentialsError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+
+class InvalidResetTokenError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=401,
+            detail="Invalid or expired password reset token; please request a new one"
+        )
+
+
+class InvalidEmailUpdateTokenError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=401,
+            detail="Invalid or expired email update token; please request a new one"
+        )
 
 
 # --- Server Request and Response Models ---
@@ -105,6 +142,17 @@ class UserResetPassword(BaseModel):
         )
 
 
+class UpdateEmail(BaseModel):
+    new_email: EmailStr
+
+    @classmethod
+    async def as_form(
+        cls,
+        new_email: EmailStr = Form(...)
+    ):
+        return cls(new_email=new_email)
+
+
 # --- DB Request and Response Models ---
 
 
@@ -133,7 +181,7 @@ async def register(
         User.email == user.email)).first()
 
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise EmailAlreadyRegisteredError()
 
     # Hash the password
     hashed_password = get_password_hash(user.password)
@@ -150,9 +198,20 @@ async def register(
     refresh_token = create_refresh_token(data={"sub": db_user.email})
     # Set cookie
     response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(key="access_token", value=access_token, httponly=True)
-    response.set_cookie(key="refresh_token",
-                        value=refresh_token, httponly=True)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict"
+    )
 
     return response
 
@@ -167,7 +226,7 @@ async def login(
         User.email == user.email)).first()
 
     if not db_user or not db_user.password or not verify_password(user.password, db_user.password.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise InvalidCredentialsError()
 
     # Create access token
     access_token = create_access_token(
@@ -296,7 +355,7 @@ async def reset_password(
         user.email, user.token, session)
 
     if not authorized_user or not reset_token:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        raise InvalidResetTokenError()
 
     # Update password and mark token as used
     if authorized_user.password:
@@ -319,4 +378,82 @@ def logout():
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
+    return response
+
+
+@router.post("/update_email")
+async def request_email_update(
+    update: UpdateEmail = Depends(UpdateEmail.as_form),
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session)
+):
+    # Check if the new email is already registered
+    existing_user = session.exec(
+        select(User).where(User.email == update.new_email)
+    ).first()
+
+    if existing_user:
+        raise EmailAlreadyRegisteredError()
+
+    if not user.id:
+        raise DataIntegrityError(resource="User id")
+
+    # Send confirmation email
+    send_email_update_confirmation(
+        current_email=user.email,
+        new_email=update.new_email,
+        user_id=user.id,
+        session=session
+    )
+
+    return RedirectResponse(
+        url="/profile?email_update_requested=true",
+        status_code=303
+    )
+
+
+@router.get("/confirm_email_update")
+async def confirm_email_update(
+    user_id: int,
+    token: str,
+    new_email: str,
+    session: Session = Depends(get_session)
+):
+    user, update_token = get_user_from_email_update_token(
+        user_id, token, session
+    )
+
+    if not user or not update_token:
+        raise InvalidResetTokenError()
+
+    # Update email and mark token as used
+    user.email = new_email
+    update_token.used = True
+    session.commit()
+
+    # Create new tokens with the updated email
+    access_token = create_access_token(data={"sub": new_email, "fresh": True})
+    refresh_token = create_refresh_token(data={"sub": new_email})
+
+    # Set cookies before redirecting
+    response = RedirectResponse(
+        url="/profile?email_updated=true",
+        status_code=303
+    )
+
+    # Add secure cookie attributes
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
     return response

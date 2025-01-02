@@ -161,6 +161,25 @@ class PasswordResetToken(SQLModel, table=True):
         return datetime.now(UTC) > self.expires_at.replace(tzinfo=UTC)
 
 
+class EmailUpdateToken(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(foreign_key="user.id")
+    token: str = Field(default_factory=lambda: str(
+        uuid4()), index=True, unique=True)
+    expires_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC) + timedelta(hours=1))
+    used: bool = Field(default=False)
+
+    user: Mapped[Optional["User"]] = Relationship(
+        back_populates="email_update_tokens")
+
+    def is_expired(self) -> bool:
+        """
+        Check if the token has expired
+        """
+        return datetime.now(UTC) > self.expires_at.replace(tzinfo=UTC)
+
+
 class UserPassword(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: Optional[int] = Field(foreign_key="user.id", unique=True)
@@ -191,6 +210,12 @@ class User(SQLModel, table=True):
         link_model=UserRoleLink
     )
     password_reset_tokens: Mapped[List["PasswordResetToken"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan"
+        }
+    )
+    email_update_tokens: Mapped[List["EmailUpdateToken"]] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan"

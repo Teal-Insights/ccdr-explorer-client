@@ -8,6 +8,18 @@
 <div class="container mt-5">
     <h1 class="mb-4">User Profile</h1>
     
+    {% if email_update_requested == "true" %}
+    <div class="alert alert-info" role="alert">
+        Please check your current email address for a confirmation link to complete the email update.
+    </div>
+    {% endif %}
+
+    {% if email_updated == "true" %}
+    <div class="alert alert-success" role="alert">
+        Your email address has been successfully updated.
+    </div>
+    {% endif %}
+
     <!-- Basic Information -->
     <div class="card mb-4" id="basic-info">
         <div class="card-header">
@@ -41,10 +53,6 @@
                     <input type="text" class="form-control" id="name" name="name" value="{{ user.name }}">
                 </div>
                 <div class="mb-3">
-                    <label for="email" class="form-label">Email</label>
-                    <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}">
-                </div>
-                <div class="mb-3">
                     <label for="avatar_file" class="form-label">Avatar</label>
                     <input type="file" class="form-control" id="avatar_file" name="avatar_file" accept="image/*">
                     <div class="form-text">
@@ -62,13 +70,29 @@
         </div>
     </div>
 
+    <!-- New Email Update Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            Update Email
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('request_email_update') }}" method="post">
+                <div class="mb-3">
+                    <label for="new_email" class="form-label">New Email Address</label>
+                    <input type="email" class="form-control" id="new_email" name="new_email" value="{{ user.email }}">
+                </div>
+                <p class="form-text">A confirmation link will be sent to your new email address to verify the change.</p>
+                <button type="submit" class="btn btn-primary">Update Email</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Change Password -->
     <div class="card mb-4">
         <div class="card-header">
             Change Password
         </div>
         <div class="card-body">
-            <!-- TODO: Trigger password reset via email confirmation -->
             <form action="{{ url_for('forgot_password') }}" method="post">
                 <input type="hidden" name="email" value="{{ user.email }}">
                 <p>To change your password, please confirm your email. A password reset link will be sent to your email address.</p>
@@ -90,7 +114,7 @@
                 <p class="text-danger">This action cannot be undone. Please confirm your password to delete your account.</p>
                 <div class="mb-3">
                     <label for="confirm_delete_password" class="form-label">Password</label>
-                    <input type="password" class="form-control" id="confirm_delete_password" name="confirm_delete_password">
+                    <input type="password" class="form-control" id="confirm_delete_password" name="confirm_delete_password" autocomplete="off">
                 </div>
                 <button type="submit" class="btn btn-danger">Delete Account</button>
             </form>
