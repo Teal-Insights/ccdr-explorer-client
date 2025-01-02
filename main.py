@@ -194,9 +194,7 @@ async def read_forgot_password(
     params: dict = Depends(common_unauthenticated_parameters),
     show_form: Optional[str] = "true",
 ):
-    if params["user"]:
-        return RedirectResponse(url="/dashboard", status_code=302)
-    params["show_form"] = show_form
+    params["show_form"] = show_form == "true"
 
     return templates.TemplateResponse(params["request"], "authentication/forgot_password.html", params)
 
