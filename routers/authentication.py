@@ -1,8 +1,9 @@
 # auth.py
 from logging import getLogger
 from typing import Optional
+from urllib.parse import urlparse
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
@@ -300,6 +301,7 @@ async def refresh_token(
 @router.post("/forgot_password")
 async def forgot_password(
     background_tasks: BackgroundTasks,
+    request: Request,
     user: UserForgotPassword = Depends(UserForgotPassword.as_form),
     session: Session = Depends(get_session)
 ):
@@ -309,7 +311,14 @@ async def forgot_password(
     if db_user:
         background_tasks.add_task(send_reset_email, user.email, session)
 
-    return RedirectResponse(url="/forgot_password?show_form=false", status_code=303)
+    # Get the referer header, default to /forgot_password if not present
+    referer = request.headers.get("referer", "/forgot_password")
+
+    # Extract the path from the full URL
+    redirect_path = urlparse(referer).path
+
+    # Add the query parameter to the redirect path
+    return RedirectResponse(url=f"{redirect_path}?show_form=false", status_code=303)
 
 
 @router.post("/reset_password")

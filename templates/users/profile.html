@@ -93,11 +93,15 @@
             Change Password
         </div>
         <div class="card-body">
+            {% if show_form %}
             <form action="{{ url_for('forgot_password') }}" method="post">
                 <input type="hidden" name="email" value="{{ user.email }}">
                 <p>To change your password, please confirm your email. A password reset link will be sent to your email address.</p>
                 <button type="submit" class="btn btn-primary">Send Password Reset Email</button>
             </form>
+            {% else %}
+            <p>A password reset link has been sent to your email address. Note that you can request a password reset only once an hour. If you have not received an email, please check your spam folder or try again later.</p>
+            {% endif %}
         </div>
     </div>
 
