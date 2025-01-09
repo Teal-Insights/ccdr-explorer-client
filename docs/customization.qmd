@@ -56,6 +56,7 @@ We find that mypy is an enormous time-saver, catching many errors early and grea
     - Organization management endpoints: `organization.py`
     - Role management endpoints: `role.py`
 - Jinja2 templates: `templates/`
+- Bootstrap Sass Files: `scss/`
 - Static assets: `static/`
 - Unit tests: `tests/`
 - Test database configuration: `docker-compose.yml`
@@ -99,6 +100,19 @@ Some parameters are shared across all authenticated or unauthenticated routes, s
 To generate the HTML pages to be returned from our GET routes, we use Jinja2 templates. Jinja2's hierarchical templates allow creating a base template (`templates/base.html`) that defines the overall layout of our web pages (e.g., where the header, body, and footer should go). Individual pages can then extend this base template. We can also template reusable components that can be injected into our layout or page templates.
 
 With Jinja2, we can use the `{% block %}` tag to define content blocks, and the `{% extends %}` tag to extend a base template. We can also use the `{% include %}` tag to include a component in a parent template. See the [Jinja2 documentation on template inheritance](https://jinja.palletsprojects.com/en/stable/templates/#template-inheritance) for more details.
+
+### Bootstrap Sass Files 
+Install Node.js on your local machine if it is not there already.
+Install sass, gulp, and gulp-sass on your local machine:
+```bash
+npm install sass gulp gulp-sass
+```
+Restart VS Code and press Run Task from the Terminal menu on the gulpfile.js. Choose gulp:default and select your option for output. This automates Sass compilation. 
+
+There is already a default styles.scss file in the `scss` folder. Here are customization instructions for Sass files that can be included in `sass`:
+[Boostrap Customization with Sass](https://getbootstrap.com/docs/5.3/customize/sass/)
+
+There are a lot of free templates available online, such as on [Start Bootstrap]|[https://startbootstrap.com]
 
 #### Context variables
 
