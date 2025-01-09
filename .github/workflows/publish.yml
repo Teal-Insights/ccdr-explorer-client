@@ -1,71 +1,63 @@
-name: Publish-and-Render
+name: Update Documentation
 
 on:
   push:
-  pull_request:
-    branches: [main]
+    branches: [ main ]
+    paths:
+      - 'index.qmd'
+      - '.github/workflows/update-docs.yml'
   workflow_dispatch:
 
 jobs:
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12"]
-        poetry-version: [latest]
-        os: [ubuntu-latest]
-    
-    runs-on: ${{ matrix.os }}
-
-    services:
-      postgres:
-        image: postgres:latest
-        env:
-          POSTGRES_DB: test_db
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Set env variables for quarto
-        run: |
-          echo "DB_USER=postgres" >> $GITHUB_ENV
-          echo "DB_PASSWORD=postgres" >> $GITHUB_ENV
-          echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
-          echo "DB_PORT=5432" >> $GITHUB_ENV
-          echo "DB_NAME=test_db" >> $GITHUB_ENV
-          echo "SECRET_KEY=$(openssl rand -base64 32)" >> $GITHUB_ENV
-          echo "BASE_URL=http://localhost:8000" >> $GITHUB_ENV
-          echo "RESEND_API_KEY=$(openssl rand -base64 32)" >> $GITHUB_ENV
-        
-      - name: Verify environment variables for quarto
-        run: |
-          echo "Checking if required environment variables are set..."
-          [ -n "$DB_USER" ] && \
-          [ -n "$DB_PASSWORD" ] && \
-          [ -n "$DB_HOST" ] && \
-          [ -n "$DB_PORT" ] && \
-          [ -n "$DB_NAME" ] && \
-          [ -n "$SECRET_KEY" ] && \
-          [ -n "$RESEND_API_KEY" ]
+          fetch-depth: 0
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Publish 
-        uses: quarto-dev/quarto-actions/publish@v2
-      
-      - name: Render
-        uses: quarto-dev/quarto-actions/render@v2
+      - name: Render Documentation
+        run: |
+          # Publish Quarto documentation
+          quarto publish --no-prompt --no-browser
+          
+          # Render README in GitHub Flavored Markdown
+          quarto render index.qmd --output-dir . --output README.md --to gfm
+          
+          # Remove index.html if it exists
+          rm -f index.html
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Stage only specific files
+          git add README.md
+          
+          # Only commit if there are changes
+          git diff --staged --quiet || git commit -m "docs: Update README.md via automated workflow"
+          
+          # Push changes
+          git push
+
+      # Optional step for generating additional documentation files
+      - name: Generate Additional Documentation
+        if: false  # Disabled by default - enable when needed
+        run: |
+          # Example: Generate .txt version
+          quarto render index.qmd --output-dir . --output rules.txt --to plain
+          
+          # Example: Generate .cursorrules version
+          quarto render index.qmd --output-dir . --output rules.cursorrules --to plain
+          
+          # Commit and push additional files
+          git add rules.txt rules.cursorrules
+          git diff --staged --quiet || git commit -m "docs: Update additional documentation files"
+          git push
