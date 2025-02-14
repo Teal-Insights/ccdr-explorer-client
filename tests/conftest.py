@@ -1,17 +1,27 @@
 import pytest
+from typing import Generator
 from dotenv import load_dotenv
-from sqlmodel import create_engine, Session, delete
+from sqlmodel import create_engine, Session, select
+from sqlalchemy import Engine
 from fastapi.testclient import TestClient
 from utils.db import get_connection_url, set_up_db, tear_down_db, get_session
-from utils.models import User, PasswordResetToken
-from utils.auth import get_password_hash
+from utils.models import User, PasswordResetToken, Organization, Role, UserPassword
+from utils.auth import get_password_hash, create_access_token, create_refresh_token
 from main import app
 
 load_dotenv()
 
 
+# Define a custom exception for test setup errors
+class SetupError(Exception):
+    """Exception raised for errors in the test setup process."""
+    def __init__(self, message="An error occurred during test setup"):
+        self.message = message
+        super().__init__(self.message)
+
+
 @pytest.fixture(scope="session")
-def engine():
+def engine() -> Engine:
     """
     Create a new SQLModel engine for the test database.
     Use an in-memory SQLite database for testing.
@@ -23,7 +33,7 @@ def engine():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def set_up_database(engine):
+def set_up_database(engine) -> Generator[None, None, None]:
     """
     Set up the test database before running the test suite.
     Drop all tables and recreate them to ensure a clean state.
@@ -34,7 +44,7 @@ def set_up_database(engine):
 
 
 @pytest.fixture
-def session(engine):
+def session(engine) -> Generator[Session, None, None]:
     """
     Provide a session for database operations in tests.
     """
@@ -43,23 +53,37 @@ def session(engine):
 
 
 @pytest.fixture(autouse=True)
-def clean_db(session: Session):
+def clean_db(session: Session) -> None:
     """
     Cleans up the database tables before each test.
     """
-    # Exempt from mypy until SQLModel overload properly supports delete()
-    session.exec(delete(PasswordResetToken))  # type: ignore
-    session.exec(delete(User))  # type: ignore
+    for model in (PasswordResetToken, User, Role, Organization):
+        for record in session.exec(select(model)).all():
+            session.delete(record)
 
     session.commit()
 
 
-# Test client fixture
 @pytest.fixture()
-def client(session: Session):
+def test_user(session: Session) -> User:
     """
-    Provides a TestClient instance with the session fixture.
-    Overrides the get_session dependency to use the test session.
+    Creates a test user in the database.
+    """
+    user = User(
+        name="Test User",
+        email="test@example.com",
+        password=UserPassword(hashed_password=get_password_hash("Test123!@#"))
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@pytest.fixture()
+def unauth_client(session: Session) -> Generator[TestClient, None, None]:
+    """
+    Provides a TestClient instance without authentication.
     """
     def get_session_override():
         return session
@@ -70,18 +94,32 @@ def client(session: Session):
     app.dependency_overrides.clear()
 
 
-# Test user fixture
 @pytest.fixture()
-def test_user(session: Session):
+def auth_client(session: Session, test_user: User) -> Generator[TestClient, None, None]:
     """
-    Creates a test user in the database.
+    Provides a TestClient instance with valid authentication tokens.
     """
-    user = User(
-        name="Test User",
-        email="test@example.com",
-        hashed_password=get_password_hash("Test123!@#")
-    )
-    session.add(user)
+    def get_session_override():
+        return session
+
+    app.dependency_overrides[get_session] = get_session_override
+    client = TestClient(app)
+
+    # Create and set valid tokens
+    access_token = create_access_token({"sub": test_user.email})
+    refresh_token = create_refresh_token({"sub": test_user.email})
+
+    client.cookies.set("access_token", access_token)
+    client.cookies.set("refresh_token", refresh_token)
+
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def test_organization(session: Session) -> Organization:
+    """Create a test organization for use in tests"""
+    organization = Organization(name="Test Organization")
+    session.add(organization)
     session.commit()
-    session.refresh(user)
-    return user
+    return organization

@@ -55,7 +55,7 @@ to deploy to any major cloud hosting platform.
 
 **Additional technologies:**
 
-- [Poetry](https://python-poetry.org/): Python dependency manager
+- [uv](https://docs.astral.sh/uv/): Python dependency manager
 - [Pytest](https://docs.pytest.org/en/7.4.x/): testing framework
 - [Docker](https://www.docker.com/): development containerization
 - [Github Actions](https://docs.github.com/en/actions): CI/CD pipeline
@@ -72,10 +72,39 @@ to deploy to any major cloud hosting platform.
 For comprehensive installation instructions, see the [installation
 page](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/installation.html).
 
-### Python and Docker
+### uv
 
-- [Python 3.12 or higher](https://www.python.org/downloads/)
-- [Docker and Docker Compose](https://docs.docker.com/get-docker/)
+MacOS and Linux:
+
+``` bash
+wget -qO- https://astral.sh/uv/install.sh | sh
+```
+
+Windows:
+
+``` bash
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+See the [uv installation
+docs](https://docs.astral.sh/uv/getting-started/installation/) for more
+information.
+
+### Python
+
+Install Python 3.12 or higher from either the official [downloads
+page](https://www.python.org/downloads/) or using uv:
+
+``` bash
+# Installs the latest version
+uv python install
+```
+
+### Docker and Docker Compose
+
+Install Docker Desktop and Coker Compose for your operating system by
+following the [instructions in the
+documentation](https://docs.docker.com/compose/install/).
 
 ### PostgreSQL headers
 
@@ -97,31 +126,19 @@ For Windows:
 
 ### Python dependencies
 
-1.  Install Poetry
+From the root directory, run:
 
 ``` bash
-pipx install poetry
+uv venv
+uv sync
 ```
 
-2.  Install project dependencies
-
-``` bash
-poetry install
-```
-
-3.  Activate shell
-
-``` bash
-poetry shell
-```
-
-(Note: You will need to activate the shell every time you open a new
-terminal session. Alternatively, you can use the `poetry run` prefix
-before other commands to run them without activating the shell.)
+This will create an in-project virtual environment and install all
+dependencies.
 
 ### Set environment variables
 
-Copy .env.example to .env with `cp .env.example .env`.
+Copy `.env.example` to `.env` with `cp .env.example .env`.
 
 Generate a 256 bit secret key with `openssl rand -base64 32` and paste
 it into the .env file.
@@ -133,6 +150,9 @@ account, verify a domain, get an API key, and paste the API key into the
 .env file.
 
 ### Start development database
+
+To start the development database, run the following command in your
+terminal from the root directory:
 
 ``` bash
 docker compose up -d
@@ -155,14 +175,31 @@ Navigate to http://localhost:8000/
 mypy .
 ```
 
-### Contributing
+## Developing with LLMs
+
+In line with the [llms.txt standard](https://llmstxt.org/), we have
+provided a Markdown-formatted prompt—designed to help LLM agents
+understand how to work with this template—as a text file:
+[llms.txt](docs/static/llms.txt).
+
+One use case for this file, if using the Cursor IDE, is to rename it to
+`.cursorrules` and place it in your project directory (see the [Cursor
+docs](https://docs.cursor.com/context/rules-for-ai) on this for more
+information). Alternatively, you could use it as a custom system prompt
+in the web interface for ChatGPT, Claude, or the LLM of your choice.
+
+We have also exposed the full Markdown-formatted project documentation
+as a [single text file](docs/static/documentation.txt) for easy
+downloading and embedding for RAG workflows.
+
+## Contributing
 
 Your contributions are welcome! See the [issues
 page](https://github.com/promptly-technologies-llc/fastapi-jinja2-postgres-webapp/issues)
 for ideas. Fork the repository, create a new branch, make your changes,
 and submit a pull request.
 
-### License
+## License
 
 This project is created and maintained by [Promptly Technologies,
 LLC](https://promptlytechnologies.com/) and licensed under the MIT

@@ -1,0 +1,19 @@
+{% extends "emails/base_email.html" %}
+
+{% block email_title %}Password Reset{% endblock %}
+
+{% block email_content %}
+    <h2>Password Reset Request</h2>
+    <p>Hello,</p>
+    <p>We received a request to reset your password. If you didn't make this request, you can safely ignore this email.</p>
+    <p style="margin: 25px 0;">
+        <a href="{{ reset_url }}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Your Password</a>
+    </p>
+    <p>Or copy and paste this link into your browser:</p>
+    <p style="word-break: break-all;">{{ reset_url }}</p>
+    <p>This link will expire in 24 hours.</p>
+{% endblock %}
+
+{% block email_footer %}
+    If you didn't request this password reset, please ignore this email or contact support if you have concerns.
+{% endblock %}
