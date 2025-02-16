@@ -8,31 +8,98 @@ import resend
 from dotenv import load_dotenv
 from pydantic import field_validator, ValidationInfo
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
+from jinja2.environment import Template
+from fastapi.templating import Jinja2Templates
 from fastapi import Depends, Cookie, HTTPException, status
 from utils.db import get_session
-from utils.models import User, PasswordResetToken
+from utils.models import User, Role, PasswordResetToken, EmailUpdateToken
 
 load_dotenv()
-logger = logging.getLogger("uvicorn.error")
+resend.api_key = os.environ["RESEND_API_KEY"]
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
 
 
-# --- AUTH ---
+# --- Constants ---
 
+
+templates = Jinja2Templates(directory="templates")
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+PASSWORD_PATTERN_COMPONENTS = [
+    r"(?=.*\d)",                   # At least one digit
+    r"(?=.*[a-z])",               # At least one lowercase letter
+    r"(?=.*[A-Z])",               # At least one uppercase letter
+    r"(?=.*[\[\]\\@$!%*?&{}<>.,'#\-_=+\(\):;|~/\^])",  # At least one special character
+    r".{8,}"  # At least 8 characters long
+]
+COMPILED_PASSWORD_PATTERN = re.compile(r"".join(PASSWORD_PATTERN_COMPONENTS))
 
 
-# Define the oauth2 scheme to get the token from the cookie
-def oauth2_scheme_cookie(
-    access_token: Optional[str] = Cookie(None, alias="access_token"),
-    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
-) -> tuple[Optional[str], Optional[str]]:
-    return access_token, refresh_token
+def convert_python_regex_to_html(regex: str) -> str:
+    """
+    Replace each special character with its escaped version only when inside character classes.
+    Ensures that the single quote "'" is doubly escaped.
+    """
+    # Map each special char to its escaped form
+    special_map = {
+        '{': r'\{',
+        '}': r'\}',
+        '<': r'\<',
+        '>': r'\>',
+        '.': r'\.',
+        '+': r'\+',
+        '|': r'\|',
+        ',': r'\,',
+        "'": r"\\'",  # doubly escaped single quote
+        "/": r"\/",
+    }
+
+    # Regex to match the entire character class [ ... ]
+    pattern = r"\[((?:\\.|[^\]])*)\]"
+
+    def replacer(match: re.Match) -> str:
+        """
+        For the matched character class, replace all special characters inside it.
+        """
+        inside = match.group(1)  # the contents inside [ ... ]
+        for ch, escaped in special_map.items():
+            inside = inside.replace(ch, escaped)
+        return f"[{inside}]"
+
+    # Use re.sub with a function to ensure we only replace inside the character class
+    return re.sub(pattern, replacer, regex)
+
+
+HTML_PASSWORD_PATTERN = "".join(
+    convert_python_regex_to_html(component) for component in PASSWORD_PATTERN_COMPONENTS
+)
+
+
+# --- Custom Exceptions ---
+
+
+class NeedsNewTokens(Exception):
+    def __init__(self, user: User, access_token: str, refresh_token: str):
+        self.user = user
+        self.access_token = access_token
+        self.refresh_token = refresh_token
+
+
+class AuthenticationError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/login"}
+        )
 
 
 class PasswordValidationError(HTTPException):
@@ -52,6 +119,25 @@ class PasswordMismatchError(PasswordValidationError):
             field=field,
             message="The passwords you entered do not match"
         )
+
+
+class InsufficientPermissionsError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=403,
+            detail="You don't have permission to perform this action"
+        )
+
+
+# --- Helpers ---
+
+
+# Define the oauth2 scheme to get the token from the cookie
+def oauth2_scheme_cookie(
+    access_token: Optional[str] = Cookie(None, alias="access_token"),
+    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
+) -> tuple[Optional[str], Optional[str]]:
+    return access_token, refresh_token
 
 
 def create_password_validator(field_name: str = "password"):
@@ -74,11 +160,8 @@ def create_password_validator(field_name: str = "password"):
         - At least 8 characters long
         """
         logger.debug(f"Validating password for {field_name}")
-        pattern = re.compile(
-            r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~])[A-Za-z\d@$!%*?&{}<>.,\\'#\-_=+\(\)\[\]:;|~]{8,}")
-        if not pattern.match(v):
-            logger.debug(f"Password for {
-                         field_name} does not satisfy the security policy")
+        if not COMPILED_PASSWORD_PATTERN.match(v):
+            logger.debug(f"Password for {field_name} does not satisfy the security policy")
             raise PasswordValidationError(
                 field=field_name,
                 message=f"{field_name} does not satisfy the security policy"
@@ -180,7 +263,8 @@ def validate_token_and_get_user(
     if decoded_token:
         user_email = decoded_token.get("sub")
         user = session.exec(select(User).where(
-            User.email == user_email)).first()
+            User.email == user_email
+        )).first()
         if user:
             if token_type == "refresh":
                 new_access_token = create_access_token(
@@ -228,11 +312,7 @@ def get_authenticated_user(
             raise NeedsNewTokens(user, new_access_token, new_refresh_token)
         return user
 
-    # If both tokens are invalid or missing, redirect to login
-    raise HTTPException(
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={"Location": "/login"}
-    )
+    raise AuthenticationError()
 
 
 def get_optional_user(
@@ -251,13 +331,6 @@ def get_optional_user(
     return None
 
 
-class NeedsNewTokens(Exception):
-    def __init__(self, user: User, access_token: str, refresh_token: str):
-        self.user = user
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-
-
 def generate_password_reset_url(email: str, token: str) -> str:
     """
     Generates the password reset URL with proper query parameters.
@@ -273,9 +346,11 @@ def generate_password_reset_url(email: str, token: str) -> str:
     return f"{base_url}/auth/reset_password?email={email}&token={token}"
 
 
-def send_reset_email(email: str, session: Session):
+def send_reset_email(email: str, session: Session) -> None:
     # Check for an existing unexpired token
-    user = session.exec(select(User).where(User.email == email)).first()
+    user: Optional[User] = session.exec(select(User).where(
+        User.email == email
+    )).first()
     if user:
         existing_token = session.exec(
             select(PasswordResetToken)
@@ -291,17 +366,24 @@ def send_reset_email(email: str, session: Session):
             return
 
         # Generate a new token
-        token = str(uuid.uuid4())
-        reset_token = PasswordResetToken(user_id=user.id, token=token)
+        token: str = str(uuid.uuid4())
+        reset_token: PasswordResetToken = PasswordResetToken(
+            user_id=user.id, token=token)
         session.add(reset_token)
 
         try:
-            reset_url = generate_password_reset_url(email, token)
+            reset_url: str = generate_password_reset_url(email, token)
+
+            # Render the email template
+            template: Template = templates.get_template(
+                "emails/reset_email.html")
+            html_content: str = template.render({"reset_url": reset_url})
+
             params: resend.Emails.SendParams = {
                 "from": "noreply@promptlytechnologies.com",
                 "to": [email],
                 "subject": "Password Reset Request",
-                "html": f"<p>Click <a href='{reset_url}'>here</a> to reset your password.</p>",
+                "html": html_content,
             }
 
             sent_email: resend.Email = resend.Emails.send(params)
@@ -316,18 +398,122 @@ def send_reset_email(email: str, session: Session):
 
 
 def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple[Optional[User], Optional[PasswordResetToken]]:
-    reset_token = session.exec(select(PasswordResetToken).where(
-        PasswordResetToken.token == token,
-        PasswordResetToken.expires_at > datetime.now(UTC),
-        PasswordResetToken.used == False
-    )).first()
+    result = session.exec(
+        select(User, PasswordResetToken)
+        .where(
+            User.email == email,
+            PasswordResetToken.token == token,
+            PasswordResetToken.expires_at > datetime.now(UTC),
+            PasswordResetToken.used == False,
+            PasswordResetToken.user_id == User.id
+        )
+    ).first()
 
-    if not reset_token:
+    if not result:
         return None, None
 
-    user = session.exec(select(User).where(
-        User.email == email,
-        User.id == reset_token.user_id
-    )).first()
-
+    user, reset_token = result
     return user, reset_token
+
+
+def get_user_with_relations(
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session),
+) -> User:
+    """
+    Returns an authenticated user with fully loaded role and organization relationships.
+    """
+    # Refresh the user instance with eagerly loaded relationships
+    eager_user = session.exec(
+        select(User)
+        .where(User.id == user.id)
+        .options(
+            selectinload(User.roles).selectinload(Role.organization),
+            selectinload(User.roles).selectinload(Role.permissions)
+        )
+    ).one()
+
+    return eager_user
+
+
+def generate_email_update_url(user_id: int, token: str, new_email: str) -> str:
+    """
+    Generates the email update confirmation URL with proper query parameters.
+    """
+    base_url = os.getenv('BASE_URL')
+    return f"{base_url}/auth/confirm_email_update?user_id={user_id}&token={token}&new_email={new_email}"
+
+
+def send_email_update_confirmation(
+    current_email: str,
+    new_email: str,
+    user_id: int,
+    session: Session
+) -> None:
+    # Check for an existing unexpired token
+    existing_token = session.exec(
+        select(EmailUpdateToken)
+        .where(
+            EmailUpdateToken.user_id == user_id,
+            EmailUpdateToken.expires_at > datetime.now(UTC),
+            EmailUpdateToken.used == False
+        )
+    ).first()
+
+    if existing_token:
+        logger.debug("An unexpired email update token already exists for this user.")
+        return
+
+    # Generate a new token
+    token = EmailUpdateToken(user_id=user_id)
+    session.add(token)
+
+    try:
+        confirmation_url = generate_email_update_url(
+            user_id, token.token, new_email)
+
+        # Render the email template
+        template = templates.get_template("emails/update_email_email.html")
+        html_content = template.render({
+            "confirmation_url": confirmation_url,
+            "current_email": current_email,
+            "new_email": new_email
+        })
+
+        params: resend.Emails.SendParams = {
+            "from": "noreply@promptlytechnologies.com",
+            "to": [current_email],
+            "subject": "Confirm Email Update",
+            "html": html_content,
+        }
+
+        sent_email: resend.Email = resend.Emails.send(params)
+        logger.debug(f"Email update confirmation sent: {sent_email.get('id')}")
+
+        session.commit()
+    except Exception as e:
+        logger.error(f"Failed to send email update confirmation: {e}")
+        session.rollback()
+
+
+def get_user_from_email_update_token(
+    user_id: int,
+    token: str,
+    session: Session
+) -> tuple[Optional[User], Optional[EmailUpdateToken]]:
+    result = session.exec(
+        select(User, EmailUpdateToken)
+        .where(
+            User.id == user_id,
+            EmailUpdateToken.token == token,
+            EmailUpdateToken.expires_at > datetime.now(UTC),
+            EmailUpdateToken.used == False,
+            EmailUpdateToken.user_id == User.id
+        )
+    ).first()
+
+    if not result:
+        return None, None
+
+    user, update_token = result
+    return user, update_token
