@@ -117,18 +117,100 @@ To generate the HTML pages to be returned from our GET routes, we use Jinja2 tem
 
 With Jinja2, we can use the `{% block %}` tag to define content blocks, and the `{% extends %}` tag to extend a base template. We can also use the `{% include %}` tag to include a component in a parent template. See the [Jinja2 documentation on template inheritance](https://jinja.palletsprojects.com/en/stable/templates/#template-inheritance) for more details.
 
-### Bootstrap Sass Files 
-Install Node.js on your local machine if it is not there already.
-Install sass, gulp, and gulp-sass on your local machine:
+### Custom theming with Bootstrap Sass
+
+[Install Node.js](https://nodejs.org/en/download/) on your local machine if it is not there already.
+
+Install `bootstrap`, `sass`, `gulp`, and `gulp-sass` in your project:
+
 ```bash
-npm install sass gulp gulp-sass
+npm install --save-dev bootstrap sass gulp gulp-cli gulp-sass
 ```
-Restart VS Code and press Run Task from the Terminal menu on the gulpfile.js. Choose gulp:default and select your option for output. This automates Sass compilation. 
 
-There is already a default styles.scss file in the `scss` folder. Here are customization instructions for Sass files that can be included in `sass`:
-[Boostrap Customization with Sass](https://getbootstrap.com/docs/5.3/customize/sass/)
+This will create a `node_modules` folder, a `package-lock.json` file, and a `package.json` file in the root directory of the project.
 
-There are a lot of free templates available online, such as on [Start Bootstrap]|[https://startbootstrap.com]
+Create an `scss` folder and a basic `scss/styles.scss` file:
+
+```bash
+mkdir scss
+touch scss/styles.scss
+```
+
+Your custom styles will go in `scss/styles.scss`, along with `@import` statements to include the Bootstrap components you want. For example, the default CSS for the template was compiled from the following configuration, which imports all of Bootstrap and overrides the `$theme-colors` and `$font-family-base` variables:
+
+```scss
+// styles.scss
+
+// Include any default variable overrides here (functions won't be available)
+
+// State colors
+$primary: #7464a1;
+$secondary: #64a19d;
+$success: #67c29c;
+$info: #1cabc4;
+$warning: #e4c662;
+$danger: #a16468;
+$light: #f8f9fa;
+$dark: #343a40;
+
+// Bootstrap color map
+$theme-colors: (
+    "primary": $primary,
+    "secondary": $secondary,
+    "success": $success,
+    "info": $info,
+    "warning": $warning,
+    "danger": $danger,
+    "light": $light,
+    "dark": $dark
+);
+
+$font-family-base: (
+    "Nunito",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji"
+);
+
+// Include all of Bootstrap
+
+@import "../node_modules/bootstrap/scss/bootstrap";
+```
+
+The most common use case for `styles.scss` is to define a custom color scheme and fonts, but it's also possible to other visual details such as border radius and box shadow depth. See the [Bootstrap Sass customization instructions](https://getbootstrap.com/docs/5.3/customize/sass/) and the many free templates available at [Start Bootstrap](https://startbootstrap.com) for examples.
+
+To compile the Sass files, we use `gulp`. In the project root directory, create a `gulpfile.js` file with the following content:
+
+```javascript
+   const gulp = require('gulp');
+   const sass = require('gulp-sass')(require('sass'));
+
+   // Define a task to compile Sass
+   gulp.task('sass', function() {
+       return gulp.src('scss/**/*.scss') // Source folder containing Sass files
+           .pipe(sass().on('error', sass.logError))
+           .pipe(gulp.dest('static/css')); // Destination folder for compiled CSS
+   });
+
+   // Define a default task
+   gulp.task('default', gulp.series('sass'));
+```
+
+To compile the Sass file to `static/css`, run this command:
+
+```bash
+npx gulp
+```
+
+Note that this will overwrite the existing `static/css/styles.css` file, so if you want to define any custom CSS styles, you should do so in either the `scss/styles.scss` file or in `static/css/extras.css`.
 
 #### Context variables
 
@@ -150,6 +232,7 @@ In this example, the `welcome.html` template will receive two pieces of context:
 While this template includes comprehensive server-side validation through Pydantic models and custom validators, it's important to note that server-side validation should be treated as a fallback security measure. If users ever see the `validation_error.html` template, it indicates that our client-side validation has failed to catch invalid input before it reaches the server.
 
 Best practices dictate implementing thorough client-side validation via JavaScript and/or HTML `input` element `pattern` attributes to:
+
 - Provide immediate feedback to users
 - Reduce server load
 - Improve user experience by avoiding round-trips to the server
