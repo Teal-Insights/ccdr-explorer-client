@@ -1,0 +1,66 @@
+name: Publish Documentation
+
+on:
+  push:
+    branches: main
+
+jobs:
+  publish-documentation:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Generate token for version incrementer app
+        id: create_token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.PRIVATE_KEY }}
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          token: ${{ steps.create_token.outputs.token }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Render and Publish
+        run: uv run quarto publish gh-pages --no-prompt --no-browser
+
+      - name: Render Documentation
+        run: |
+          # Publish Quarto documentation
+          quarto publish --no-prompt --no-browser
+          
+          # Render README in GitHub Flavored Markdown
+          quarto render index.qmd --output-dir . --output README.md --to gfm
+          
+          # Remove index.html if it exists
+          rm -f index.html
+
+      - name: Commit version change
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update README"
+          branch: ${{ github.ref_name }}
+          file_pattern: "README.md"
