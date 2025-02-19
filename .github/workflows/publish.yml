@@ -74,16 +74,13 @@ jobs:
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
 
-      - name: Render and Publish
-        run: uv run quarto publish gh-pages --no-prompt --no-browser
-
       - name: Render Documentation
         run: |
           # Publish Quarto documentation
-          quarto publish --no-prompt --no-browser
+          uv run quarto publish --no-prompt --no-browser
           
           # Render README in GitHub Flavored Markdown
-          quarto render index.qmd --output-dir . --output README.md --to gfm
+          uv run quarto render index.qmd --output-dir . --output README.md --to gfm
           
           # Remove index.html if it exists
           rm -f index.html
