@@ -1,6 +1,7 @@
 from logging import getLogger
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException, Form, Request
 from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
@@ -11,6 +12,8 @@ from datetime import datetime
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
+templates = Jinja2Templates(directory="templates")
+
 
 # --- Custom Exceptions ---
 
@@ -83,6 +86,26 @@ class OrganizationUpdate(BaseModel):
 
 
 # --- Routes ---
+
+
+@router.get("/{org_id}")
+async def read_organization(
+    org_id: int,
+    request: Request,
+    user: User = Depends(get_user_with_relations)
+):
+    # Get the organization only if the user is a member of it
+    org = next(
+        (org for org in user.organizations if org.id == org_id),
+        None
+    )
+    if not org:
+        raise OrganizationNotFoundError()
+
+    return templates.TemplateResponse(
+        request, "users/organization.html", {"organization": org}
+    )
+
 
 @router.post("/create", response_class=RedirectResponse)
 def create_organization(

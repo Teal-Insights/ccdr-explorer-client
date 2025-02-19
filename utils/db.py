@@ -2,7 +2,6 @@ import os
 import logging
 from typing import Generator, Union, Sequence
 from dotenv import load_dotenv
-from fastapi import HTTPException
 from sqlalchemy.engine import URL
 from sqlmodel import create_engine, Session, SQLModel, select
 from utils.models import Role, Permission, RolePermissionLink, default_roles, ValidPermissions
