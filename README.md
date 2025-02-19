@@ -111,7 +111,7 @@ documentation](https://docs.docker.com/compose/install/).
 For Ubuntu/Debian:
 
 ``` bash
-sudo apt update && sudo apt install -y python3-dev libpq-dev
+sudo apt update && sudo apt install -y python3-dev libpq-dev libwebp-dev
 ```
 
 For macOS:
