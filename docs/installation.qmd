@@ -2,9 +2,9 @@
 title: "Installation"
 ---
 
-## Install all dependencies in a VSCode Dev Container
+## Install all development dependencies in a VSCode Dev Container
 
-If you use VSCode with Docker to develop in a container, the following VSCode Dev Container configuration will install all dependencies:
+If you use VSCode with Docker to develop in a container, the following VSCode Dev Container configuration will install all development dependencies:
 
 ``` json
 {

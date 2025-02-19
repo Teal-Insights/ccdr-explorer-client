@@ -71,6 +71,9 @@ jobs:
           echo "BASE_URL=http://localhost:8000" >> $GITHUB_ENV
           echo "RESEND_API_KEY=resend_api_key" >> $GITHUB_ENV
 
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v2
+
       - name: Render and Publish
         run: uv run quarto publish gh-pages --no-prompt --no-browser
 
