@@ -77,7 +77,7 @@ jobs:
       - name: Render Documentation
         run: |
           # Publish Quarto documentation
-          uv run quarto publish --no-prompt --no-browser
+          uv run quarto publish gh-pages --no-prompt --no-browser
           
           # Render README in GitHub Flavored Markdown
           uv run quarto render index.qmd --output-dir . --output README.md --to gfm
