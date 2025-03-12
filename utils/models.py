@@ -4,6 +4,7 @@ from uuid import uuid4
 from datetime import datetime, UTC, timedelta
 from typing import Optional, List, Union
 from fastapi import HTTPException
+from pydantic import EmailStr
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum as SQLAlchemyEnum, LargeBinary
 from sqlalchemy.orm import Mapped
@@ -33,6 +34,23 @@ class DataIntegrityError(HTTPException):
                 f"{resource} is in a broken state; please contact a system administrator"
             )
         )
+
+
+# ---- Base Models ----
+
+class AccountBase(SQLModel):
+    email: EmailStr = Field(index=True, unique=True)
+    hashed_password: str
+
+
+class UserBase(SQLModel):
+    name: Optional[str] = None
+    avatar_data: Optional[bytes] = Field(
+        default=None, sa_column=Column(LargeBinary)
+    )
+    avatar_content_type: Optional[str] = Field(
+        default=None
+    )
 
 
 # --- Database models ---
@@ -180,13 +198,15 @@ class EmailUpdateToken(SQLModel, table=True):
         return datetime.now(UTC) > self.expires_at.replace(tzinfo=UTC)
 
 
-class UserPassword(SQLModel, table=True):
+class Account(AccountBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=utc_time)
+    updated_at: datetime = Field(default_factory=utc_time)
+
     user_id: Optional[int] = Field(foreign_key="user.id", unique=True)
-    hashed_password: str
 
     user: Mapped[Optional["User"]] = Relationship(
-        back_populates="password",
+        back_populates="account",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
             "single_parent": True
@@ -195,13 +215,9 @@ class UserPassword(SQLModel, table=True):
 
 
 # TODO: Prevent deleting a user who is sole owner of an organization
-class User(SQLModel, table=True):
+# TODO: Automate change of updated_at when user is updated
+class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    email: str = Field(index=True, unique=True)
-    avatar_data: Optional[bytes] = Field(
-        default=None, sa_column=Column(LargeBinary))
-    avatar_content_type: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_time)
     updated_at: datetime = Field(default_factory=utc_time)
 
@@ -221,7 +237,7 @@ class User(SQLModel, table=True):
             "cascade": "all, delete-orphan"
         }
     )
-    password: Mapped[Optional[UserPassword]] = Relationship(
+    account: Mapped[Optional[Account]] = Relationship(
         back_populates="user"
     )
 
