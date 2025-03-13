@@ -3,7 +3,7 @@ from logging import getLogger
 from typing import Optional
 from urllib.parse import urlparse
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form, Request
+from fastapi import APIRouter, Depends, BackgroundTasks, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, ConfigDict
@@ -28,6 +28,7 @@ from utils.auth import (
     PasswordValidationError,
     get_optional_user
 )
+from exceptions.http_exceptions import EmailAlreadyRegisteredError, CredentialsError
 
 logger = getLogger("uvicorn.error")
 
@@ -37,20 +38,7 @@ templates = Jinja2Templates(directory="templates")
 # --- Custom Exceptions ---
 
 
-class EmailAlreadyRegisteredError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=409,
-            detail="This email is already registered"
-        )
 
-
-class AuthenticationError(HTTPException):
-    def __init__(self, message: str = "Invalid credentials"):
-        super().__init__(
-            status_code=401,
-            detail=message
-        )
 
 
 # --- Server Request and Response Models ---
@@ -246,7 +234,7 @@ async def read_reset_password(
 
     # Raise informative error to let user know the token is invalid and may have expired
     if not authorized_user:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        raise CredentialsError(message="Invalid or expired token")
 
     return templates.TemplateResponse(
         "authentication/reset_password.html",
@@ -310,7 +298,7 @@ async def login(
         User.email == user.email)).first()
 
     if not db_user or not db_user.password or not verify_password(user.password, db_user.password.hashed_password):
-        raise AuthenticationError()
+        raise CredentialsError()
 
     # Create access token
     access_token = create_access_token(
@@ -416,7 +404,7 @@ async def reset_password(
         user.email, user.token, session)
 
     if not authorized_user or not reset_token:
-        raise AuthenticationError("Invalid or expired password reset token; please request a new one")
+        raise CredentialsError("Invalid or expired password reset token; please request a new one")
 
     # Update password and mark token as used
     if authorized_user.password:
@@ -488,7 +476,7 @@ async def confirm_email_update(
     )
 
     if not user or not update_token:
-        raise AuthenticationError("Invalid or expired email update token; please request a new one")
+        raise CredentialsError("Invalid or expired email update token; please request a new one")
 
     # Update email and mark token as used
     user.email = new_email

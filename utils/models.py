@@ -1,13 +1,13 @@
 from logging import getLogger, DEBUG
-from enum import Enum
 from uuid import uuid4
 from datetime import datetime, UTC, timedelta
 from typing import Optional, List, Union
-from fastapi import HTTPException
 from pydantic import EmailStr
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, Enum as SQLAlchemyEnum, LargeBinary
 from sqlalchemy.orm import Mapped
+from utils.enums import ValidPermissions
+from exceptions.http_exceptions import DataIntegrityError
 
 logger = getLogger("uvicorn.error")
 logger.setLevel(DEBUG)
@@ -18,22 +18,6 @@ logger.setLevel(DEBUG)
 
 def utc_time():
     return datetime.now(UTC)
-
-
-# --- Custom exceptions ---
-
-
-class DataIntegrityError(HTTPException):
-    def __init__(
-            self,
-            resource: str = "Database resource"
-    ):
-        super().__init__(
-            status_code=500,
-            detail=(
-                f"{resource} is in a broken state; please contact a system administrator"
-            )
-        )
 
 
 # --- Private database models ---
@@ -105,20 +89,6 @@ class EmailUpdateToken(SQLModel, table=True):
 
 
 # --- Public database models ---
-
-
-default_roles = ["Owner", "Administrator", "Member"]
-
-
-class ValidPermissions(Enum):
-    DELETE_ORGANIZATION = "Delete Organization"
-    EDIT_ORGANIZATION = "Edit Organization"
-    INVITE_USER = "Invite User"
-    REMOVE_USER = "Remove User"
-    EDIT_USER_ROLE = "Edit User Role"
-    CREATE_ROLE = "Create Role"
-    DELETE_ROLE = "Delete Role"
-    EDIT_ROLE = "Edit Role"
 
 
 class UserRoleLink(SQLModel, table=True):

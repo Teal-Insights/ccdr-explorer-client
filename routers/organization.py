@@ -1,45 +1,19 @@
 from logging import getLogger
-from fastapi import APIRouter, Depends, HTTPException, Form, Request
+from datetime import datetime
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
 from utils.db import get_session
-from utils.auth import get_authenticated_user, get_user_with_relations, InsufficientPermissionsError
+from utils.auth import get_authenticated_user, get_user_with_relations
 from utils.models import Organization, User, Role, utc_time, default_roles, ValidPermissions
-from datetime import datetime
+from exceptions.http_exceptions import EmptyOrganizationNameError, OrganizationNotFoundError, OrganizationNameTakenError, InsufficientPermissionsError
 
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 templates = Jinja2Templates(directory="templates")
-
-
-# --- Custom Exceptions ---
-
-
-class EmptyOrganizationNameError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=400,
-            detail="Organization name cannot be empty"
-        )
-
-
-class OrganizationNotFoundError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=404,
-            detail="Organization not found"
-        )
-
-
-class OrganizationNameTakenError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=400,
-            detail="Organization name already taken"
-        )
 
 
 # --- Server Request and Response Models ---

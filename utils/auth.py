@@ -14,9 +14,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Optional
 from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
-from fastapi import Depends, Cookie, HTTPException, status, Request
+from fastapi import Depends, Cookie
 from utils.db import get_session
 from utils.models import User, Role, PasswordResetToken, EmailUpdateToken
+from exceptions.http_exceptions import PasswordValidationError, PasswordMismatchError, AuthenticationError
+from exceptions.exceptions import NeedsNewTokens
 
 load_dotenv()
 resend.api_key = os.environ["RESEND_API_KEY"]
@@ -82,51 +84,6 @@ def convert_python_regex_to_html(regex: str) -> str:
 HTML_PASSWORD_PATTERN = "".join(
     convert_python_regex_to_html(component) for component in PASSWORD_PATTERN_COMPONENTS
 )
-
-
-# --- Custom Exceptions ---
-
-
-class NeedsNewTokens(Exception):
-    def __init__(self, user: User, access_token: str, refresh_token: str):
-        self.user = user
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-
-
-class AuthenticationError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": "/login"}
-        )
-
-
-class PasswordValidationError(HTTPException):
-    def __init__(self, field: str, message: str):
-        super().__init__(
-            status_code=422,
-            detail={
-                "field": field,
-                "message": message
-            }
-        )
-
-
-class PasswordMismatchError(PasswordValidationError):
-    def __init__(self, field: str = "confirm_password"):
-        super().__init__(
-            field=field,
-            message="The passwords you entered do not match"
-        )
-
-
-class InsufficientPermissionsError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=403,
-            detail="You don't have permission to perform this action"
-        )
 
 
 # --- Helpers ---

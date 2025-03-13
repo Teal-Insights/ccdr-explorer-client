@@ -2,56 +2,19 @@
 # they themselves have.
 from typing import List, Sequence, Optional
 from logging import getLogger
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, Form
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select, col
 from sqlalchemy.orm import selectinload
 from utils.db import get_session
-from utils.auth import get_authenticated_user, InsufficientPermissionsError
+from utils.auth import get_authenticated_user
 from utils.models import Role, Permission, ValidPermissions, utc_time, User, DataIntegrityError
+from exceptions.http_exceptions import InsufficientPermissionsError, InvalidPermissionError, RoleAlreadyExistsError, RoleNotFoundError, RoleHasUsersError
 
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/roles", tags=["roles"])
-
-
-# --- Custom Exceptions ---
-
-
-class InvalidPermissionError(HTTPException):
-    """Raised when a user attempts to assign an invalid permission to a role"""
-
-    def __init__(self, permission: ValidPermissions):
-        super().__init__(
-            status_code=400,
-            detail=f"Invalid permission: {permission}"
-        )
-
-
-class RoleAlreadyExistsError(HTTPException):
-    """Raised when attempting to create a role with a name that already exists"""
-
-    def __init__(self):
-        super().__init__(status_code=400, detail="Role already exists")
-
-
-class RoleNotFoundError(HTTPException):
-    """Raised when a requested role does not exist"""
-
-    def __init__(self):
-        super().__init__(status_code=404, detail="Role not found")
-
-
-class RoleHasUsersError(HTTPException):
-    """Raised when a requested role to be deleted has users"""
-
-    def __init__(self):
-        super().__init__(
-            status_code=400,
-            detail="Role cannot be deleted until users with that role are reassigned"
-        )
-
 
 # --- Server Request Models ---
 
