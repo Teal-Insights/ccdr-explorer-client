@@ -6,12 +6,16 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
-from routers import authentication, organization, role, user, dashboard, terms_of_service, privacy_policy, about
-from utils.auth import (
-    NeedsNewTokens,
-    PasswordValidationError,
-    AuthenticationError,
+from routers import about, account, dashboard, organization, privacy_policy, role, terms_of_service, user
+from utils.dependencies import (
     get_optional_user
+)
+from exceptions.http_exceptions import (
+    AuthenticationError,
+    PasswordValidationError
+)
+from exceptions.exceptions import (
+    NeedsNewTokens
 )
 from utils.db import set_up_db
 from utils.models import User
@@ -39,14 +43,14 @@ templates = Jinja2Templates(directory="templates")
 # --- Include Routers ---
 
 
-app.include_router(authentication.router)
-app.include_router(organization.router)
-app.include_router(role.router)
-app.include_router(user.router)
-app.include_router(dashboard.router)
-app.include_router(terms_of_service.router)
-app.include_router(privacy_policy.router)
+app.include_router(account.router)
 app.include_router(about.router)
+app.include_router(dashboard.router)
+app.include_router(organization.router)
+app.include_router(privacy_policy.router)
+app.include_router(role.router)
+app.include_router(terms_of_service.router)
+app.include_router(user.router)
 
 
 # --- Exception Handling Middlewares ---

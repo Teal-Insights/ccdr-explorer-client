@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select, col
 from sqlalchemy.orm import selectinload
 from utils.db import get_session
-from utils.auth import get_authenticated_user
+from utils.dependencies import get_authenticated_user
 from utils.models import Role, Permission, ValidPermissions, utc_time, User, DataIntegrityError
 from exceptions.http_exceptions import InsufficientPermissionsError, InvalidPermissionError, RoleAlreadyExistsError, RoleNotFoundError, RoleHasUsersError
 

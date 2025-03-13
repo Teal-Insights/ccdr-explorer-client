@@ -5,9 +5,10 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlmodel import Session, select
-from utils.db import get_session
-from utils.auth import get_authenticated_user, get_user_with_relations
-from utils.models import Organization, User, Role, utc_time, default_roles, ValidPermissions
+from utils.db import get_session, default_roles
+from utils.dependencies import get_authenticated_user, get_user_with_relations
+from utils.models import Organization, User, Role, utc_time
+from utils.enums import ValidPermissions
 from exceptions.http_exceptions import EmptyOrganizationNameError, OrganizationNotFoundError, OrganizationNameTakenError, InsufficientPermissionsError
 
 logger = getLogger("uvicorn.error")

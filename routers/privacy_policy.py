@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
-from utils.auth import get_optional_user
+from utils.dependencies import get_optional_user
 from utils.models import User
 
 router = APIRouter(prefix="/privacy_policy", tags=["privacy_policy"])

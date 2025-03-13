@@ -4,7 +4,8 @@ from sqlmodel import Session
 from typing import Optional
 from fastapi.templating import Jinja2Templates
 from utils.models import UserBase, User, DataIntegrityError
-from utils.auth import get_session, get_authenticated_user
+from utils.db import get_session
+from utils.dependencies import get_authenticated_user
 from utils.images import validate_and_process_image, MAX_FILE_SIZE, MIN_DIMENSION, MAX_DIMENSION, ALLOWED_CONTENT_TYPES
 
 router = APIRouter(prefix="/user", tags=["user"])
