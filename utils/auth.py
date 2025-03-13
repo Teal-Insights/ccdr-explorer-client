@@ -8,17 +8,14 @@ import resend
 from dotenv import load_dotenv
 from pydantic import field_validator, ValidationInfo
 from sqlmodel import Session, select
-from sqlalchemy.orm import selectinload
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
-from fastapi import Depends, Cookie
-from utils.db import get_session
-from utils.models import User, Role, PasswordResetToken, EmailUpdateToken
-from exceptions.http_exceptions import PasswordValidationError, PasswordMismatchError, AuthenticationError
-from exceptions.exceptions import NeedsNewTokens
+from fastapi import Cookie
+from utils.models import User, PasswordResetToken, EmailUpdateToken, Account
+from exceptions.http_exceptions import PasswordValidationError, PasswordMismatchError
 
 load_dotenv()
 resend.api_key = os.environ["RESEND_API_KEY"]
@@ -211,83 +208,6 @@ def validate_token(token: str, token_type: str = "access") -> Optional[dict]:
         return None
 
 
-def validate_token_and_get_user(
-    token: str,
-    token_type: str,
-    session: Session
-) -> tuple[Optional[User], Optional[str], Optional[str]]:
-    decoded_token = validate_token(token, token_type=token_type)
-    if decoded_token:
-        user_email = decoded_token.get("sub")
-        user = session.exec(select(User).where(
-            User.email == user_email
-        )).first()
-        if user:
-            if token_type == "refresh":
-                new_access_token = create_access_token(
-                    data={"sub": user.email})
-                new_refresh_token = create_refresh_token(
-                    data={"sub": user.email})
-                return user, new_access_token, new_refresh_token
-            return user, None, None
-    return None, None, None
-
-
-def get_user_from_tokens(
-    tokens: tuple[Optional[str], Optional[str]],
-    session: Session
-) -> tuple[Optional[User], Optional[str], Optional[str]]:
-    access_token, refresh_token = tokens
-
-    # Try to validate the access token first
-    user, _, _ = validate_token_and_get_user(
-        access_token, "access", session) if access_token else (None, None, None)
-    if user:
-        return user, None, None
-
-    # If access token is invalid or missing, try the refresh token
-    if refresh_token:
-        user, new_access_token, new_refresh_token = validate_token_and_get_user(
-            refresh_token, "refresh", session)
-        if user:
-            return user, new_access_token, new_refresh_token
-
-    # Return a tuple of None values if no valid user is found
-    return None, None, None
-
-
-def get_authenticated_user(
-    tokens: tuple[Optional[str], Optional[str]
-                  ] = Depends(oauth2_scheme_cookie),
-    session: Session = Depends(get_session),
-) -> User:
-    user, new_access_token, new_refresh_token = get_user_from_tokens(
-        tokens, session)
-
-    if user:
-        if new_access_token and new_refresh_token:
-            raise NeedsNewTokens(user, new_access_token, new_refresh_token)
-        return user
-
-    raise AuthenticationError()
-
-
-def get_optional_user(
-    tokens: tuple[Optional[str], Optional[str]
-                  ] = Depends(oauth2_scheme_cookie),
-    session: Session = Depends(get_session)
-) -> Optional[User]:
-    user, new_access_token, new_refresh_token = get_user_from_tokens(
-        tokens, session)
-
-    if user:
-        if new_access_token and new_refresh_token:
-            raise NeedsNewTokens(user, new_access_token, new_refresh_token)
-        return user
-
-    return None
-
-
 def generate_password_reset_url(email: str, token: str) -> str:
     """
     Generates the password reset URL with proper query parameters.
@@ -305,27 +225,28 @@ def generate_password_reset_url(email: str, token: str) -> str:
 
 def send_reset_email(email: str, session: Session) -> None:
     # Check for an existing unexpired token
-    user: Optional[User] = session.exec(select(User).where(
-        User.email == email
+    account: Optional[Account] = session.exec(select(Account).where(
+        Account.email == email
     )).first()
-    if user:
+    
+    if account:
         existing_token = session.exec(
             select(PasswordResetToken)
             .where(
-                PasswordResetToken.user_id == user.id,
+                PasswordResetToken.account_id == account.id,
                 PasswordResetToken.expires_at > datetime.now(UTC),
                 PasswordResetToken.used == False
             )
         ).first()
 
         if existing_token:
-            logger.debug("An unexpired token already exists for this user.")
+            logger.debug("An unexpired token already exists for this account.")
             return
 
         # Generate a new token
         token: str = str(uuid.uuid4())
         reset_token: PasswordResetToken = PasswordResetToken(
-            user_id=user.id, token=token)
+            account_id=account.id, token=token)
         session.add(reset_token)
 
         try:
@@ -351,83 +272,44 @@ def send_reset_email(email: str, session: Session) -> None:
             logger.error(f"Failed to send password reset email: {e}")
             session.rollback()
     else:
-        logger.debug("No user found with the provided email.")
+        logger.debug("No account found with the provided email.")
 
 
-def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple[Optional[User], Optional[PasswordResetToken]]:
-    result = session.exec(
-        select(User, PasswordResetToken)
-        .where(
-            User.email == email,
-            PasswordResetToken.token == token,
-            PasswordResetToken.expires_at > datetime.now(UTC),
-            PasswordResetToken.used == False,
-            PasswordResetToken.user_id == User.id
-        )
-    ).first()
-
-    if not result:
-        return None, None
-
-    user, reset_token = result
-    return user, reset_token
-
-
-def get_user_with_relations(
-    user: User = Depends(get_authenticated_user),
-    session: Session = Depends(get_session),
-) -> User:
-    """
-    Returns an authenticated user with fully loaded role and organization relationships.
-    """
-    # Refresh the user instance with eagerly loaded relationships
-    eager_user = session.exec(
-        select(User)
-        .where(User.id == user.id)
-        .options(
-            selectinload(User.roles).selectinload(Role.organization),
-            selectinload(User.roles).selectinload(Role.permissions)
-        )
-    ).one()
-
-    return eager_user
-
-
-def generate_email_update_url(user_id: int, token: str, new_email: str) -> str:
+def generate_email_update_url(account_id: int, token: str, new_email: str) -> str:
     """
     Generates the email update confirmation URL with proper query parameters.
     """
     base_url = os.getenv('BASE_URL')
-    return f"{base_url}/auth/confirm_email_update?user_id={user_id}&token={token}&new_email={new_email}"
+    return f"{base_url}/auth/confirm_email_update?account_id={account_id}&token={token}&new_email={new_email}"
 
 
 def send_email_update_confirmation(
     current_email: str,
     new_email: str,
-    user_id: int,
+    account_id: int,
     session: Session
 ) -> None:
     # Check for an existing unexpired token
     existing_token = session.exec(
         select(EmailUpdateToken)
         .where(
-            EmailUpdateToken.user_id == user_id,
+            EmailUpdateToken.account_id == account_id,
             EmailUpdateToken.expires_at > datetime.now(UTC),
             EmailUpdateToken.used == False
         )
     ).first()
 
     if existing_token:
-        logger.debug("An unexpired email update token already exists for this user.")
+        logger.debug("An unexpired email update token already exists for this account.")
         return
 
     # Generate a new token
-    token = EmailUpdateToken(user_id=user_id)
+    token = EmailUpdateToken(account_id=account_id)
     session.add(token)
 
     try:
         confirmation_url = generate_email_update_url(
-            user_id, token.token, new_email)
+            account_id, token.token, new_email)
 
         # Render the email template
         template = templates.get_template("emails/update_email_email.html")
@@ -451,26 +333,3 @@ def send_email_update_confirmation(
     except Exception as e:
         logger.error(f"Failed to send email update confirmation: {e}")
         session.rollback()
-
-
-def get_user_from_email_update_token(
-    user_id: int,
-    token: str,
-    session: Session
-) -> tuple[Optional[User], Optional[EmailUpdateToken]]:
-    result = session.exec(
-        select(User, EmailUpdateToken)
-        .where(
-            User.id == user_id,
-            EmailUpdateToken.token == token,
-            EmailUpdateToken.expires_at > datetime.now(UTC),
-            EmailUpdateToken.used == False,
-            EmailUpdateToken.user_id == User.id
-        )
-    ).first()
-
-    if not result:
-        return None, None
-
-    user, update_token = result
-    return user, update_token

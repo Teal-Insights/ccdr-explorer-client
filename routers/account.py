@@ -1,20 +1,16 @@
 # auth.py
 from logging import getLogger
-from typing import Optional
+from typing import Optional, Tuple
 from urllib.parse import urlparse
-from datetime import datetime
 from fastapi import APIRouter, Depends, BackgroundTasks, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import EmailStr
 from sqlmodel import Session, select
-from utils.models import User, Account, DataIntegrityError, User
+from utils.models import User, DataIntegrityError, Account
 from utils.db import get_session
 from utils.auth import (
     HTML_PASSWORD_PATTERN,
-    get_user_from_reset_token,
-    create_password_validator,
-    create_passwords_match_validator,
     oauth2_scheme_cookie,
     get_password_hash,
     verify_password,
@@ -23,168 +19,95 @@ from utils.auth import (
     validate_token,
     send_reset_email,
     send_email_update_confirmation,
-    get_user_from_email_update_token,
-    get_authenticated_user,
-    PasswordValidationError,
-    get_optional_user
+    create_password_validator,
+    create_passwords_match_validator
 )
-from exceptions.http_exceptions import EmailAlreadyRegisteredError, CredentialsError
+from utils.dependencies import (
+    get_authenticated_account,
+    get_optional_user,
+    get_account_from_reset_token,
+    get_account_from_email_update_token,
+    get_account_from_credentials
+)
+from exceptions.http_exceptions import (
+    EmailAlreadyRegisteredError,
+    CredentialsError,
+    PasswordValidationError
+)
 
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/account", tags=["account"])
 templates = Jinja2Templates(directory="templates")
 
-# --- Custom Exceptions ---
+
+# --- Route-specific dependencies ---
 
 
-
-
-
-# --- Server Request and Response Models ---
-
-
-class DeleteAccount(Account):
-    @classmethod
-    async def as_form(
-        cls,
-        email: EmailStr = Form(...),
-        password: str = Form(...),
-    ):
-        return cls(email=email, password=password)
-
-
-class CreateAccount(Account):
-    name: str
-    password: str
-    confirm_password: str
-
-    validate_password_strength = create_password_validator("password")
-    validate_passwords_match = create_passwords_match_validator(
-        "password", "confirm_password")
-
-    @classmethod
-    async def as_form(
-        cls,
-        name: str = Form(...),
-        email: EmailStr = Form(...),
-        password: str = Form(...),
-        confirm_password: str = Form(...)
-    ):
-        return cls(
-            name=name,
-            email=email,
-            password=password,
-            confirm_password=confirm_password
-        )
-
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-    @classmethod
-    async def as_form(
-        cls,
-        email: EmailStr = Form(...),
-        password: str = Form(...)
-    ):
-        return cls(email=email, password=password)
-
-
-class UserForgotPassword(BaseModel):
-    email: EmailStr
-
-    @classmethod
-    async def as_form(
-        cls,
-        email: EmailStr = Form(...)
-    ):
-        return cls(email=email)
-
-
-class UserResetPassword(BaseModel):
-    email: EmailStr
-    token: str
-    new_password: str
-    confirm_new_password: str
-
-    # Use the factory with a different field name
-    validate_password_strength = create_password_validator("new_password")
-    validate_passwords_match = create_passwords_match_validator(
-        "new_password", "confirm_new_password")
-
-    @classmethod
-    async def as_form(
-        cls,
-        email: EmailStr = Form(...),
-        token: str = Form(...),
-        new_password: str = Form(...),
-        confirm_new_password: str = Form(...)
-    ):
-        return cls(email=email, token=token,
-                   new_password=new_password, confirm_new_password=confirm_new_password)
-
-
-class UpdateEmail(BaseModel):
-    new_email: EmailStr
-
-    @classmethod
-    async def as_form(
-        cls,
-        new_email: EmailStr = Form(...)
-    ):
-        return cls(new_email=new_email)
-
-
-class UserRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    email: EmailStr
-    organization_id: Optional[int]
-    created_at: datetime
-    updated_at: datetime
+def validate_password_strength_and_match(
+    password: str = Form(...),
+    confirm_password: str = Form(...)
+) -> None:
+    """
+    Validates password strength and confirms passwords match.
+    
+    Args:
+        password: Password from form
+        confirm_password: Confirmation password from form
+        
+    Raises:
+        PasswordValidationError: If password is weak or passwords don't match
+    """
+    # Validate password strength
+    validator = create_password_validator("password")
+    validator({"password": password})
+    
+    # Validate passwords match
+    match_validator = create_passwords_match_validator("password", "confirm_password")
+    match_validator({"password": password, "confirm_password": confirm_password})
 
 
 # --- Routes ---
 
 
-# TODO: Check the email too
 @router.post("/delete", response_class=RedirectResponse)
 async def delete_account(
-    user_delete_account: DeleteAccount = Depends(
-        DeleteAccount.as_form),
-    user: User = Depends(get_authenticated_user),
+    email: EmailStr = Form(...),
+    password: str = Form(...),
+    account: Account = Depends(get_authenticated_account),
     session: Session = Depends(get_session)
 ):
-    if not user.password:
-        raise DataIntegrityError(
-            resource="User password"
-        )
+    """
+    Delete a user account after verifying credentials.
+    """
+    # Verify the provided email matches the authenticated user
+    if email != account.email:
+        raise CredentialsError(message="Email does not match authenticated account")
 
-    if not verify_password(
-        user_delete_account.password,
-        user.password.hashed_password
-    ):
+    # Verify password
+    if not verify_password(password, account.hashed_password):
         raise PasswordValidationError(
             field="password",
             message="Password is incorrect"
         )
 
-    # Delete the user
-    session.delete(user)
+    # Delete the account
+    session.delete(account)
     session.commit()
 
     # Log out the user
     return RedirectResponse(url="/auth/logout", status_code=303)
+
+
 @router.get("/login")
 async def read_login(
     request: Request,
     user: Optional[User] = Depends(get_optional_user),
     email_updated: Optional[str] = "false"
 ):
+    """
+    Render login page or redirect to dashboard if already logged in.
+    """
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
     return templates.TemplateResponse(
@@ -198,6 +121,9 @@ async def read_register(
     request: Request,
     user: Optional[User] = Depends(get_optional_user)
 ):
+    """
+    Render registration page or redirect to dashboard if already logged in.
+    """
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
 
@@ -213,6 +139,9 @@ async def read_forgot_password(
     user: Optional[User] = Depends(get_optional_user),
     show_form: Optional[str] = "true",
 ):
+    """
+    Render forgot password page or redirect to dashboard if already logged in.
+    """
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
 
@@ -230,10 +159,13 @@ async def read_reset_password(
     user: Optional[User] = Depends(get_optional_user),
     session: Session = Depends(get_session)
 ):
-    authorized_user, _ = get_user_from_reset_token(email, token, session)
+    """
+    Render reset password page after validating token.
+    """
+    authorized_account, _ = get_account_from_reset_token(email, token, session)
 
     # Raise informative error to let user know the token is invalid and may have expired
-    if not authorized_user:
+    if not authorized_account:
         raise CredentialsError(message="Invalid or expired token")
 
     return templates.TemplateResponse(
@@ -242,32 +174,42 @@ async def read_reset_password(
     )
 
 
-# TODO: Use custom error message in the case where the user is already registered
 @router.post("/register", response_class=RedirectResponse)
 async def register(
-    user: UserRegister = Depends(UserRegister.as_form),
+    name: str = Form(...),
+    email: EmailStr = Form(...),
     session: Session = Depends(get_session),
+    _: None = Depends(validate_password_strength_and_match),
+    password: str = Form(...)
 ) -> RedirectResponse:
+    """
+    Register a new user account.
+    """
     # Check if the email is already registered
-    db_user = session.exec(select(User).where(
-        User.email == user.email)).first()
+    account: Optional[Account] = session.exec(select(Account).where(
+        Account.email == email)).one_or_none()
 
-    if db_user:
+    if account:
         raise EmailAlreadyRegisteredError()
 
     # Hash the password
-    hashed_password = get_password_hash(user.password)
+    hashed_password = get_password_hash(password)
 
+    # Create the account
+    account = Account(email=email, hashed_password=hashed_password)
+    session.add(account)
+    session.flush()  # Flush to get the account ID
+    
     # Create the user
-    db_user = User(name=user.name, email=user.email,
-                   password=UserPassword(hashed_password=hashed_password))
-    session.add(db_user)
+    account.user = User(name=name)
+    session.add(account)
     session.commit()
-    session.refresh(db_user)
+    session.refresh(account)
 
     # Create access token
-    access_token = create_access_token(data={"sub": db_user.email})
-    refresh_token = create_refresh_token(data={"sub": db_user.email})
+    access_token = create_access_token(data={"sub": email})
+    refresh_token = create_refresh_token(data={"sub": email})
+    
     # Set cookie
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
@@ -290,20 +232,18 @@ async def register(
 
 @router.post("/login", response_class=RedirectResponse)
 async def login(
-    user: UserLogin = Depends(UserLogin.as_form),
-    session: Session = Depends(get_session),
+    account_and_session: Tuple[Account, Session] = Depends(get_account_from_credentials)
 ) -> RedirectResponse:
-    # Check if the email is registered
-    db_user = session.exec(select(User).where(
-        User.email == user.email)).first()
-
-    if not db_user or not db_user.password or not verify_password(user.password, db_user.password.hashed_password):
-        raise CredentialsError()
+    """
+    Log in a user with valid credentials.
+    """
+    account, session = account_and_session
 
     # Create access token
     access_token = create_access_token(
-        data={"sub": db_user.email, "fresh": True})
-    refresh_token = create_refresh_token(data={"sub": db_user.email})
+        data={"sub": account.email, "fresh": True}
+    )
+    refresh_token = create_refresh_token(data={"sub": account.email})
 
     # Set cookie
     response = RedirectResponse(url="/", status_code=303)
@@ -328,10 +268,12 @@ async def login(
 # Updated refresh_token endpoint
 @router.post("/refresh", response_class=RedirectResponse)
 async def refresh_token(
-    tokens: tuple[Optional[str], Optional[str]
-                  ] = Depends(oauth2_scheme_cookie),
+    tokens: tuple[Optional[str], Optional[str]] = Depends(oauth2_scheme_cookie),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    """
+    Refresh the access token using a valid refresh token.
+    """
     _, refresh_token = tokens
     if not refresh_token:
         return RedirectResponse(url="/login", status_code=303)
@@ -344,14 +286,15 @@ async def refresh_token(
         return response
 
     user_email = decoded_token.get("sub")
-    db_user = session.exec(select(User).where(
-        User.email == user_email)).first()
-    if not db_user:
+    account = session.exec(select(Account).where(
+        Account.email == user_email)).one_or_none()
+    if not account:
         return RedirectResponse(url="/login", status_code=303)
 
     new_access_token = create_access_token(
-        data={"sub": db_user.email, "fresh": False})
-    new_refresh_token = create_refresh_token(data={"sub": db_user.email})
+        data={"sub": account.email, "fresh": False}
+    )
+    new_refresh_token = create_refresh_token(data={"sub": account.email})
 
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
@@ -376,14 +319,18 @@ async def refresh_token(
 async def forgot_password(
     background_tasks: BackgroundTasks,
     request: Request,
-    user: UserForgotPassword = Depends(UserForgotPassword.as_form),
+    email: EmailStr = Form(...),
     session: Session = Depends(get_session)
 ):
-    db_user = session.exec(select(User).where(
-        User.email == user.email)).first()
+    """
+    Send a password reset email to the user.
+    """
+    # TODO: Make this a dependency?
+    account = session.exec(select(Account).where(
+        Account.email == email)).one_or_none()
 
-    if db_user:
-        background_tasks.add_task(send_reset_email, user.email, session)
+    if account:
+        background_tasks.add_task(send_reset_email, email, session)
 
     # Get the referer header, default to /forgot_password if not present
     referer = request.headers.get("referer", "/forgot_password")
@@ -397,36 +344,39 @@ async def forgot_password(
 
 @router.post("/reset_password")
 async def reset_password(
-    user: UserResetPassword = Depends(UserResetPassword.as_form),
+    email: EmailStr = Form(...),
+    token: str = Form(...),
+    # TODO: Just return validated new password or even hashed password from the validator
+    _: None = Depends(validate_password_strength_and_match),
+    new_password: str = Form(...),
     session: Session = Depends(get_session)
 ):
-    authorized_user, reset_token = get_user_from_reset_token(
-        user.email, user.token, session)
+    """
+    Reset a user's password using a valid token.
+    """
+    # TODO: Make this a dependency?
+    authorized_account, reset_token = get_account_from_reset_token(
+        email, token, session
+    )
 
-    if not authorized_user or not reset_token:
+    if not authorized_account or not reset_token:
         raise CredentialsError("Invalid or expired password reset token; please request a new one")
 
     # Update password and mark token as used
-    if authorized_user.password:
-        authorized_user.password.hashed_password = get_password_hash(
-            user.new_password
-        )
-    else:
-        logger.warning(
-            "User password not found during password reset; creating new password for user")
-        authorized_user.password = UserPassword(
-            hashed_password=get_password_hash(user.new_password)
-        )
+    authorized_account.hashed_password = get_password_hash(new_password)
 
     reset_token.used = True
     session.commit()
-    session.refresh(authorized_user)
+    session.refresh(authorized_account)
 
     return RedirectResponse(url="/login", status_code=303)
 
 
 @router.get("/logout", response_class=RedirectResponse)
 def logout():
+    """
+    Log out a user by clearing their cookies.
+    """
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
@@ -435,26 +385,37 @@ def logout():
 
 @router.post("/update_email")
 async def request_email_update(
-    update: UpdateEmail = Depends(UpdateEmail.as_form),
-    user: User = Depends(get_authenticated_user),
+    email: EmailStr = Form(...),
+    new_email: EmailStr = Form(...),
+    account: Account = Depends(get_authenticated_account),
     session: Session = Depends(get_session)
 ):
+    """
+    Request to update a user's email address.
+    """
+    # Verify the provided email matches the authenticated user
+    if email != account.email:
+        raise CredentialsError(message="Email does not match authenticated user")
+
+    if email == new_email:
+        raise CredentialsError(message="New email is the same as the current email")
+
     # Check if the new email is already registered
     existing_user = session.exec(
-        select(User).where(User.email == update.new_email)
+        select(Account.id).where(Account.email == new_email)
     ).first()
 
     if existing_user:
         raise EmailAlreadyRegisteredError()
 
-    if not user.id:
-        raise DataIntegrityError(resource="User id")
+    if not account.id:
+        raise DataIntegrityError(resource="Account id")
 
     # Send confirmation email
     send_email_update_confirmation(
-        current_email=user.email,
-        new_email=update.new_email,
-        user_id=user.id,
+        current_email=email,
+        new_email=new_email,
+        account_id=account.id,
         session=session
     )
 
@@ -466,20 +427,23 @@ async def request_email_update(
 
 @router.get("/confirm_email_update")
 async def confirm_email_update(
-    user_id: int,
+    account_id: int,
     token: str,
     new_email: str,
     session: Session = Depends(get_session)
 ):
-    user, update_token = get_user_from_email_update_token(
-        user_id, token, session
+    """
+    Confirm an email update using a valid token.
+    """
+    # TODO: Just eager load the update token with the account
+    account, update_token = get_account_from_email_update_token(
+        account_id, token, session
     )
 
-    if not user or not update_token:
+    if not account or not update_token:
         raise CredentialsError("Invalid or expired email update token; please request a new one")
-
-    # Update email and mark token as used
-    user.email = new_email
+        
+    account.email = new_email
     update_token.used = True
     session.commit()
 

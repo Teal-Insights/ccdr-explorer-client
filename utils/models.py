@@ -52,7 +52,7 @@ class Account(SQLModel, table=True):
 
 class PasswordResetToken(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: Optional[int] = Field(foreign_key="user.id")
+    account_id: Optional[int] = Field(foreign_key="account.id")
     token: str = Field(default_factory=lambda: str(
         uuid4()), index=True, unique=True)
     expires_at: datetime = Field(
@@ -71,7 +71,7 @@ class PasswordResetToken(SQLModel, table=True):
 
 class EmailUpdateToken(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: Optional[int] = Field(foreign_key="user.id")
+    account_id: Optional[int] = Field(foreign_key="account.id")
     token: str = Field(default_factory=lambda: str(
         uuid4()), index=True, unique=True)
     expires_at: datetime = Field(
