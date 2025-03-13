@@ -4,7 +4,7 @@ from typing import List, Sequence, Optional
 from logging import getLogger
 from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select, col
 from sqlalchemy.orm import selectinload
 from utils.db import get_session

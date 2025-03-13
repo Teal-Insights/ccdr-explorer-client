@@ -5,11 +5,13 @@ from urllib.parse import urlparse
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Form, Request
 from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, ConfigDict
 from sqlmodel import Session, select
-from utils.models import AccountBase, Account, DataIntegrityError, User
+from utils.models import User, Account, DataIntegrityError, User
+from utils.db import get_session
 from utils.auth import (
-    get_session,
+    HTML_PASSWORD_PATTERN,
     get_user_from_reset_token,
     create_password_validator,
     create_passwords_match_validator,
@@ -23,12 +25,14 @@ from utils.auth import (
     send_email_update_confirmation,
     get_user_from_email_update_token,
     get_authenticated_user,
-    PasswordValidationError
+    PasswordValidationError,
+    get_optional_user
 )
 
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/account", tags=["account"])
+templates = Jinja2Templates(directory="templates")
 
 # --- Custom Exceptions ---
 
@@ -52,7 +56,7 @@ class AuthenticationError(HTTPException):
 # --- Server Request and Response Models ---
 
 
-class DeleteAccount(AccountBase):
+class DeleteAccount(Account):
     @classmethod
     async def as_form(
         cls,
@@ -62,7 +66,7 @@ class DeleteAccount(AccountBase):
         return cls(email=email, password=password)
 
 
-class CreateAccount(AccountBase):
+class CreateAccount(Account):
     name: str
     password: str
     confirm_password: str
@@ -187,6 +191,67 @@ async def delete_account(
 
     # Log out the user
     return RedirectResponse(url="/auth/logout", status_code=303)
+@router.get("/login")
+async def read_login(
+    request: Request,
+    user: Optional[User] = Depends(get_optional_user),
+    email_updated: Optional[str] = "false"
+):
+    if user:
+        return RedirectResponse(url="/dashboard", status_code=302)
+    return templates.TemplateResponse(
+        "authentication/login.html",
+        {"request": request, "user": user, "email_updated": email_updated}
+    )
+
+
+@router.get("/register")
+async def read_register(
+    request: Request,
+    user: Optional[User] = Depends(get_optional_user)
+):
+    if user:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    return templates.TemplateResponse(
+        "authentication/register.html",
+        {"request": request, "user": user}
+    )
+
+
+@router.get("/forgot_password")
+async def read_forgot_password(
+    request: Request,
+    user: Optional[User] = Depends(get_optional_user),
+    show_form: Optional[str] = "true",
+):
+    if user:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    return templates.TemplateResponse(
+        "authentication/forgot_password.html",
+        {"request": request, "user": user, "show_form": show_form == "true"}
+    )
+
+
+@router.get("/reset_password")
+async def read_reset_password(
+    request: Request,
+    email: str,
+    token: str,
+    user: Optional[User] = Depends(get_optional_user),
+    session: Session = Depends(get_session)
+):
+    authorized_user, _ = get_user_from_reset_token(email, token, session)
+
+    # Raise informative error to let user know the token is invalid and may have expired
+    if not authorized_user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    return templates.TemplateResponse(
+        "authentication/reset_password.html",
+        {"request": request, "user": user, "email": email, "token": token, "password_pattern": HTML_PASSWORD_PATTERN}
+    )
 
 
 # TODO: Use custom error message in the case where the user is already registered

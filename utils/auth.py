@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Optional
 from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
-from fastapi import Depends, Cookie, HTTPException, status
+from fastapi import Depends, Cookie, HTTPException, status, Request
 from utils.db import get_session
 from utils.models import User, Role, PasswordResetToken, EmailUpdateToken
 
