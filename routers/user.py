@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Form, UploadFile, File
 from fastapi.responses import RedirectResponse, Response
 from sqlmodel import Session
 from typing import Optional
-from utils.models import User, UserBase, DataIntegrityError
+from utils.models import UserBase, User, DataIntegrityError
 from utils.auth import get_session, get_authenticated_user
 from utils.images import validate_and_process_image
 
@@ -39,25 +39,21 @@ class UpdateUser(UserBase):
 
 @router.post("/update", response_class=RedirectResponse)
 async def update_profile(
-    user_profile: UpdateUser = Depends(UpdateUser.as_form),
+    user_update: UpdateUser = Depends(UpdateUser.as_form),
     user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ):
     # Handle avatar update
-    if user_profile.avatar_data:
+    if user_update.avatar_data:
         processed_image, content_type = validate_and_process_image(
-            user_profile.avatar_data,
-            user_profile.avatar_content_type
+            user_update.avatar_data,
+            user_update.avatar_content_type
         )
-        user_profile.avatar_data = processed_image
-        user_profile.avatar_content_type = content_type
+        user.avatar_data = processed_image
+        user.avatar_content_type = content_type
 
     # Update user details
-    user.name = user_profile.name
-    
-    if user_profile.avatar_data:
-        user.avatar_data = user_profile.avatar_data
-        user.avatar_content_type = user_profile.avatar_content_type
+    user.name = user_update.name
 
     session.commit()
     session.refresh(user)
