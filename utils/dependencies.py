@@ -10,7 +10,7 @@ from utils.auth import (
 )
 from utils.db import get_session
 from utils.models import User, Role, PasswordResetToken, EmailUpdateToken, Account
-from exceptions.http_exceptions import AuthenticationError, CredentialsError
+from exceptions.http_exceptions import AuthenticationError, CredentialsError, DataIntegrityError
 from exceptions.exceptions import NeedsNewTokens
 
 
@@ -134,7 +134,10 @@ def get_authenticated_account(
     if account:
         if new_access_token and new_refresh_token:
             # This will be caught by middleware to set new cookies
-            raise NeedsNewTokens(account.user, new_access_token, new_refresh_token)
+            if account.user:
+                raise NeedsNewTokens(account.user, new_access_token, new_refresh_token)
+            else:
+                raise   DataIntegrityError("User")
         return account
 
     raise AuthenticationError()

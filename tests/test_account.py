@@ -47,7 +47,8 @@ def mock_resend_send(mock_email_response):
 def test_register_endpoint(unauth_client: TestClient, session: Session):
     # Debug: Print the tables in the database
     inspector = inspect(session.bind)
-    print("Tables in the database:", inspector.get_table_names())
+    if inspector:  # Add null check
+        print("Tables in the database:", inspector.get_table_names())
     
     # Create a mock register response
     response = unauth_client.post(
@@ -154,9 +155,6 @@ def test_password_reset_flow(unauth_client: TestClient, session: Session, test_a
                                .where(PasswordResetToken.account_id == test_account.id)).first()
     assert reset_token is not None
     assert not reset_token.used
-
-    # Create a mock response for password reset
-    response = RedirectResponse(url="/login", status_code=303)
     
     # Update password and mark token as used directly in the database
     test_account.hashed_password = get_password_hash("NewPass123!@#")

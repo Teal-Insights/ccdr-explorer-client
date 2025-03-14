@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 from httpx import Response
 from sqlmodel import Session
 from unittest.mock import patch
+from typing import cast
 
 from main import app
 from utils.models import User
@@ -24,9 +25,20 @@ def test_read_profile_authorized(auth_client: TestClient, test_user: User):
     """Test that authorized users can view their profile"""
     response = auth_client.get(app.url_path_for("read_profile"))
     assert response.status_code == 200
-    # Check that the response contains the expected HTML content
-    assert test_user.account.email in response.text
-    assert test_user.name in response.text
+    
+    # Get the response text
+    response_text = response.text
+    
+    # Verify account exists
+    assert test_user.account is not None
+    
+    # Verify email is in the response if it exists
+    if test_user.account.email is not None:
+        assert response_text.find(str(test_user.account.email)) != -1
+    
+    # Verify name is in the response if it exists
+    if test_user.name is not None:
+        assert response_text.find(str(test_user.name)) != -1
 
 
 def test_update_profile_unauthorized(unauth_client: TestClient):
@@ -109,7 +121,7 @@ def test_delete_account_wrong_password(auth_client: TestClient, test_user: User)
     response: Response = auth_client.post(
         app.url_path_for("delete_account"),
         data={
-            "email": test_user.account.email,
+            "email": test_user.account.email if test_user.account else "",
             "password": "WrongPassword123!"
         },
         follow_redirects=False
@@ -128,7 +140,7 @@ def test_delete_account_success(auth_client: TestClient, test_user: User, sessio
     response: Response = auth_client.post(
         app.url_path_for("delete_account"),
         data={
-            "email": test_user.account.email,
+            "email": test_user.account.email if test_user.account else "",
             "password": "Test123!@#"
         },
         follow_redirects=False
@@ -155,7 +167,7 @@ def test_get_avatar_authorized(mock_validate, auth_client: TestClient, test_user
     auth_client.post(
         app.url_path_for("update_profile"),
         data={
-            "name": test_user.name
+            "name": test_user.name or ""  # Ensure name is not None
         },
         files={
             "avatar_file": ("test_avatar.jpg", b"fake image data", "image/jpeg")
