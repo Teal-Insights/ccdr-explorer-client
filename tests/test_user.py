@@ -25,7 +25,7 @@ def test_read_profile_authorized(auth_client: TestClient, test_user: User):
     response = auth_client.get(app.url_path_for("read_profile"))
     assert response.status_code == 200
     # Check that the response contains the expected HTML content
-    assert test_user.email in response.text
+    assert test_user.account.email in response.text
     assert test_user.name in response.text
 
 
@@ -108,7 +108,10 @@ def test_delete_account_wrong_password(auth_client: TestClient, test_user: User)
     """Test that account deletion fails with wrong password"""
     response: Response = auth_client.post(
         app.url_path_for("delete_account"),
-        data={"confirm_delete_password": "WrongPassword123!"},
+        data={
+            "email": test_user.account.email,
+            "password": "WrongPassword123!"
+        },
         follow_redirects=False
     )
     assert response.status_code == 422
@@ -118,17 +121,27 @@ def test_delete_account_wrong_password(auth_client: TestClient, test_user: User)
 def test_delete_account_success(auth_client: TestClient, test_user: User, session: Session):
     """Test successful account deletion"""
 
+    # Store the user ID for later verification
+    user_id = test_user.id
+
     # Delete account
     response: Response = auth_client.post(
         app.url_path_for("delete_account"),
-        data={"confirm_delete_password": "Test123!@#"},
+        data={
+            "email": test_user.account.email,
+            "password": "Test123!@#"
+        },
         follow_redirects=False
     )
     assert response.status_code == 303
     assert response.headers["location"] == app.url_path_for("logout")
 
+    # Clear the session and query for the user again to ensure we're not using a cached object
+    session.close()
+    session.expire_all()
+    
     # Verify user is deleted from database
-    user = session.get(User, test_user.id)
+    user = session.get(User, user_id)
     assert user is None
 
 

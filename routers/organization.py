@@ -123,13 +123,14 @@ def create_organization(
 
 @router.post("/update/{org_id}", name="update_organization", response_class=RedirectResponse)
 def update_organization(
+    org_id: int,
     org: OrganizationUpdate = Depends(OrganizationUpdate.as_form),
     user: User = Depends(get_user_with_relations),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
     # This will raise appropriate exceptions if org doesn't exist or user lacks access
     organization: Organization | None = next(
-        (org for org in user.organizations if org.id == org.id), None)
+        (org_item for org_item in user.organizations if org_item.id == org_id), None)
 
     # Check if user has permission to edit organization
     if not organization or not user.has_permission(ValidPermissions.EDIT_ORGANIZATION, organization):

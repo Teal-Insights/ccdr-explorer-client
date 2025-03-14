@@ -6,7 +6,6 @@ import uuid
 import logging
 import resend
 from dotenv import load_dotenv
-from pydantic import field_validator, ValidationInfo
 from sqlmodel import Session, select
 from bcrypt import gensalt, hashpw, checkpw
 from datetime import UTC, datetime, timedelta
@@ -15,9 +14,8 @@ from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
 from fastapi import Cookie
 from utils.models import PasswordResetToken, EmailUpdateToken, Account
-from exceptions.http_exceptions import PasswordValidationError, PasswordMismatchError
 
-load_dotenv()
+load_dotenv(override=True)
 resend.api_key = os.environ["RESEND_API_KEY"]
 
 logger = logging.getLogger(__name__)
@@ -92,57 +90,6 @@ def oauth2_scheme_cookie(
     refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
 ) -> tuple[Optional[str], Optional[str]]:
     return access_token, refresh_token
-
-
-def create_password_validator(field_name: str = "password"):
-    """
-    Factory function that creates a password validation decorator for Pydantic models.
-
-    Args:
-        field_name: Name of the field to validate and use in error messages
-
-    Returns:
-        A configured field_validator for password validation
-    """
-    @field_validator(field_name, check_fields=False)
-    def validate_password_strength(v: str) -> str:
-        """
-        Validate password meets security requirements:
-        - At least one number
-        - At least one uppercase and one lowercase letter
-        - At least one special character
-        - At least 8 characters long
-        """
-        logger.debug(f"Validating password for {field_name}")
-        if not COMPILED_PASSWORD_PATTERN.match(v):
-            logger.debug(f"Password for {field_name} does not satisfy the security policy")
-            raise PasswordValidationError(
-                field=field_name,
-                message=f"{field_name} does not satisfy the security policy"
-            )
-        return v
-
-    return validate_password_strength
-
-
-def create_passwords_match_validator(password_field: str, confirm_field: str):
-    """
-    Factory function that creates a password matching validation decorator for Pydantic models.
-
-    Args:
-        password_field: Name of the main password field
-        confirm_field: Name of the confirmation password field
-
-    Returns:
-        A configured field_validator for password matching validation
-    """
-    @field_validator(confirm_field)
-    def passwords_match(v: str, values: ValidationInfo) -> str:
-        if password_field in values.data and v != values.data[password_field]:
-            raise PasswordMismatchError(field=confirm_field)
-        return v
-
-    return passwords_match
 
 
 def get_password_hash(password: str) -> str:

@@ -1,14 +1,18 @@
 import pytest
 from typing import Generator
-from sqlmodel import create_engine, Session, select, SQLModel
+from sqlmodel import create_engine, Session, select
 from sqlalchemy import Engine
 from fastapi.testclient import TestClient
-from utils.db import get_session
-from utils.models import User, PasswordResetToken, Organization, Role, Account, Permission
+import os
+from dotenv import load_dotenv
+from utils.db import get_session, get_connection_url, tear_down_db, set_up_db
+from utils.models import User, PasswordResetToken, EmailUpdateToken, Organization, Role, Account
 from utils.auth import get_password_hash, create_access_token, create_refresh_token
-from utils.enums import ValidPermissions
+from utils.dependencies import get_authenticated_user, get_user_with_relations
 from main import app
 
+# Load environment variables
+load_dotenv(override=True)
 
 # Define a custom exception for test setup errors
 class SetupError(Exception):
@@ -22,10 +26,10 @@ class SetupError(Exception):
 def engine() -> Engine:
     """
     Create a new SQLModel engine for the test database.
-    Use an in-memory SQLite database for testing.
+    Use PostgreSQL for testing to match production environment.
     """
-    # Use in-memory SQLite for testing
-    engine = create_engine("sqlite:///:memory:")
+    # Use PostgreSQL for testing to match production environment
+    engine = create_engine(get_connection_url())
     return engine
 
 
@@ -35,22 +39,14 @@ def set_up_database(engine) -> Generator[None, None, None]:
     Set up the test database before running the test suite.
     Drop all tables and recreate them to ensure a clean state.
     """
-    # Create all tables in the in-memory database
-    SQLModel.metadata.create_all(engine)
-    
-    # Create permissions
-    with Session(engine) as session:
-        # Check if permissions already exist
-        existing_permissions = session.exec(select(Permission)).all()
-        if not existing_permissions:
-            # Create all permissions from the ValidPermissions enum
-            for permission in ValidPermissions:
-                session.add(Permission(name=permission))
-            session.commit()
+    # Drop and recreate all tables using the helpers from db.py
+    tear_down_db()
+    set_up_db(drop=False)
     
     yield
-    # Drop all tables
-    SQLModel.metadata.drop_all(engine)
+    
+    # Clean up after tests
+    tear_down_db()
 
 
 @pytest.fixture
@@ -68,7 +64,7 @@ def clean_db(session: Session) -> None:
     Cleans up the database tables before each test.
     """
     # Don't delete permissions as they are required for tests
-    for model in (PasswordResetToken, User, Role, Organization, Account):
+    for model in (PasswordResetToken, EmailUpdateToken, User, Role, Organization, Account):
         for record in session.exec(select(model)).all():
             session.delete(record)
 
@@ -93,7 +89,7 @@ def test_account(session: Session) -> Account:
 @pytest.fixture()
 def test_user(session: Session, test_account: Account) -> User:
     """
-    Creates a test user in the database.
+    Creates a test user in the database linked to the test account.
     """
     user = User(
         name="Test User",
@@ -102,6 +98,9 @@ def test_user(session: Session, test_account: Account) -> User:
     session.add(user)
     session.commit()
     session.refresh(user)
+    
+    # Also refresh the account to ensure the relationship is loaded
+    session.refresh(test_account)
     return user
 
 
@@ -110,24 +109,15 @@ def unauth_client(session: Session) -> Generator[TestClient, None, None]:
     """
     Provides a TestClient instance without authentication.
     """
-    def get_session_override():
-        return session
-
-    app.dependency_overrides[get_session] = get_session_override
     client = TestClient(app)
     yield client
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture()
-def auth_client(session: Session, test_account: Account) -> Generator[TestClient, None, None]:
+def auth_client(session: Session, test_account: Account, test_user: User) -> Generator[TestClient, None, None]:
     """
     Provides a TestClient instance with valid authentication tokens.
     """
-    def get_session_override():
-        return session
-
-    app.dependency_overrides[get_session] = get_session_override
     client = TestClient(app)
 
     # Create and set valid tokens
@@ -138,7 +128,6 @@ def auth_client(session: Session, test_account: Account) -> Generator[TestClient
     client.cookies.set("refresh_token", refresh_token)
 
     yield client
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture

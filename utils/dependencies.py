@@ -56,15 +56,15 @@ def get_account_from_credentials(
 ) -> Tuple[Account, Session]:
     """
     Validates user credentials and returns the account if valid.
-    
+
     Args:
         email: Email address from form
         password: Password from form
         session: Database session
-        
+
     Returns:
         Tuple containing the account and session
-        
+
     Raises:
         HTTPException: If credentials are invalid
     """
@@ -73,36 +73,8 @@ def get_account_from_credentials(
     
     if not account or not verify_password(password, account.hashed_password):
         raise CredentialsError()
-        
+
     return account, session
-
-
-def get_user_from_credentials(
-    email: EmailStr = Form(...),
-    password: str = Form(...),
-    session: Session = Depends(get_session)
-) -> Tuple[User, Session]:
-    """
-    Validates user credentials and returns the user if valid.
-    
-    Args:
-        email: Email address from form
-        password: Password from form
-        session: Database session
-        
-    Returns:
-        Tuple containing the user and session
-        
-    Raises:
-        HTTPException: If credentials are invalid
-    """
-    user = session.exec(select(User).join(Account).where(
-        Account.email == email)).first()
-    
-    if not user or not user.account or not verify_password(password, user.account.hashed_password):
-        raise CredentialsError()
-        
-    return user, session
 
 
 def get_account_from_tokens(
@@ -315,48 +287,6 @@ def get_account_from_reset_token(
 
     account, reset_token = result
     return account, reset_token
-
-
-def get_user_from_email_update_token(
-    user_id: int,
-    token: str,
-    session: Session
-) -> tuple[Optional[User], Optional[EmailUpdateToken]]:
-    result = session.exec(
-        select(User, EmailUpdateToken)
-        .where(
-            User.id == user_id,
-            EmailUpdateToken.token == token,
-            EmailUpdateToken.expires_at > datetime.now(UTC),
-            EmailUpdateToken.used == False,
-            EmailUpdateToken.user_id == User.id
-        )
-    ).first()
-
-    if not result:
-        return None, None
-
-    user, update_token = result
-    return user, update_token
-
-
-def get_user_from_reset_token(email: str, token: str, session: Session) -> tuple[Optional[User], Optional[PasswordResetToken]]:
-    result = session.exec(
-        select(User, PasswordResetToken)
-        .where(
-            User.email == email,
-            PasswordResetToken.token == token,
-            PasswordResetToken.expires_at > datetime.now(UTC),
-            PasswordResetToken.used == False,
-            PasswordResetToken.user_id == User.id
-        )
-    ).first()
-
-    if not result:
-        return None, None
-
-    user, reset_token = result
-    return user, reset_token
 
 
 def get_user_with_relations(

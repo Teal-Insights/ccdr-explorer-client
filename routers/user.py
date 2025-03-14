@@ -49,7 +49,8 @@ async def read_profile(
 ):
     # Add image constraints to the template context
     return templates.TemplateResponse(
-        request, "users/profile.html", {
+        request,
+        "users/profile.html", {
             "max_file_size_mb": MAX_FILE_SIZE / (1024 * 1024),  # Convert bytes to MB
             "min_dimension": MIN_DIMENSION,
             "max_dimension": MAX_DIMENSION,

@@ -11,6 +11,7 @@ from utils.models import User, DataIntegrityError, Account
 from utils.db import get_session
 from utils.auth import (
     HTML_PASSWORD_PATTERN,
+    COMPILED_PASSWORD_PATTERN,
     oauth2_scheme_cookie,
     get_password_hash,
     verify_password,
@@ -18,9 +19,7 @@ from utils.auth import (
     create_refresh_token,
     validate_token,
     send_reset_email,
-    send_email_update_confirmation,
-    create_password_validator,
-    create_passwords_match_validator
+    send_email_update_confirmation
 )
 from utils.dependencies import (
     get_authenticated_account,
@@ -47,7 +46,7 @@ templates = Jinja2Templates(directory="templates")
 def validate_password_strength_and_match(
     password: str = Form(...),
     confirm_password: str = Form(...)
-) -> None:
+) -> str:
     """
     Validates password strength and confirms passwords match.
     
@@ -57,14 +56,25 @@ def validate_password_strength_and_match(
         
     Raises:
         PasswordValidationError: If password is weak or passwords don't match
+    
+    Returns:
+        str: The validated password
     """
     # Validate password strength
-    validator = create_password_validator("password")
-    validator({"password": password})
+    if not COMPILED_PASSWORD_PATTERN.match(password):
+        raise PasswordValidationError(
+            field="password",
+            message="Password does not satisfy the security policy"
+        )
     
     # Validate passwords match
-    match_validator = create_passwords_match_validator("password", "confirm_password")
-    match_validator({"password": password, "confirm_password": confirm_password})
+    if password != confirm_password:
+        raise PasswordValidationError(
+            field="confirm_password",
+            message="The passwords you entered do not match"
+        )
+    
+    return password
 
 
 # --- Routes ---
@@ -91,12 +101,14 @@ async def delete_account(
             message="Password is incorrect"
         )
 
-    # Delete the account
+    # Delete the account and associated user
+    # Note: The user will be deleted automatically due to the cascade relationship,
+    # but we need to refresh the session to ensure the changes are committed properly
     session.delete(account)
     session.commit()
 
     # Log out the user
-    return RedirectResponse(url="/auth/logout", status_code=303)
+    return RedirectResponse(url="/account/logout", status_code=303)
 
 
 @router.get("/login")
@@ -346,15 +358,14 @@ async def forgot_password(
 async def reset_password(
     email: EmailStr = Form(...),
     token: str = Form(...),
-    # TODO: Just return validated new password or even hashed password from the validator
-    _: None = Depends(validate_password_strength_and_match),
-    new_password: str = Form(...),
+    new_password: str = Depends(validate_password_strength_and_match),
     session: Session = Depends(get_session)
 ):
     """
     Reset a user's password using a valid token.
     """
-    # TODO: Make this a dependency?
+    
+    # Get account from reset token
     authorized_account, reset_token = get_account_from_reset_token(
         email, token, session
     )
