@@ -9,7 +9,7 @@ from urllib.parse import urlparse, parse_qs
 from html import unescape
 
 from main import app
-from utils.models import User, PasswordResetToken, UserPassword, EmailUpdateToken
+from utils.models import User, PasswordResetToken, EmailUpdateToken, Account
 from utils.auth import (
     create_access_token,
     verify_password,
@@ -299,7 +299,7 @@ def test_request_email_update_already_registered(auth_client: TestClient, sessio
     existing_user = User(
         name="Existing User",
         email=existing_email,
-        password=UserPassword(hashed_password=get_password_hash("Test123!@#"))
+        password=Account(hashed_password=get_password_hash("Test123!@#"))
     )
     session.add(existing_user)
     session.commit()

@@ -14,7 +14,7 @@ from typing import Optional
 from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
 from fastapi import Cookie
-from utils.models import User, PasswordResetToken, EmailUpdateToken, Account
+from utils.models import PasswordResetToken, EmailUpdateToken, Account
 from exceptions.http_exceptions import PasswordValidationError, PasswordMismatchError
 
 load_dotenv()
@@ -220,7 +220,7 @@ def generate_password_reset_url(email: str, token: str) -> str:
         Complete password reset URL
     """
     base_url = os.getenv('BASE_URL')
-    return f"{base_url}/auth/reset_password?email={email}&token={token}"
+    return f"{base_url}/account/reset_password?email={email}&token={token}"
 
 
 def send_reset_email(email: str, session: Session) -> None:
@@ -280,7 +280,7 @@ def generate_email_update_url(account_id: int, token: str, new_email: str) -> st
     Generates the email update confirmation URL with proper query parameters.
     """
     base_url = os.getenv('BASE_URL')
-    return f"{base_url}/auth/confirm_email_update?account_id={account_id}&token={token}&new_email={new_email}"
+    return f"{base_url}/account/confirm_email_update?account_id={account_id}&token={token}&new_email={new_email}"
 
 
 def send_email_update_confirmation(
