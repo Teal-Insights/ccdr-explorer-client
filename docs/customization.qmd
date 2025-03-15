@@ -71,9 +71,9 @@ We also create POST endpoints, which accept form submissions so the user can cre
 
 #### Customizable folders and files
 
-- FastAPI application entry point and GET routes: `main.py`
-- FastAPI POST routes: `routers/`
-    - User authentication endpoints: `authentication.py`
+- FastAPI application entry point: `main.py`
+- FastAPI routes: `routers/`
+    - User authentication endpoints: `account.py`
     - User profile management endpoints: `user.py`
     - Organization management endpoints: `organization.py`
     - Role management endpoints: `role.py`
@@ -84,14 +84,21 @@ We also create POST endpoints, which accept form submissions so the user can cre
 - Helper functions: `utils/`
     - Auth helpers: `auth.py`
     - Database helpers: `db.py`
+    - FastAPI dependencies: `dependencies.py`
+    - Enums: `enums.py`
     - Database models: `models.py`
     - Image helpers: `images.py`
+- Exceptions: `exceptions/`
+    - HTTP exceptions: `http_exceptions.py`
+    - Other custom exceptions: `exceptions.py`
 - Environment variables: `.env.example`
 - CI/CD configuration: `.github/`
 - Project configuration: `pyproject.toml`
 - Quarto documentation: 
-    - Source: `index.qmd` + `docs/`
+    - README source: `index.qmd`
+    - Website source: `index.qmd` + `docs/`
     - Configuration: `_quarto.yml`
+
 
 Most everything else is auto-generated and should not be manually modified.
 
@@ -99,19 +106,9 @@ Most everything else is auto-generated and should not be manually modified.
 
 ### Code conventions
 
-GET routes are defined in the main entry point for the application, `main.py`. POST routes are organized into separate modules within the `routers/` directory.
+We name our GET routes using the convention `read_<name>`, where `<name>` is the name of the page, to indicate that they are read-only endpoints that do not modify the database. In POST routes that modify the database, you can use the `get_session` dependency as an argument to get a database session.
 
-We name our GET routes using the convention `read_<name>`, where `<name>` is the name of the page, to indicate that they are read-only endpoints that do not modify the database.
-
-We divide our GET routes into authenticated and unauthenticated routes, using commented section headers in our code that look like this:
-
-```python
-# --- Authenticated Routes ---
-```
-
-Some of our routes take request parameters, which we pass as keyword arguments to the route handler. These parameters should be type annotated for validation purposes.
-
-Some parameters are shared across all authenticated or unauthenticated routes, so we define them in the `common_authenticated_parameters` and `common_unauthenticated_parameters` dependencies defined in `main.py`.
+Routes that require authentication generally take the `get_authenticated_account` dependency as an argument. Unauthenticated GET routes generally take the `get_optional_user` dependency as an argument. If a route should *only* be seen by authenticated users (i.e., a login page), you can redirect to the dashboard if `get_optional_user` returns a `User` object.
 
 ### Context variables
 
@@ -244,12 +241,12 @@ SQLModel is an Object-Relational Mapping (ORM) library that allows us to interac
 
 Our database models are defined in `utils/models.py`. Each model is a Python class that inherits from `SQLModel` and represents a database table. The key models are:
 
+- `Account`: Represents a user account with email and password hash
+- `User`: Represents a user profile with name, email, and avatar
 - `Organization`: Represents a company or team
-- `User`: Represents a user account with name, email, and avatar
 - `Role`: Represents a set of permissions within an organization
 - `Permission`: Represents specific actions a user can perform (defined by ValidPermissions enum)
 - `PasswordResetToken`: Manages password reset functionality with expiration
-- `UserPassword`: Stores hashed user passwords separately from user data
 
 Two additional models are used by SQLModel to manage many-to-many relationships; you generally will not need to interact with them directly:
 
