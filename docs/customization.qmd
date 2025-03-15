@@ -141,74 +141,6 @@ Pydantic is used for data validation and serialization. It ensures that the data
 
 If a user-submitted form contains data that has the wrong number, names, or types of fields, Pydantic will raise a `RequestValidationError`, which is caught by middleware and converted into an HTTP 422 error response.
 
-For other, custom validation logic, we add Pydantic `@field_validator` methods to our Pydantic request models and then add the models as dependencies in the signatures of corresponding POST routes. FastAPI's dependency injection system ensures that dependency logic is executed before the body of the route handler.
-
-#### Defining request models and custom validators
-
-For example, in the `UserRegister` request model in `routers/authentication.py`, we add a custom validation method to ensure that the `confirm_password` field matches the `password` field. If not, it raises a custom `PasswordMismatchError`:
-
-```python
-class PasswordMismatchError(HTTPException):
-    def __init__(self, field: str = "confirm_password"):
-        super().__init__(
-            status_code=422,
-            detail={
-                "field": field,
-                "message": "The passwords you entered do not match"
-            }
-        )
-
-class UserRegister(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-    confirm_password: str
-
-    # Custom validators are added as class attributes
-    @field_validator("confirm_password", check_fields=False)
-    def validate_passwords_match(cls, v: str, values: dict[str, Any]) -> str:
-        if v != values["password"]:
-            raise PasswordMismatchError()
-        return v
-    # ...
-```
-
-We then add this request model as a dependency in the signature of our POST route:
-
-```python
-@app.post("/register")
-async def register(request: UserRegister = Depends()):
-    # ...
-```
-
-When the user submits the form, Pydantic will first check that all expected fields are present and match the expected types. If not, it raises a `RequestValidationError`. Then, it runs our custom `field_validator`, `validate_passwords_match`. If it finds that the `confirm_password` field does not match the `password` field, it raises a `PasswordMismatchError`. These exceptions can then be caught and handled by our middleware.
-
-(Note that these examples are simplified versions of the actual code.)
-
-#### Converting form data to request models
-
-In addition to custom validation logic, we also need to define a method on our request models that converts form data into the request model. Here's what that looks like in the `UserRegister` request model from the previous example:
-
-```python
-class UserRegister(BaseModel):
-    # ...
-
-    @classmethod
-    async def as_form(
-        cls,
-        name: str = Form(...),
-        email: EmailStr = Form(...),
-        password: str = Form(...),
-        confirm_password: str = Form(...)
-    ):
-        return cls(
-            name=name,
-            email=email,
-            password=password,
-            confirm_password=confirm_password
-        )
-``` 
-
 ### Middleware exception handling
 
 Middlewares—which process requests before they reach the route handlers and responses before they are sent back to the client—are defined in `main.py`. They are commonly used in web development for tasks such as error handling, authentication token validation, logging, and modifying request/response objects.
@@ -220,8 +152,8 @@ Middleware functions are decorated with `@app.exception_handler(ExceptionType)` 
 Here's a middleware for handling the `PasswordMismatchError` exception from the previous example, which renders the `errors/validation_error.html` template with the error details:
 
 ```python
-@app.exception_handler(PasswordMismatchError)
-async def password_mismatch_exception_handler(request: Request, exc: PasswordMismatchError):
+@app.exception_handler(PasswordValidationError)
+async def password_validation_exception_handler(request: Request, exc: PasswordValidationError):
     return templates.TemplateResponse(
         request,
         "errors/validation_error.html",

@@ -36,14 +36,6 @@ class PasswordValidationError(HTTPException):
         )
 
 
-class PasswordMismatchError(PasswordValidationError):
-    def __init__(self, field: str = "confirm_password"):
-        super().__init__(
-            field=field,
-            message="The passwords you entered do not match"
-        )
-
-
 class InsufficientPermissionsError(HTTPException):
     def __init__(self):
         super().__init__(
@@ -52,6 +44,7 @@ class InsufficientPermissionsError(HTTPException):
         )
 
 
+# TODO: Consolidate these two into a single validation error
 class EmptyOrganizationNameError(HTTPException):
     def __init__(self):
         super().__init__(
@@ -60,19 +53,19 @@ class EmptyOrganizationNameError(HTTPException):
         )
 
 
-class OrganizationNotFoundError(HTTPException):
-    def __init__(self):
-        super().__init__(
-            status_code=404,
-            detail="Organization not found"
-        )
-
-
 class OrganizationNameTakenError(HTTPException):
     def __init__(self):
         super().__init__(
             status_code=400,
             detail="Organization name already taken"
+        )
+
+
+class OrganizationNotFoundError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=404,
+            detail="Organization not found"
         )
 
 
