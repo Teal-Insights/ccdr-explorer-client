@@ -18,7 +18,7 @@ from utils.auth import (
     send_email_update_confirmation
 )
 from unittest.mock import patch, MagicMock
-from utils.models import Account, EmailUpdateToken
+from utils.models import EmailUpdateToken
 
 
 def test_convert_python_regex_to_html() -> None:

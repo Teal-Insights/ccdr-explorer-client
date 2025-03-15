@@ -102,8 +102,7 @@ async def delete_account(
         )
 
     # Delete the account and associated user
-    # Note: The user will be deleted automatically due to the cascade relationship,
-    # but we need to refresh the session to ensure the changes are committed properly
+    # Note: The user will be deleted automatically by cascade relationship
     session.delete(account)
     session.commit()
 
@@ -141,7 +140,7 @@ async def read_register(
 
     return templates.TemplateResponse(
         "authentication/register.html",
-        {"request": request, "user": user}
+        {"request": request, "user": user, "password_pattern": HTML_PASSWORD_PATTERN}
     )
 
 
