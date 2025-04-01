@@ -1,7 +1,7 @@
 # test_role.py
 
 import pytest
-from .conftest import SetupError
+from tests.conftest import SetupError
 from utils.models import Role, Permission, ValidPermissions, User
 from sqlmodel import Session, select
 

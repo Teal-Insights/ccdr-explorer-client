@@ -12,7 +12,7 @@ from utils.models import (
     PasswordResetToken,
     Account
 )
-from .conftest import SetupError
+from tests.conftest import SetupError
 
 
 def test_permissions_persist_after_role_deletion(session: Session):

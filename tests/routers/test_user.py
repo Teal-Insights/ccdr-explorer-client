@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 from httpx import Response
 from sqlmodel import Session
 from unittest.mock import patch
-from typing import cast
 
 from main import app
 from utils.models import User

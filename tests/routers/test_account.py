@@ -8,7 +8,6 @@ import resend
 from urllib.parse import urlparse, parse_qs
 from html import unescape
 from sqlalchemy import inspect
-from starlette.responses import RedirectResponse
 
 from main import app
 from utils.models import User, PasswordResetToken, EmailUpdateToken, Account
@@ -18,7 +17,6 @@ from utils.auth import (
     validate_token,
     get_password_hash
 )
-from .conftest import SetupError
 
 # --- Fixture setup ---
 

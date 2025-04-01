@@ -3,12 +3,10 @@ from typing import Generator
 from sqlmodel import create_engine, Session, select
 from sqlalchemy import Engine
 from fastapi.testclient import TestClient
-import os
 from dotenv import load_dotenv
-from utils.db import get_session, get_connection_url, tear_down_db, set_up_db
+from utils.db import get_connection_url, tear_down_db, set_up_db
 from utils.models import User, PasswordResetToken, EmailUpdateToken, Organization, Role, Account
 from utils.auth import get_password_hash, create_access_token, create_refresh_token
-from utils.dependencies import get_authenticated_user, get_user_with_relations
 from main import app
 
 # Load environment variables
