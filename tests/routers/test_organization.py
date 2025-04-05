@@ -39,11 +39,14 @@ def test_create_organization_empty_name(auth_client):
     """Test organization creation with empty name"""
     response = auth_client.post(
         "/organizations/create",
-        data={"name": "   "}  # Empty or whitespace name
+        data={"name": "   "},
+        follow_redirects=True
     )
     
-    assert response.status_code == 400
-    assert "Organization name cannot be empty" in response.text
+    # Should get a 422 Unprocessable Entity for validation error
+    assert response.status_code == 422
+    assert "this field cannot be empty or contain only whitespace" in response.text
+    assert "name" in response.text
 
 def test_create_organization_duplicate_name(auth_client, session, test_organization):
     """Test organization creation with duplicate name"""
@@ -173,11 +176,12 @@ def test_update_organization_empty_name(auth_client, session, test_organization,
             "id": test_organization.id,
             "name": "   "
         },
-        follow_redirects=False
+        follow_redirects=True
     )
 
-    assert response.status_code == 400
-    assert "organization name cannot be empty" in response.text.lower()
+    assert response.status_code == 422
+    assert "this field cannot be empty or contain only whitespace" in response.text.lower()
+    assert "name" in response.text.lower()
 
 def test_update_organization_unauthenticated(unauth_client, test_organization):
     """Test organization update without authentication"""

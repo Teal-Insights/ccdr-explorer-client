@@ -3,13 +3,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import StringConstraints
 from sqlmodel import Session, select
 from utils.db import get_session, default_roles
 from utils.dependencies import get_authenticated_user, get_user_with_relations
 from utils.models import Organization, User, Role, utc_time
 from utils.enums import ValidPermissions
-from exceptions.http_exceptions import OrganizationNotFoundError, OrganizationNameTakenError, InsufficientPermissionsError
+from exceptions.http_exceptions import OrganizationNotFoundError, OrganizationNameTakenError, InsufficientPermissionsError, EmptyOrganizationNameError
 
 logger = getLogger("uvicorn.error")
 
@@ -41,10 +40,18 @@ async def read_organization(
 
 @router.post("/create", response_class=RedirectResponse)
 def create_organization(
-    name: Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)] = Form(...),
+    name: Annotated[str, Form(
+        min_length=1,
+        strip_whitespace=True,
+        pattern=r"\S+",
+        description="Organization name cannot be empty or contain only whitespace",
+        title="Organization name"
+    )],
     user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
+    logger.debug(f"Received organization name: '{name}' (length: {len(name)})")
+    
     # Check if organization already exists
     db_org = session.exec(select(Organization).where(
         Organization.name == name)).first()
@@ -81,7 +88,13 @@ def create_organization(
 @router.post("/update/{org_id}", name="update_organization", response_class=RedirectResponse)
 def update_organization(
     org_id: int,
-    name: Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)] = Form(...),
+    name: Annotated[str, Form(
+        min_length=1,
+        strip_whitespace=True,
+        pattern=r"\S+",
+        description="Organization name cannot be empty or contain only whitespace",
+        title="Organization name"
+    )],
     user: User = Depends(get_user_with_relations),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:

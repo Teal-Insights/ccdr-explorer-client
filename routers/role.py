@@ -21,6 +21,7 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 def create_role(
     name: str = Form(...),
     organization_id: int = Form(...),
+    permissions: List[ValidPermissions] = Form(...),
     user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session)
 ) -> RedirectResponse:
@@ -46,10 +47,10 @@ def create_role(
 
     # Select Permission records corresponding to the user-selected permissions
     # and associate them with the newly created role
-    permissions: Sequence[Permission] = session.exec(
+    db_permissions: Sequence[Permission] = session.exec(
         select(Permission).where(col(Permission.name).in_(permissions))
     ).all()
-    db_role.permissions.extend(permissions)
+    db_role.permissions.extend(db_permissions)
 
     # Commit transaction
     session.commit()

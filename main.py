@@ -105,8 +105,18 @@ async def password_validation_exception_handler(request: Request, exc: PasswordV
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = {}
+
+    # Map error types to user-friendly message templates
+    error_templates = {
+        "pattern_mismatch": "this field cannot be empty or contain only whitespace",
+        "string_too_short": "this field is required",
+        "missing": "this field is required",
+        "string_pattern_mismatch": "this field cannot be empty or contain only whitespace",
+        "enum": "invalid value"
+    }
+
     for error in exc.errors():
-        # Handle different error locations more carefully
+        # Handle different error locations carefully
         location = error["loc"]
 
         # Skip type errors for the whole body
@@ -115,8 +125,21 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
         # For form fields, the location might be just (field_name,)
         # For JSON body, it might be (body, field_name)
-        field_name = location[-1]  # Take the last item in the location tuple
-        errors[field_name] = error["msg"]
+        # For array items, it might be (field_name, array_index)
+        field_name = location[-2] if isinstance(location[-1], int) else location[-1]
+        
+        # Format the field name to be more user-friendly
+        display_name = field_name.replace("_", " ").title()
+        
+        # Use mapped message if available, otherwise use FastAPI's message
+        error_type = error.get("type", "")
+        message_template = error_templates.get(error_type, error["msg"])
+        
+        # For array items, append the index to the message
+        if isinstance(location[-1], int):
+            message_template = f"Item {location[-1] + 1}: {message_template}"
+            
+        errors[display_name] = message_template
 
     return templates.TemplateResponse(
         request,
