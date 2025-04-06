@@ -1,4 +1,4 @@
-import warnings
+
 from sqlmodel import Session, select, inspect
 from sqlalchemy import Engine
 from utils.db import (
@@ -10,8 +10,7 @@ from utils.db import (
     set_up_db,
 )
 from utils.models import Role, Permission, Organization, RolePermissionLink, ValidPermissions
-from .conftest import SetupError
-
+from tests.conftest import SetupError
 
 def test_get_connection_url():
     """Test that get_connection_url returns a valid URL object"""
