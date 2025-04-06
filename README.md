@@ -164,7 +164,7 @@ Make sure the development database is running and tables and default
 permissions/roles are created first.
 
 ``` bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Navigate to http://localhost:8000/
@@ -172,7 +172,7 @@ Navigate to http://localhost:8000/
 ### Lint types with mypy
 
 ``` bash
-mypy .
+uv run mypy .
 ```
 
 ## Developing with LLMs

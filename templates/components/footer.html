@@ -10,9 +10,9 @@
           <div class="col-md-4 text-center mb-3 mb-md-0">
               <h5 class="text-muted mb-2">Quick Links</h5>
               <ul class="list-inline mb-0">
-                  <li class="list-inline-item"><a href="{{ url_for('read_about') }}" class="text-muted">About</a></li>
-                  <li class="list-inline-item"><a href="{{ url_for('read_privacy_policy') }}" class="text-muted">Privacy Policy</a></li>
-                  <li class="list-inline-item"><a href="{{ url_for('read_terms_of_service') }}" class="text-muted">Terms of Service</a></li>
+                  <li class="list-inline-item"><a href="{{ url_for('read_static_page', page_name='about') }}" class="text-muted">About</a></li>
+                  <li class="list-inline-item"><a href="{{ url_for('read_static_page', page_name='privacy-policy') }}" class="text-muted">Privacy Policy</a></li>
+                  <li class="list-inline-item"><a href="{{ url_for('read_static_page', page_name='terms-of-service') }}" class="text-muted">Terms of Service</a></li>
               </ul>
           </div>
 

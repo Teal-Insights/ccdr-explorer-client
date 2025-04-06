@@ -2,8 +2,10 @@
 __pycache__
 *.pyc
 .env
+_environment
 /.quarto/
 _docs/
+*.ipynb
 .pytest_cache/
 .mypy_cache/
 node_modules

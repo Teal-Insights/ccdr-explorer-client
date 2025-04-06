@@ -43,13 +43,17 @@ To contribute code to the project:
 
 ### Rendering the documentation
 
-The README and documentation website are rendered with [Quarto](https://quarto.org/docs/). If you ,make changes to the `.qmd` files in the root folder and the `docs` folder, run the following commands to re-render the docs:
+The README and documentation website are rendered with [Quarto](https://quarto.org/docs/). If you make changes to the `.qmd` files in the root folder and the `docs` folder, you will need to re-render the docs with Quarto.
+
+Quarto expects environment variables to be set in a file called `_environment`, so before running Quarto render commands, you should copy your `.env` file to `_environment`.
 
 ``` bash
+# To copy the .env file to _environment
+cp .env _environment
 # To render the documentation website
-quarto render
+uv run quarto render
 # To render the README
-quarto render index.qmd --output-dir . --output README.md --to gfm
+uv run quarto render index.qmd --output-dir . --output README.md --to gfm
 ```
 
 Due to a quirk of Quarto, an unnecessary `index.html` file is created in the root folder when the README is rendered. This file can be safely deleted.
@@ -74,5 +78,5 @@ When creating new features,
 To publish the documentation to GitHub Pages, run the following command:
 
 ``` bash
-quarto publish gh-pages
+uv run quarto publish gh-pages
 ```

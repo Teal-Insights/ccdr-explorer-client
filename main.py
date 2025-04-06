@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
-from routers import about, account, dashboard, organization, privacy_policy, role, terms_of_service, user
+from routers import account, dashboard, organization, role, user, static_pages
 from utils.dependencies import (
     get_optional_user
 )
@@ -44,12 +44,10 @@ templates = Jinja2Templates(directory="templates")
 
 
 app.include_router(account.router)
-app.include_router(about.router)
 app.include_router(dashboard.router)
 app.include_router(organization.router)
-app.include_router(privacy_policy.router)
 app.include_router(role.router)
-app.include_router(terms_of_service.router)
+app.include_router(static_pages.router)
 app.include_router(user.router)
 
 
@@ -191,8 +189,9 @@ async def read_home(
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
     return templates.TemplateResponse(
+        request,
         "index.html",
-        {"request": request, "user": user}
+        {"user": user}
     )
 
 
