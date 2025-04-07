@@ -1,5 +1,8 @@
-from utils.models import Organization, Role, Permission, ValidPermissions
-from sqlmodel import select
+from utils.models import Organization, Role, Permission, ValidPermissions, User
+from utils.db import create_default_roles
+from sqlmodel import select, Session
+from tests.conftest import SetupError
+from fastapi.testclient import TestClient
 
 def test_create_organization_success(auth_client, session, test_user):
     """Test successful organization creation"""
@@ -28,12 +31,35 @@ def test_create_organization_success(auth_client, session, test_user):
         .where(Role.organization_id == org.id)
     ).all()
     
-    assert len(roles) > 0
-    assert any(role.name == "Owner" for role in roles)
+    # Verify all default roles exist by name
+    role_names = {role.name for role in roles}
+    assert "Owner" in role_names
+    assert "Administrator" in role_names
+    assert "Member" in role_names
+    assert len(roles) == 3 # Ensure only default roles were created
 
     # Verify test_user was assigned as owner
-    owner_role = next(role for role in roles if role.name == "Owner")
+    owner_role = next((role for role in roles if role.name == "Owner"), None)
+    assert owner_role is not None
     assert test_user in owner_role.users
+
+    # Verify permissions for Owner role (should have all)
+    all_permissions = session.exec(select(Permission)).all()
+    all_permission_names = {p.name for p in all_permissions}
+    owner_permission_names = {p.name for p in owner_role.permissions}
+    assert owner_permission_names == all_permission_names
+
+    # Verify permissions for Administrator role (should have all except DELETE_ORGANIZATION)
+    admin_role = next((role for role in roles if role.name == "Administrator"), None)
+    assert admin_role is not None
+    admin_permission_names = {p.name for p in admin_role.permissions}
+    expected_admin_permissions = {p.name for p in all_permissions if p.name != ValidPermissions.DELETE_ORGANIZATION}
+    assert admin_permission_names == expected_admin_permissions
+
+    # Verify permissions for Member role (should have none)
+    member_role = next((role for role in roles if role.name == "Member"), None)
+    assert member_role is not None
+    assert len(member_role.permissions) == 0
 
 def test_create_organization_empty_name(auth_client):
     """Test organization creation with empty name"""
@@ -227,15 +253,10 @@ def test_delete_organization_success(auth_client, session, test_organization, te
     ).first()
     assert deleted_org is None
 
-def test_delete_organization_unauthorized(auth_client, session, test_organization, test_user):
+def test_delete_organization_unauthorized(auth_client_member, session, test_organization):
     """Test organization deletion without proper permissions"""
-    # Add user to organization but without delete permission
-    basic_role = Role(name="Owner", organization_id=test_organization.id)
-    basic_role.users.append(test_user)
-    session.add(basic_role)
-    session.commit()
-
-    response = auth_client.post(
+    # Use auth_client_member, who belongs to the org but has no delete permission
+    response = auth_client_member.post(
         f"/organizations/delete/{test_organization.id}",
         follow_redirects=False
     )
@@ -247,9 +268,9 @@ def test_delete_organization_unauthorized(auth_client, session, test_organizatio
     org = session.get(Organization, test_organization.id)
     assert org is not None
 
-def test_delete_organization_not_member(auth_client, session, test_organization, test_user):
+def test_delete_organization_not_member(auth_client_non_member, session, test_organization):
     """Test organization deletion by non-member"""
-    response = auth_client.post(
+    response = auth_client_non_member.post(
         f"/organizations/delete/{test_organization.id}",
         follow_redirects=False
     )
@@ -305,3 +326,255 @@ def test_delete_organization_cascade(auth_client, session, test_organization, te
         .where(Role.organization_id == org_id)
     ).all()
     assert len(roles) == 0
+
+# --- Organization View Permission Tests ---
+
+def test_read_organization_as_owner(auth_client_owner, test_organization):
+    """Test accessing organization page as an owner"""
+    response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 200
+    assert test_organization.name in response.text
+
+    # Check for owner-specific actions
+    assert "Invite Member" in response.text
+    assert "Create Role" in response.text
+    assert "Edit Role" in response.text
+    assert "Delete Role" in response.text
+    assert "Edit Organization" in response.text
+    assert "Delete Organization" in response.text
+
+
+def test_read_organization_as_admin(auth_client_admin, test_organization):
+    """Test accessing organization page as an admin"""
+    response = auth_client_admin.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 200
+    assert test_organization.name in response.text
+
+    # Check for admin-specific actions based on permissions
+    assert "Invite Member" in response.text
+    assert "Create Role" in response.text
+    assert "Edit Role" in response.text
+
+    # Admin shouldn't have these permissions
+    assert "Delete Organization" not in response.text
+
+
+def test_read_organization_as_member(auth_client_member, test_organization):
+    """Test accessing organization page as a regular member"""
+    response = auth_client_member.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 200
+    assert test_organization.name in response.text
+
+    # Member should not have permission buttons
+    assert "Invite Member" not in response.text
+    assert "Create Role" not in response.text
+    assert "Edit Role" not in response.text
+    assert "Delete Role" not in response.text
+    assert "Edit Organization" not in response.text
+    assert "Delete Organization" not in response.text
+
+
+def test_read_organization_as_non_member(auth_client_non_member, test_organization):
+    """Test accessing organization page as a non-member"""
+    response = auth_client_non_member.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+
+    # Non-members should get an error when accessing the organization
+    assert response.status_code == 404
+    assert "Organization not found" in response.text
+
+
+def test_organization_page_displays_roles_correctly(auth_client_owner, session, test_organization, org_owner):
+    """Test that roles and their permissions are displayed correctly"""
+    response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 200
+
+    # Check that roles are displayed
+    assert "Owner" in response.text
+    assert "Administrator" not in response.text  # Should not exist yet
+
+    # Check permissions are listed
+    permissions = [p.name.value for p in session.exec(
+        select(Permission)).all()]
+
+    for permission in permissions:
+        assert permission in response.text
+
+
+def test_organization_page_displays_members_correctly(auth_client_owner, org_admin_user, org_member_user, test_organization):
+    """Test that members and their roles are displayed correctly"""
+    response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 200
+
+    # Check that members are displayed with their names and roles
+    assert "Test User" in response.text
+    assert "Admin User" in response.text
+    assert "Member User" in response.text
+
+    # Check roles appear next to users
+    assert ">Owner<" in response.text
+    assert ">Administrator<" in response.text
+    assert ">Member<" in response.text
+
+
+def test_empty_organization_displays_no_members_message(auth_client_owner, session):
+    """Test that an organization with no members displays appropriate message"""
+    # Create a new empty organization with just the owner
+    empty_org = Organization(name="Empty Organization")
+    session.add(empty_org)
+    session.commit()
+
+    if empty_org.id is None:
+        raise SetupError("Empty organization ID is None")
+
+    create_default_roles(session, empty_org.id, check_first=False)
+
+    # Retrieve the owner role
+    owner_role = session.exec(
+        select(Role)
+        .where(Role.name == "Owner")
+        .where(Role.organization_id == empty_org.id)
+    ).first()
+    session.refresh(empty_org)
+
+    if owner_role is None:
+        raise SetupError("Could not find 'Owner' role after test setup.")
+
+    # Get the owner user (created by the org_owner fixture)
+    owner = session.exec(select(User).where(User.name == "Org Owner")).first()
+    if owner is None:
+        raise SetupError("Could not find 'Org Owner' user after test setup.")
+
+    # Add the owner to the role to ensure we can access the organization
+    # but keep it otherwise empty
+    owner_role.users.append(owner)
+
+    # No need to add again, just commit
+    session.commit()
+
+    response = auth_client_owner.get(
+        f"/organizations/{empty_org.id}",
+        follow_redirects=False
+    )
+
+    # This will fail before implementation but should pass after
+    assert response.status_code == 200
+    assert "No members found" in response.text
+
+
+def test_organization_with_default_roles_only(auth_client_owner: TestClient, session: Session):
+    """Test that an organization with only default roles shows appropriate message"""
+    org_owner: User | None = session.exec(select(User).where(User.name == "Org Owner")).first()
+    if org_owner is None:
+        raise SetupError("Could not find 'Org Owner' user after test setup.")
+
+    # Get the organization that the specific org_owner user is associated with
+    org = session.exec(
+        select(Organization)
+        .where(Organization.roles.any(Role.users.contains(org_owner)))
+    ).first()
+    if org is None:
+        raise SetupError("Could not find organization for the specified org_owner")
+    
+    # Add just the default "Owner" and "Member" roles
+    response = auth_client_owner.get(
+        f"/organizations/{org.id}",
+        follow_redirects=False
+    )
+
+    # This will fail before implementation but should pass after
+    assert response.status_code == 200
+    assert "No custom roles defined" in response.text
+
+# --- Invite User Tests ---
+
+def test_invite_user_success(auth_client_owner, session, test_organization, non_member_user):
+    """Test successfully inviting a user to the organization"""
+    # Count roles before invite
+    roles_count_before = len(non_member_user.roles)
+
+    # Send invite
+    response = auth_client_owner.post(
+        f"/organizations/invite/{test_organization.id}",
+        data={"email": non_member_user.account.email},
+        follow_redirects=False
+    )
+
+    # Should redirect back to organization page
+    assert response.status_code == 303
+    assert f"/organizations/{test_organization.id}" in response.headers["location"]
+
+    # Verify database state - user should now have the Member role
+    session.refresh(non_member_user)
+    assert len(non_member_user.roles) == roles_count_before + 1
+
+    # Verify the user has been assigned the Member role
+    member_role = session.exec(
+        select(Role)
+        .where(Role.name == "Member")
+        .where(Role.organization_id == test_organization.id)
+    ).first()
+
+    assert member_role is not None
+    assert non_member_user in member_role.users
+
+
+def test_invite_nonexistent_user(auth_client_owner, test_organization):
+    """Test inviting a user that doesn't exist in the system"""
+    response = auth_client_owner.post(
+        f"/organizations/invite/{test_organization.id}",
+        data={"email": "nonexistent@example.com"},
+        follow_redirects=True
+    )
+
+    # Should return an error
+    assert response.status_code in [404, 400, 500]  # Allow any reasonable error code
+    assert "user not found" in response.text.lower() or "account not found" in response.text.lower() or "email not found" in response.text.lower()
+
+
+def test_invite_existing_member(auth_client_owner, test_organization, org_member_user):
+    """Test inviting a user who is already a member"""
+    response = auth_client_owner.post(
+        f"/organizations/invite/{test_organization.id}",
+        data={"email": org_member_user.account.email},
+        follow_redirects=True
+    )
+
+    # Should return a 400 Bad Request
+    assert response.status_code == 400
+    assert "already a member" in response.text.lower()
+
+
+def test_invite_without_permission(auth_client_member, test_organization, non_member_user):
+    """Test inviting a user without having the INVITE_USER permission"""
+    response = auth_client_member.post(
+        f"/organizations/invite/{test_organization.id}",
+        data={"email": non_member_user.account.email},
+        follow_redirects=True
+    )
+
+    # Should return a 403 Forbidden
+    assert response.status_code == 403
+    assert "permission" in response.text.lower()

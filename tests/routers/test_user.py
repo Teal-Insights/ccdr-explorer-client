@@ -4,7 +4,7 @@ from sqlmodel import Session
 from unittest.mock import patch
 
 from main import app
-from utils.models import User
+from utils.models import User, Role
 from utils.images import InvalidImageError
 
 # Mock data for consistent testing
@@ -210,3 +210,74 @@ def test_update_profile_invalid_image(mock_validate, auth_client: TestClient):
     )
     assert response.status_code == 400
     assert "Invalid test image" in response.text
+
+
+# --- Multi-Organization Profile Tests ---
+
+def test_profile_displays_multiple_organizations(auth_client, test_user, session, test_organization, second_test_organization):
+    """Test that a user's profile page displays all organizations they belong to"""
+    # Ensure test_user is part of both organizations
+    # First org should already be set up through the org_owner fixture
+    # Now add to second org
+    member_role = Role(
+        name="Member", 
+        organization_id=second_test_organization.id
+    )
+    test_user.roles.append(member_role)
+    session.add(member_role)
+    session.commit()
+    
+    # Visit profile page
+    response = auth_client.get("/user/profile")
+    assert response.status_code == 200
+    
+    # Check that both organizations are displayed
+    assert test_organization.name in response.text
+    assert second_test_organization.name in response.text
+
+
+def test_profile_displays_organization_list(auth_client, test_user, session, test_organization):
+    """Test that the profile page shows organizations in a macro-rendered list"""
+    response = auth_client.get("/user/profile")
+    assert response.status_code == 200
+    
+    # Check that organizations are rendered in a list
+    assert "Organizations" in response.text
+    assert test_organization.name in response.text
+    assert f"/organizations/{test_organization.id}" in response.text
+
+
+def test_profile_organization_roles(auth_client, test_user, session, test_organization, second_test_organization):
+    """Test that the profile shows the user's roles in each organization"""
+    # Add user to a second organization with a different role
+    admin_role = Role(
+        name="Administrator", 
+        organization_id=second_test_organization.id
+    )
+    test_user.roles.append(admin_role)
+    session.add(admin_role)
+    session.commit()
+    
+    # Visit profile page
+    response = auth_client.get("/user/profile")
+    assert response.status_code == 200
+    
+    # Check that both organizations and roles are displayed
+    assert test_organization.name in response.text
+    assert second_test_organization.name in response.text
+    assert "Owner" in response.text  # From the first org
+    assert "Administrator" in response.text  # From the second org
+
+
+def test_profile_no_organizations(auth_client, session, test_user):
+    """Test profile display when user has no organizations"""
+    # Remove user from all orgs by clearing roles
+    test_user.roles = []
+    session.commit()
+    
+    # Visit profile page
+    response = auth_client.get("/user/profile")
+    assert response.status_code == 200
+    
+    # Should show "no organizations" message
+    assert "You are not a member of any organizations" in response.text

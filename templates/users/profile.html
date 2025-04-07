@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from 'components/silhouette.html' import render_silhouette %}
-{% from 'components/organizations.html' import render_organizations with context %}
+{% from 'base/macros/silhouette.html' import render_silhouette %}
+{% from 'users/macros/organizations.html' import render_organizations with context %}
 
 {% block title %}Profile{% endblock %}
 

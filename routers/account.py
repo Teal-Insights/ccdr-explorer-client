@@ -122,7 +122,7 @@ async def read_login(
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
     return templates.TemplateResponse(
-        "authentication/login.html",
+        "account/login.html",
         {"request": request, "user": user, "email_updated": email_updated}
     )
 
@@ -139,7 +139,7 @@ async def read_register(
         return RedirectResponse(url="/dashboard", status_code=302)
 
     return templates.TemplateResponse(
-        "authentication/register.html",
+        "account/register.html",
         {"request": request, "user": user, "password_pattern": HTML_PASSWORD_PATTERN}
     )
 
@@ -157,7 +157,7 @@ async def read_forgot_password(
         return RedirectResponse(url="/dashboard", status_code=302)
 
     return templates.TemplateResponse(
-        "authentication/forgot_password.html",
+        "account/forgot_password.html",
         {"request": request, "user": user, "show_form": show_form == "true"}
     )
 
@@ -180,7 +180,7 @@ async def read_reset_password(
         raise CredentialsError(message="Invalid or expired token")
 
     return templates.TemplateResponse(
-        "authentication/reset_password.html",
+        "account/reset_password.html",
         {"request": request, "user": user, "email": email, "token": token, "password_pattern": HTML_PASSWORD_PATTERN}
     )
 
@@ -212,7 +212,7 @@ async def register(
     session.flush()  # Flush to get the account ID
     
     # Create the user
-    account.user = User(name=name)
+    account.user = User(name=name, account_id=account.id)
     session.add(account)
     session.commit()
     session.refresh(account)

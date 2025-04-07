@@ -44,12 +44,11 @@ class InsufficientPermissionsError(HTTPException):
         )
 
 
-# TODO: Consolidate these two into a single validation error
-class EmptyOrganizationNameError(HTTPException):
-    def __init__(self):
+class OrganizationSetupError(HTTPException):
+    def __init__(self, message: str = "Organization setup failed"):
         super().__init__(
-            status_code=400,
-            detail="Organization name cannot be empty"
+            status_code=500,
+            detail=message
         )
 
 
@@ -66,6 +65,22 @@ class OrganizationNotFoundError(HTTPException):
         super().__init__(
             status_code=404,
             detail="Organization not found"
+        )
+
+
+class UserNotFoundError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=404,
+            detail="User not found"
+        )
+
+
+class UserAlreadyMemberError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=400,
+            detail="User is already a member of this organization"
         )
 
 

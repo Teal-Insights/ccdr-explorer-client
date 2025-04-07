@@ -9,9 +9,9 @@ templates = Jinja2Templates(directory="templates")
 
 # Define valid static pages to prevent arbitrary template access
 VALID_PAGES = {
-    "about": "about.html",
-    "privacy-policy": "privacy_policy.html",
-    "terms-of-service": "terms_of_service.html"
+    "about": "static_pages/about.html",
+    "privacy-policy": "static_pages/privacy_policy.html",
+    "terms-of-service": "static_pages/terms_of_service.html"
 }
 
 @router.get("/{page_name}", name="read_static_page")

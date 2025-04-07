@@ -27,12 +27,12 @@ dependencies = [
 dev = [
     "graphviz<1.0.0,>=0.20.3",
     "quarto<1.0.0,>=0.1.0",
-    "mypy<2.0.0,>=1.11.2",
     "jupyter<2.0.0,>=1.1.1",
     "notebook<8.0.0,>=7.2.2",
     "pytest<9.0.0,>=8.3.3",
     "sqlalchemy-schemadisplay<3.0,>=2.0",
     "perplexity-cli",
+    "mypy>=1.15.0",
 ]
 
 [tool.uv.sources]

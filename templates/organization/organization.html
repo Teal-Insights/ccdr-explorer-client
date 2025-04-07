@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from 'base/macros/silhouette.html' import render_silhouette %}
+
+{% block title %}{{ organization.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ organization.name }}</h1>
+        <div>
+            {% if ValidPermissions.EDIT_ORGANIZATION in user_permissions %}
+            <button type="button" class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#editOrganizationModal">
+                Edit Organization
+            </button>
+            {% endif %}
+            
+            {% if ValidPermissions.DELETE_ORGANIZATION in user_permissions %}
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteOrganizationModal">
+                Delete Organization
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Include the roles card #}
+    {% include 'organization/modals/roles_card.html' %}
+
+    {# Include the members card #}
+    {% include 'organization/modals/members_card.html' %}
+
+</div>
+
+{# Include the edit organization modal #}
+{% include 'organization/modals/edit_organization_modal.html' %}
+
+{# Include the delete organization modal #}
+{% include 'organization/modals/delete_organization_modal.html' %}
+
+{% endblock %}
