@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
-from utils.db import get_session, default_roles, create_default_roles
+from utils.db import get_session, create_default_roles
 from utils.dependencies import get_authenticated_user, get_user_with_relations
 from utils.models import Organization, User, Role, Account, utc_time
 from utils.enums import ValidPermissions
@@ -138,7 +138,10 @@ def create_organization(
 
     session.refresh(db_org) # Refresh again to be safe before redirect
 
-    return RedirectResponse(url=f"/organizations/{db_org.id}", status_code=303)
+    return RedirectResponse(
+        url=router.url_path_for("read_organization", org_id=db_org.id),
+        status_code=303
+    )
 
 
 @router.post("/update/{org_id}", response_class=RedirectResponse)
@@ -177,7 +180,7 @@ def update_organization(
     session.add(organization)
     session.commit()
 
-    return RedirectResponse(url=f"/profile", status_code=303)
+    return RedirectResponse(url=router.url_path_for("read_organization", org_id=org_id), status_code=303)
 
 
 @router.post("/delete/{org_id}", response_class=RedirectResponse)
@@ -200,7 +203,7 @@ def delete_organization(
     session.delete(organization)
     session.commit()
 
-    return RedirectResponse(url="/profile", status_code=303)
+    return RedirectResponse(url="/user/profile", status_code=303)
 
 
 @router.post("/invite/{org_id}", response_class=RedirectResponse)
@@ -278,6 +281,6 @@ def invite_member(
     
     # Return to the organization page
     return RedirectResponse(
-        url=f"/organizations/{org_id}",
+        url=router.url_path_for("read_organization", org_id=org_id),
         status_code=303
     )

@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, BackgroundTasks, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.datastructures import URLPath
 from pydantic import EmailStr
 from sqlmodel import Session, select
 from utils.models import User, DataIntegrityError, Account
@@ -33,7 +34,8 @@ from exceptions.http_exceptions import (
     CredentialsError,
     PasswordValidationError
 )
-
+from routers.dashboard import router as dashboard_router
+from routers.user import router as user_router
 logger = getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/account", tags=["account"])
@@ -80,34 +82,15 @@ def validate_password_strength_and_match(
 # --- Routes ---
 
 
-@router.post("/delete", response_class=RedirectResponse)
-async def delete_account(
-    email: EmailStr = Form(...),
-    password: str = Form(...),
-    account: Account = Depends(get_authenticated_account),
-    session: Session = Depends(get_session)
-):
+@router.get("/logout", response_class=RedirectResponse)
+def logout():
     """
-    Delete a user account after verifying credentials.
+    Log out a user by clearing their cookies.
     """
-    # Verify the provided email matches the authenticated user
-    if email != account.email:
-        raise CredentialsError(message="Email does not match authenticated account")
-
-    # Verify password
-    if not verify_password(password, account.hashed_password):
-        raise PasswordValidationError(
-            field="password",
-            message="Password is incorrect"
-        )
-
-    # Delete the account and associated user
-    # Note: The user will be deleted automatically by cascade relationship
-    session.delete(account)
-    session.commit()
-
-    # Log out the user
-    return RedirectResponse(url="/account/logout", status_code=303)
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+    return response
 
 
 @router.get("/login")
@@ -120,7 +103,7 @@ async def read_login(
     Render login page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url=dashboard_router.url_path_for("read_dashboard"), status_code=302)
     return templates.TemplateResponse(
         "account/login.html",
         {"request": request, "user": user, "email_updated": email_updated}
@@ -136,7 +119,7 @@ async def read_register(
     Render registration page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url=dashboard_router.url_path_for("read_dashboard"), status_code=302)
 
     return templates.TemplateResponse(
         "account/register.html",
@@ -154,7 +137,7 @@ async def read_forgot_password(
     Render forgot password page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url=dashboard_router.url_path_for("read_dashboard"), status_code=302)
 
     return templates.TemplateResponse(
         "account/forgot_password.html",
@@ -183,6 +166,36 @@ async def read_reset_password(
         "account/reset_password.html",
         {"request": request, "user": user, "email": email, "token": token, "password_pattern": HTML_PASSWORD_PATTERN}
     )
+
+
+@router.post("/delete", response_class=RedirectResponse)
+async def delete_account(
+    email: EmailStr = Form(...),
+    password: str = Form(...),
+    account: Account = Depends(get_authenticated_account),
+    session: Session = Depends(get_session)
+):
+    """
+    Delete a user account after verifying credentials.
+    """
+    # Verify the provided email matches the authenticated user
+    if email != account.email:
+        raise CredentialsError(message="Email does not match authenticated account")
+
+    # Verify password
+    if not verify_password(password, account.hashed_password):
+        raise PasswordValidationError(
+            field="password",
+            message="Password is incorrect"
+        )
+
+    # Delete the account and associated user
+    # Note: The user will be deleted automatically by cascade relationship
+    session.delete(account)
+    session.commit()
+
+    # Log out the user
+    return RedirectResponse(url=router.url_path_for("logout"), status_code=303)
 
 
 @router.post("/register", response_class=RedirectResponse)
@@ -222,7 +235,7 @@ async def register(
     refresh_token = create_refresh_token(data={"sub": email})
     
     # Set cookie
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url=dashboard_router.url_path_for("read_dashboard"), status_code=303)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -257,7 +270,7 @@ async def login(
     refresh_token = create_refresh_token(data={"sub": account.email})
 
     # Set cookie
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url=dashboard_router.url_path_for("read_dashboard"), status_code=303)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -287,11 +300,11 @@ async def refresh_token(
     """
     _, refresh_token = tokens
     if not refresh_token:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url=router.url_path_for("read_login"), status_code=303)
 
     decoded_token = validate_token(refresh_token, token_type="refresh")
     if not decoded_token:
-        response = RedirectResponse(url="/login", status_code=303)
+        response = RedirectResponse(url=router.url_path_for("read_login"), status_code=303)
         response.delete_cookie("access_token")
         response.delete_cookie("refresh_token")
         return response
@@ -300,14 +313,14 @@ async def refresh_token(
     account = session.exec(select(Account).where(
         Account.email == user_email)).one_or_none()
     if not account:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url=router.url_path_for("read_login"), status_code=303)
 
     new_access_token = create_access_token(
         data={"sub": account.email, "fresh": False}
     )
     new_refresh_token = create_refresh_token(data={"sub": account.email})
 
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url=dashboard_router.url_path_for("read_dashboard"), status_code=303)
     response.set_cookie(
         key="access_token",
         value=new_access_token,
@@ -379,18 +392,7 @@ async def reset_password(
     session.commit()
     session.refresh(authorized_account)
 
-    return RedirectResponse(url="/login", status_code=303)
-
-
-@router.get("/logout", response_class=RedirectResponse)
-def logout():
-    """
-    Log out a user by clearing their cookies.
-    """
-    response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
-    return response
+    return RedirectResponse(url=router.url_path_for("read_login"), status_code=303)
 
 
 @router.post("/update_email")
@@ -429,8 +431,12 @@ async def request_email_update(
         session=session
     )
 
+    # Generate URL with query parameters separately
+    profile_path: URLPath = user_router.url_path_for("read_profile")
+    redirect_url = f"{profile_path}?email_update_requested=true"
+
     return RedirectResponse(
-        url="/profile?email_update_requested=true",
+        url=redirect_url,
         status_code=303
     )
 
@@ -461,9 +467,13 @@ async def confirm_email_update(
     access_token = create_access_token(data={"sub": new_email, "fresh": True})
     refresh_token = create_refresh_token(data={"sub": new_email})
 
+    # Generate URL with query parameters separately
+    profile_path: URLPath = user_router.url_path_for("read_profile")
+    redirect_url = f"{profile_path}?email_updated=true"
+    
     # Set cookies before redirecting
     response = RedirectResponse(
-        url="/profile?email_updated=true",
+        url=redirect_url,
         status_code=303
     )
 

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Set
 import jinja2
 from jinja2 import meta, Environment
+from jinja2 import nodes
 import pytest
 
 
@@ -66,7 +67,6 @@ def extract_template_variables(template_path: Path) -> Set[str]:
         return variables
     except jinja2.exceptions.TemplateSyntaxError as e:
         pytest.fail(f"Syntax error in template {template_path}: {str(e)}")
-        return set()
 
 
 @pytest.mark.parametrize("template_file", get_all_template_files())
@@ -86,6 +86,41 @@ def test_template_syntax(template_file: Path):
 
 
 @pytest.mark.parametrize("template_file", get_all_template_files())
+def test_extends_paths_are_valid(template_file: Path):
+    """Test that {% extends ... %} paths point to valid files."""
+    with open(template_file, 'r') as f:
+        template_source = f.read()
+
+    # Use a loader so Jinja2 knows the base directory for relative paths
+    env = Environment(loader=jinja2.FileSystemLoader("templates"))
+    try:
+        ast = env.parse(template_source)
+        # Find the extends node, if it exists
+        extends_node = ast.find(nodes.Extends)
+
+        if extends_node:
+            # Get the path specified in {% extends "..." %}
+            # The template can be different types of expressions
+            if isinstance(extends_node.template, nodes.Const):
+                parent_template_path = extends_node.template.value
+            else:
+                # For other expression types, skip this test
+                return
+
+            # Check if the resolved path exists relative to the templates dir
+            full_path = Path("templates") / parent_template_path
+            assert full_path.is_file(), (
+                f"In {template_file}: extends path '{parent_template_path}' "
+                f"does not point to a valid file ({full_path})"
+            )
+        # If no extends node, this test passes for this file
+    except jinja2.exceptions.TemplateSyntaxError as e:
+        # If syntax is invalid, this test fails, but test_template_syntax should catch it more specifically.
+        # We fail here too to be explicit.
+        pytest.fail(f"Syntax error in template {template_file}: {str(e)}")
+
+
+@pytest.mark.parametrize("template_file", get_all_template_files())
 def test_template_required_variables(template_file: Path):
     """Test that we can identify required variables for each template"""
     # Extract variables from the template
@@ -95,5 +130,5 @@ def test_template_required_variables(template_file: Path):
     print(f"Template: {template_file}")
     print(f"Required variables: {variables}")
     
-    # This test now serves as documentation for what variables each template requires
-        
+    # TODO: Add tests to ensure that each route passes the required variables to the template
+

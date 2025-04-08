@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from typing import Optional, List
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import selectinload
-from utils.models import User, DataIntegrityError, Role, Organization
+from utils.models import User, DataIntegrityError, Organization
 from utils.db import get_session
 from utils.dependencies import get_authenticated_user, get_user_with_relations
 from utils.images import validate_and_process_image, MAX_FILE_SIZE, MIN_DIMENSION, MAX_DIMENSION, ALLOWED_CONTENT_TYPES
@@ -14,6 +14,7 @@ from exceptions.http_exceptions import (
     UserNotFoundError,
     OrganizationNotFoundError
 )
+from routers.organization import router as organization_router
 
 router = APIRouter(prefix="/user", tags=["user"])
 templates = Jinja2Templates(directory="templates")
@@ -138,7 +139,7 @@ def update_user_role(
     session.commit()
     
     return RedirectResponse(
-        url=f"/organizations/{organization_id}",
+        url=organization_router.url_path_for("read_organization", org_id=organization_id),
         status_code=303
     )
 
@@ -189,6 +190,6 @@ def remove_user_from_organization(
     session.commit()
     
     return RedirectResponse(
-        url=f"/organizations/{organization_id}",
+        url=organization_router.url_path_for("read_organization", org_id=organization_id),
         status_code=303
     )

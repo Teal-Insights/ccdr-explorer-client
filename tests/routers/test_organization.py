@@ -1,7 +1,10 @@
 from utils.models import Organization, Role, Permission, ValidPermissions, User
 from utils.db import create_default_roles
+from main import app
 from sqlmodel import select
 from tests.conftest import SetupError
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 def test_create_organization_success(auth_client, session, test_user):
     """Test successful organization creation"""
@@ -109,9 +112,14 @@ def test_create_organization_unauthenticated(unauth_client):
     
     assert response.status_code == 303  # Unauthorized
 
-def test_update_organization_success(auth_client, session, test_organization, test_user):
+def test_update_organization_success(
+        auth_client: TestClient, session: Session, test_organization: Organization, test_user: User
+    ):
     """Test successful organization update"""
     # Set up test user as owner with edit permission
+    if test_organization.id is None:
+        raise SetupError("Test organization ID is None")
+
     owner_role = Role(name="Owner", organization_id=test_organization.id)
     owner_role.permissions = [
         Permission(name=ValidPermissions.EDIT_ORGANIZATION)
@@ -123,18 +131,20 @@ def test_update_organization_success(auth_client, session, test_organization, te
     new_name = "Updated Organization Name"
     response = auth_client.post(
         f"/organizations/update/{test_organization.id}",
-        data={"id": test_organization.id, "name": new_name},
+        data={"id": str(test_organization.id), "name": new_name},
         follow_redirects=False
     )
 
     assert response.status_code == 303  # Redirect status code
-    assert "/profile" in response.headers["location"]
+    assert str(app.url_path_for("read_organization", org_id=test_organization.id)) in response.headers["location"]
 
     # Expire all objects in the session to force a refresh from the database
     session.expire_all()
     
     # Verify database update
     updated_org = session.get(Organization, test_organization.id)
+    if updated_org is None:
+        raise SetupError("Updated organization not found")
     assert updated_org.name == new_name
 
 def test_update_organization_unauthorized(auth_client, session, test_organization, test_user):
