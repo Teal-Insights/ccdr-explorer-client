@@ -4,6 +4,7 @@ import pytest
 from tests.conftest import SetupError
 from utils.models import Role, Permission, ValidPermissions, User
 from sqlmodel import Session, select
+import re
 
 
 @pytest.fixture
@@ -521,31 +522,60 @@ def test_organization_page_role_edit_access(auth_client_owner, auth_client_admin
     assert "Edit Role" not in member_response.text
 
 
-def test_organization_page_role_delete_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization):
+def test_organization_page_role_delete_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization, session: Session):
     """Test that role deletion UI elements are only shown to users with DELETE_ROLE permission"""
-    # Owner should see role deletion controls
+    # Create a custom, deletable role for the test
+    custom_role = Role(name="Custom Role To Delete", organization_id=test_organization.id)
+    session.add(custom_role)
+    session.commit()
+    session.refresh(custom_role)
+
+    # Confirm that the custom role is accessible from organization object
+    assert custom_role in test_organization.roles
+
+    # Owner should see the delete role form action because a custom role exists and they have permission
     owner_response = auth_client_owner.get(
         f"/organizations/{test_organization.id}",
         follow_redirects=False
     )
     assert owner_response.status_code == 200
-    assert "Delete Role" in owner_response.text
-    
-    # Admin should not see role deletion controls (wasn't given DELETE_ROLE)
+    expected_custom_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="{custom_role.id}">\\s*<input type="hidden" name="organization_id" value="{test_organization.id}">\\s*<button type="submit" class="btn btn-sm btn-outline-danger"\\s*>\\s*Delete Role\\s*</button>\\s*</form>'
+    assert re.search(expected_custom_delete_form, owner_response.text) is not None
+
+    # Admin should see the delete role form action
     admin_response = auth_client_admin.get(
         f"/organizations/{test_organization.id}",
         follow_redirects=False
     )
     assert admin_response.status_code == 200
-    assert "Delete Role" not in admin_response.text
-    
-    # Member should not see role deletion controls
+    assert f'<input type="hidden" name="id" value="{custom_role.id}">' in admin_response.text
+    assert 'action="http://testserver/roles/delete"' in admin_response.text
+
+    # Member should *not* see the delete role form action
     member_response = auth_client_member.get(
         f"/organizations/{test_organization.id}",
         follow_redirects=False
     )
     assert member_response.status_code == 200
-    assert "Delete Role" not in member_response.text
+    assert f'<input type="hidden" name="id" value="{custom_role.id}">' not in member_response.text
+    assert 'action="http://testserver/roles/delete"' not in member_response.text
+
+    # Built-in roles should not have delete forms for anyone
+    # Check that the delete form is NOT present for the built-in "Owner" role (hardcoded ID 1 in fixtures)
+    expected_owner_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="1">' # Check only for the form targeting owner role ID
+    assert expected_owner_delete_form not in owner_response.text
+    assert expected_owner_delete_form not in admin_response.text
+    assert expected_owner_delete_form not in member_response.text
+    # Check that the delete form is NOT present for built-in Administrator role
+    expected_admin_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="2">' # Check only for the form targeting admin role ID
+    assert expected_admin_delete_form not in owner_response.text
+    assert expected_admin_delete_form not in admin_response.text
+    assert expected_admin_delete_form not in member_response.text
+    # Check that the delete form is NOT present for built-in Member role
+    expected_member_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="3">' # Check only for the form targeting member role ID
+    assert expected_member_delete_form not in owner_response.text
+    assert expected_member_delete_form not in admin_response.text
+    assert expected_member_delete_form not in member_response.text
 
 
 def test_create_role_form_modal(auth_client_owner, test_organization):

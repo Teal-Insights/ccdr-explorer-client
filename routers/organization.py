@@ -52,7 +52,7 @@ async def read_organization(
         select(Organization)
         .where(Organization.id == org_id)
         .options(
-            selectinload(Organization.roles).selectinload(Role.users),
+            selectinload(Organization.roles).selectinload(Role.users).selectinload(User.account),
             selectinload(Organization.roles).selectinload(Role.users).selectinload(User.roles),
             selectinload(Organization.roles).selectinload(Role.permissions)
         )

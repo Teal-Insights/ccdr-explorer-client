@@ -362,9 +362,9 @@ def test_read_organization_as_admin(auth_client_admin, test_organization):
     assert "Invite Member" in response.text
     assert "Create Role" in response.text
     assert "Edit Role" in response.text
-
-    # Admin shouldn't have these permissions
-    assert "Delete Organization" not in response.text
+    
+    # Admin shouldn't have the permission to trigger the delete modal
+    assert 'data-bs-target="#deleteOrganizationModal"' not in response.text
 
 
 def test_read_organization_as_member(auth_client_member, test_organization):

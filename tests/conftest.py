@@ -133,7 +133,7 @@ def test_organization(session: Session) -> Organization:
     """Create a test organization with default roles and permissions"""
     organization = Organization(name="Test Organization")
     session.add(organization)
-    session.flush() # Flush to get the organization ID
+    session.flush()
 
     if organization.id is None:
         pytest.fail("Failed to get organization ID after flush")
@@ -141,9 +141,6 @@ def test_organization(session: Session) -> Organization:
     # Use the utility function to create default roles and assign permissions
     # This function handles the commit internally
     create_default_roles(session, organization.id, check_first=False)
-
-    # Refresh the organization object to load the newly created roles/permissions
-    session.refresh(organization)
 
     return organization
 

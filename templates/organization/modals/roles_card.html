@@ -9,15 +9,15 @@
         {% endif %}
     </div>
     <div class="card-body">
-        {% set custom_roles_exist = false %}
+        {% set ns = namespace(custom_roles_exist=false) %}
         {% for role in organization.roles %}
             {% if role.name not in ["Owner", "Administrator", "Member"] %}
-                {% set custom_roles_exist = true %}
+                {% set ns.custom_roles_exist = true %}
             {% endif %}
         {% endfor %}
         
         {% if organization.roles %}
-            {% if custom_roles_exist %}
+            {% if ns.custom_roles_exist %}
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
@@ -50,7 +50,7 @@
                                 </button>
                                 {% endif %}
                                 
-                                {% if ValidPermissions.DELETE_ROLE in user_permissions and role.name != "Owner" %}
+                                {% if ValidPermissions.DELETE_ROLE in user_permissions and role.name not in ["Owner", "Administrator", "Member"] %}
                                 <form method="POST" action="{{ url_for('delete_role') }}" class="d-inline">
                                     <input type="hidden" name="id" value="{{ role.id }}">
                                     <input type="hidden" name="organization_id" value="{{ organization.id }}">
