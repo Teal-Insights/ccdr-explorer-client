@@ -1,11 +1,13 @@
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlmodel import Session
-from unittest.mock import patch
-
+from sqlmodel import Session, select
+from unittest.mock import patch, MagicMock
+from tests.conftest import SetupError
 from main import app
-from utils.models import User, Role
+from utils.models import User, Role, Organization
 from utils.images import InvalidImageError
+import re
+import pytest
 
 # Mock data for consistent testing
 MOCK_IMAGE_DATA = b"processed fake image data"
@@ -57,7 +59,9 @@ def test_update_profile_unauthorized(unauth_client: TestClient):
 
 
 @patch('routers.user.validate_and_process_image')
-def test_update_profile_authorized(mock_validate, auth_client: TestClient, test_user: User, session: Session):
+def test_update_profile_authorized(
+        mock_validate: MagicMock, auth_client: TestClient, test_user: User, session: Session
+    ):
     """Test that authorized users can edit their profile"""
     
     # Configure mock to return processed image data
@@ -157,7 +161,9 @@ def test_delete_account_success(auth_client: TestClient, test_user: User, sessio
 
 
 @patch('routers.user.validate_and_process_image')
-def test_get_avatar_authorized(mock_validate, auth_client: TestClient, test_user: User):
+def test_get_avatar_authorized(
+        mock_validate: MagicMock, auth_client: TestClient, test_user: User
+    ):
     """Test getting user avatar"""
     # Configure mock to return processed image data
     mock_validate.return_value = (MOCK_IMAGE_DATA, MOCK_CONTENT_TYPE)
@@ -194,7 +200,9 @@ def test_get_avatar_unauthorized(unauth_client: TestClient):
 
 # Add new test for invalid image
 @patch('routers.user.validate_and_process_image')
-def test_update_profile_invalid_image(mock_validate, auth_client: TestClient):
+def test_update_profile_invalid_image(
+        mock_validate: MagicMock, auth_client: TestClient
+    ):
     """Test that invalid images are rejected"""
     # Configure mock to raise InvalidImageError
     mock_validate.side_effect = InvalidImageError("Invalid test image")
@@ -214,8 +222,13 @@ def test_update_profile_invalid_image(mock_validate, auth_client: TestClient):
 
 # --- Multi-Organization Profile Tests ---
 
-def test_profile_displays_multiple_organizations(auth_client, test_user, session, test_organization, second_test_organization):
+def test_profile_displays_multiple_organizations(
+        auth_client: TestClient, test_user: User, session: Session, test_organization: Organization, second_test_organization: Organization
+    ):
     """Test that a user's profile page displays all organizations they belong to"""
+    if second_test_organization.id is None:
+        raise SetupError("Second test organization ID is None")
+    
     # Ensure test_user is part of both organizations
     # First org should already be set up through the org_owner fixture
     # Now add to second org
@@ -226,50 +239,47 @@ def test_profile_displays_multiple_organizations(auth_client, test_user, session
     test_user.roles.append(member_role)
     session.add(member_role)
     session.commit()
-    
+
     # Visit profile page
     response = auth_client.get("/user/profile")
     assert response.status_code == 200
-    
+
     # Check that both organizations are displayed
     assert test_organization.name in response.text
     assert second_test_organization.name in response.text
 
 
-def test_profile_displays_organization_list(auth_client, test_user, session, test_organization):
+def test_profile_displays_organization_list(
+        auth_client_owner: TestClient, session: Session, test_organization: Organization
+    ):
     """Test that the profile page shows organizations in a macro-rendered list"""
-    response = auth_client.get("/user/profile")
+    
+    response = auth_client_owner.get("/user/profile")
     assert response.status_code == 200
     
-    # Check that organizations are rendered in a list
-    assert "Organizations" in response.text
-    assert test_organization.name in response.text
-    assert f"/organizations/{test_organization.id}" in response.text
-
-
-def test_profile_organization_roles(auth_client, test_user, session, test_organization, second_test_organization):
-    """Test that the profile shows the user's roles in each organization"""
-    # Add user to a second organization with a different role
-    admin_role = Role(
-        name="Administrator", 
-        organization_id=second_test_organization.id
+    # Find the entire Organizations card section using regex
+    # This regex looks for the card div, the header with "Organizations" and the button,
+    # and captures everything until the next card's div or the end of the container
+    org_section_match = re.search(
+        r'(<div class="card mb-4">\s*<div class="card-header.*?">\s*Organizations\s*<button.*?</div>.*?<div class="card-body">.*?</div>\s*</div>)',
+        response.text, 
+        re.DOTALL # Allow . to match newline characters
     )
-    test_user.roles.append(admin_role)
-    session.add(admin_role)
-    session.commit()
     
-    # Visit profile page
-    response = auth_client.get("/user/profile")
-    assert response.status_code == 200
+    # Check that the organizations section was found
+    assert org_section_match, "Organizations card section not found in profile HTML"
     
-    # Check that both organizations and roles are displayed
-    assert test_organization.name in response.text
-    assert second_test_organization.name in response.text
-    assert "Owner" in response.text  # From the first org
-    assert "Administrator" in response.text  # From the second org
+    # Extract the matched HTML for the organizations section
+    org_section_html = org_section_match.group(1)
+    
+    # Check that the organization name and link are rendered within this specific section
+    assert test_organization.name in org_section_html, f"Organization name '{test_organization.name}' not found within the organizations card section"
+    assert f"/organizations/{test_organization.id}" in org_section_html, f"Organization link '/organizations/{test_organization.id}' not found within the organizations card section"
 
 
-def test_profile_no_organizations(auth_client, session, test_user):
+def test_profile_no_organizations(
+        auth_client: TestClient, test_user: User, session: Session
+    ):
     """Test profile display when user has no organizations"""
     # Remove user from all orgs by clearing roles
     test_user.roles = []

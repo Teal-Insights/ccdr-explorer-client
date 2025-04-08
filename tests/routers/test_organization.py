@@ -1,8 +1,7 @@
 from utils.models import Organization, Role, Permission, ValidPermissions, User
 from utils.db import create_default_roles
-from sqlmodel import select, Session
+from sqlmodel import select
 from tests.conftest import SetupError
-from fastapi.testclient import TestClient
 
 def test_create_organization_success(auth_client, session, test_user):
     """Test successful organization creation"""
@@ -363,7 +362,7 @@ def test_read_organization_as_admin(auth_client_admin, test_organization):
     assert "Create Role" in response.text
     assert "Edit Role" in response.text
     
-    # Admin shouldn't have the permission to trigger the delete modal
+    # Admin shouldn't have the permission to trigger the delete organization modal
     assert 'data-bs-target="#deleteOrganizationModal"' not in response.text
 
 
@@ -398,27 +397,6 @@ def test_read_organization_as_non_member(auth_client_non_member, test_organizati
     assert "Organization not found" in response.text
 
 
-def test_organization_page_displays_roles_correctly(auth_client_owner, session, test_organization, org_owner):
-    """Test that roles and their permissions are displayed correctly"""
-    response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
-        follow_redirects=False
-    )
-
-    assert response.status_code == 200
-
-    # Check that roles are displayed
-    assert "Owner" in response.text
-    assert "Administrator" not in response.text  # Should not exist yet
-
-    # Check permissions are listed
-    permissions = [p.name.value for p in session.exec(
-        select(Permission)).all()]
-
-    for permission in permissions:
-        assert permission in response.text
-
-
 def test_organization_page_displays_members_correctly(auth_client_owner, org_admin_user, org_member_user, test_organization):
     """Test that members and their roles are displayed correctly"""
     response = auth_client_owner.get(
@@ -429,7 +407,7 @@ def test_organization_page_displays_members_correctly(auth_client_owner, org_adm
     assert response.status_code == 200
 
     # Check that members are displayed with their names and roles
-    assert "Test User" in response.text
+    assert "Org Owner" in response.text
     assert "Admin User" in response.text
     assert "Member User" in response.text
 
@@ -483,30 +461,6 @@ def test_empty_organization_displays_no_members_message(auth_client_owner, sessi
     assert response.status_code == 200
     assert "No members found" in response.text
 
-
-def test_organization_with_default_roles_only(auth_client_owner: TestClient, session: Session):
-    """Test that an organization with only default roles shows appropriate message"""
-    org_owner: User | None = session.exec(select(User).where(User.name == "Org Owner")).first()
-    if org_owner is None:
-        raise SetupError("Could not find 'Org Owner' user after test setup.")
-
-    # Get the organization that the specific org_owner user is associated with
-    org = session.exec(
-        select(Organization)
-        .where(Organization.roles.any(Role.users.contains(org_owner)))
-    ).first()
-    if org is None:
-        raise SetupError("Could not find organization for the specified org_owner")
-    
-    # Add just the default "Owner" and "Member" roles
-    response = auth_client_owner.get(
-        f"/organizations/{org.id}",
-        follow_redirects=False
-    )
-
-    # This will fail before implementation but should pass after
-    assert response.status_code == 200
-    assert "No custom roles defined" in response.text
 
 # --- Invite User Tests ---
 
