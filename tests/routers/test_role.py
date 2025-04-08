@@ -589,8 +589,8 @@ def test_create_role_form_modal(auth_client_owner, test_organization):
     
     # Check for modal elements
     assert 'id="createRoleModal"' in response.text
-    assert 'action="/roles/create"' in response.text
-    assert 'method="post"' in response.text
+    assert 'action="http://testserver/roles/create"' in response.text
+    assert 'method="POST"' in response.text or 'method="post"' in response.text
     assert 'name="name"' in response.text
     assert 'name="organization_id"' in response.text
     assert f'value="{test_organization.id}"' in response.text
@@ -607,7 +607,7 @@ def test_edit_role_form_modal(auth_client_owner, session, test_organization):
         name="Test Edit Role",
         organization_id=test_organization.id
     )
-    
+
     # Add some permissions
     edit_permission = session.exec(
         select(Permission).where(Permission.name == ValidPermissions.EDIT_ROLE)
@@ -615,39 +615,50 @@ def test_edit_role_form_modal(auth_client_owner, session, test_organization):
     invite_permission = session.exec(
         select(Permission).where(Permission.name == ValidPermissions.INVITE_USER)
     ).first()
-    
+
     test_role.permissions.append(edit_permission)
     test_role.permissions.append(invite_permission)
-    
+
     session.add(test_role)
     session.commit()
     session.refresh(test_role)
-    
+
+    # Verify DELETE_ROLE permission is NOT in the role's permissions before making request
+    role_permission_names = [p.name for p in test_role.permissions]
+    assert ValidPermissions.DELETE_ROLE not in role_permission_names, "DELETE_ROLE should not be in permissions before test"
+
     response = auth_client_owner.get(
         f"/organizations/{test_organization.id}",
         follow_redirects=False
     )
-    
     assert response.status_code == 200
-    
+
     # Check for modal elements
     assert f'id="editRoleModal{test_role.id}"' in response.text
-    assert 'action="/roles/update"' in response.text
-    assert 'method="post"' in response.text
+    assert 'action="http://testserver/roles/update"' in response.text
+    assert 'method="POST"' in response.text or 'method="post"' in response.text
     assert 'name="name"' in response.text
     assert f'value="{test_role.name}"' in response.text
     assert 'name="id"' in response.text
     assert f'value="{test_role.id}"' in response.text
     assert 'name="organization_id"' in response.text
     assert f'value="{test_organization.id}"' in response.text
-    
+
     # Check for permission checkboxes with correct checked state
     for permission in ValidPermissions:
-        assert permission.value in response.text
-        
-    # These should be checked
-    assert f'value="{ValidPermissions.EDIT_ROLE.value}" checked' in response.text
-    assert f'value="{ValidPermissions.INVITE_USER.value}" checked' in response.text
+        assert f'value="{permission.value}"' in response.text
+
+    # These should be checked - use regex for robustness
+    edit_role_pattern = f'<input(?=[^>]*\\svalue="{re.escape(ValidPermissions.EDIT_ROLE.value)}")(?=[^>]*\\sid="perm_{test_role.id}_{re.escape(ValidPermissions.EDIT_ROLE.value.replace(" ", "_"))}")[^>]*\\s+checked[^>]*>'
+    assert re.search(edit_role_pattern, response.text) is not None, f"Checkbox for {ValidPermissions.EDIT_ROLE.value} should be checked"
+    invite_user_pattern = f'<input(?=[^>]*\\svalue="{re.escape(ValidPermissions.INVITE_USER.value)}")(?=[^>]*\\sid="perm_{test_role.id}_{re.escape(ValidPermissions.INVITE_USER.value.replace(" ", "_"))}")[^>]*\\s+checked[^>]*>'
+    assert re.search(invite_user_pattern, response.text) is not None, f"Checkbox for {ValidPermissions.INVITE_USER.value} should be checked"
+
+    # Check for one that should NOT be checked
+    delete_role_pattern = f'<input(?=[^>]*\\svalue="{re.escape(ValidPermissions.DELETE_ROLE.value)}")(?=[^>]*\\sid="perm_{test_role.id}_{re.escape(ValidPermissions.DELETE_ROLE.value.replace(" ", "_"))}")[^>]*\\s+checked[^>]*>'
+    delete_match = re.search(delete_role_pattern, response.text)
+
+    assert delete_match is None, f"Checkbox for {ValidPermissions.DELETE_ROLE.value} should NOT be checked"
 
 
 def test_delete_role_form(auth_client_owner, session, test_organization):
@@ -669,8 +680,8 @@ def test_delete_role_form(auth_client_owner, session, test_organization):
     assert response.status_code == 200
     
     # Check for delete form elements
-    assert 'action="/roles/delete"' in response.text
-    assert 'method="post"' in response.text
+    assert 'action="http://testserver/roles/delete"' in response.text
+    assert 'method="POST"' in response.text or 'method="post"' in response.text
     assert 'name="id"' in response.text
     assert f'value="{test_role.id}"' in response.text
     assert 'name="organization_id"' in response.text
