@@ -3,7 +3,7 @@
 import pytest
 from tests.conftest import SetupError
 from utils.models import Role, Permission, ValidPermissions, User
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 import re
 from main import app
 
@@ -479,7 +479,8 @@ def test_organization_page_role_creation_access(auth_client_owner, auth_client_a
         follow_redirects=False
     )
     assert owner_response.status_code == 200
-    assert "Create Role" in owner_response.text
+    # Check for the button's modal trigger specifically
+    assert 'data-bs-target="#createRoleModal"' in owner_response.text
     
     # Admin should see role creation
     admin_response = auth_client_admin.get(
@@ -487,7 +488,8 @@ def test_organization_page_role_creation_access(auth_client_owner, auth_client_a
         follow_redirects=False
     )
     assert admin_response.status_code == 200
-    assert "Create Role" in admin_response.text
+    # Check for the button's modal trigger specifically
+    assert 'data-bs-target="#createRoleModal"' in admin_response.text
     
     # Member should not see role creation
     member_response = auth_client_member.get(
@@ -495,34 +497,45 @@ def test_organization_page_role_creation_access(auth_client_owner, auth_client_a
         follow_redirects=False
     )
     assert member_response.status_code == 200
-    assert "Create Role" not in member_response.text
+    # Check that the button's modal trigger is NOT present
+    assert 'data-bs-target="#createRoleModal"' not in member_response.text
 
 
-def test_organization_page_role_edit_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization):
-    """Test that role editing UI elements are only shown to users with EDIT_ROLE permission"""
-    # Owner should see role editing controls
+def test_organization_page_role_edit_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization, session: Session):
+    """Test that the 'Edit Role' button appears for custom roles only for users with permission."""
+    # Create a custom, editable role for the test
+    custom_role = Role(name="Custom Role To Edit", organization_id=test_organization.id)
+    session.add(custom_role)
+    session.commit()
+    session.refresh(custom_role)
+
+    # Define the regex pattern for the specific custom role's edit button
+    edit_button_pattern = fr'<button[^>]*data-bs-target="#editRoleModal{custom_role.id}"[^>]*>\s*Edit Role\s*</button>'
+
+    # Owner should see the edit button for the custom role
     owner_response = auth_client_owner.get(
         app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert owner_response.status_code == 200
-    assert "Edit Role" in owner_response.text
+    assert re.search(edit_button_pattern, owner_response.text) is not None, "Owner should see edit button for custom role"
     
-    # Admin should see role editing controls
+    # Admin should see the edit button for the custom role
     admin_response = auth_client_admin.get(
         app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert admin_response.status_code == 200
-    assert "Edit Role" in admin_response.text
-    
-    # Member should not see role editing controls
+    assert re.search(edit_button_pattern, admin_response.text) is not None, "Admin should see edit button for custom role"
+
+    # Member should not see *any* edit role button
     member_response = auth_client_member.get(
         app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert member_response.status_code == 200
-    assert "Edit Role" not in member_response.text
+    # Use a general pattern to ensure no edit buttons are present for the member
+    assert re.search(r'<button[^>]*>\\s*Edit Role\\s*</button>', member_response.text) is None, "Member should not see any edit buttons"
 
 
 def test_organization_page_role_delete_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization, session: Session):
@@ -579,6 +592,153 @@ def test_organization_page_role_delete_access(auth_client_owner, auth_client_adm
     assert expected_member_delete_form not in owner_response.text
     assert expected_member_delete_form not in admin_response.text
     assert expected_member_delete_form not in member_response.text
+
+
+def test_organization_page_always_shows_default_roles(auth_client_member, test_organization, session: Session):
+    """
+    Test that Owner, Administrator, and Member roles are always visible
+    on the organization page, even if no custom roles exist.
+    The default Member client is used as it has the least privileges but should still see the roles.
+    """
+    # Ensure no custom roles exist for this test
+    custom_roles = session.exec(
+        select(Role).where(
+            Role.organization_id == test_organization.id,
+            col(Role.name).not_in(["Owner", "Administrator", "Member"])
+        )
+    ).all()
+    assert len(custom_roles) == 0, "Test setup failed: Custom roles exist unexpectedly."
+
+    response = auth_client_member.get(
+        app.url_path_for("read_organization", org_id=test_organization.id),
+        follow_redirects=False
+    )
+    assert response.status_code == 200
+
+    # Check if the default role names are present in the rendered table body
+    # This implicitly checks if the table is rendered even without custom roles.
+    assert "<td>Owner</td>" in response.text
+    assert "<td>Administrator</td>" in response.text
+    assert "<td>Member</td>" in response.text
+
+
+def test_organization_page_no_edit_for_default_roles(auth_client_owner, test_organization):
+    """
+    Test that the 'Edit Role' button/modal trigger does not appear for default roles
+    (Owner, Administrator, Member), even for the owner.
+    """
+    response = auth_client_owner.get(
+        app.url_path_for("read_organization", org_id=test_organization.id),
+        follow_redirects=False
+    )
+    assert response.status_code == 200
+
+    # Owner role (ID 1) should not have an edit button
+    owner_edit_button_pattern = r'<button[^>]*data-bs-target="#editRoleModal1"[^>]*>\\s*Edit Role\\s*</button>'
+    assert re.search(owner_edit_button_pattern, response.text) is None, "Edit button found for Owner role"
+
+    # Administrator role (ID 2) should not have an edit button
+    admin_edit_button_pattern = r'<button[^>]*data-bs-target="#editRoleModal2"[^>]*>\\s*Edit Role\\s*</button>'
+    assert re.search(admin_edit_button_pattern, response.text) is None, "Edit button found for Administrator role"
+
+    # Member role (ID 3) should not have an edit button
+    member_edit_button_pattern = r'<button[^>]*data-bs-target="#editRoleModal3"[^>]*>\\s*Edit Role\\s*</button>'
+    assert re.search(member_edit_button_pattern, response.text) is None, "Edit button found for Member role"
+
+    # Check that the edit modals themselves are not generated for default roles
+    assert 'id="editRoleModal1"' not in response.text, "Edit modal found for Owner role"
+    assert 'id="editRoleModal2"' not in response.text, "Edit modal found for Administrator role"
+    assert 'id="editRoleModal3"' not in response.text, "Edit modal found for Member role"
+
+
+def test_organization_page_no_delete_for_default_roles(auth_client_owner, test_organization):
+    """
+    Test that the 'Delete Role' button/form does not appear for default roles
+    (Owner, Administrator, Member), even for the owner.
+    This re-verifies and centralizes checks from test_organization_page_role_delete_access.
+    """
+    response = auth_client_owner.get(
+        app.url_path_for("read_organization", org_id=test_organization.id),
+        follow_redirects=False
+    )
+    assert response.status_code == 200
+
+    # Check that delete forms are NOT present for default roles (IDs 1, 2, 3)
+    owner_delete_form_pattern = r'<form[^>]*action="[^"]*?/roles/delete"[^>]*>.*?<input[^>]*name="id"[^>]*value="1"[^>]*>.*?</form>'
+    assert re.search(owner_delete_form_pattern, response.text, re.DOTALL) is None, "Delete form found for Owner role"
+
+    admin_delete_form_pattern = r'<form[^>]*action="[^"]*?/roles/delete"[^>]*>.*?<input[^>]*name="id"[^>]*value="2"[^>]*>.*?</form>'
+    assert re.search(admin_delete_form_pattern, response.text, re.DOTALL) is None, "Delete form found for Administrator role"
+
+    member_delete_form_pattern = r'<form[^>]*action="[^"]*?/roles/delete"[^>]*>.*?<input[^>]*name="id"[^>]*value="3"[^>]*>.*?</form>'
+    assert re.search(member_delete_form_pattern, response.text, re.DOTALL) is None, "Delete form found for Member role"
+
+
+# --- API Endpoint Tests for Default Roles ---
+
+@pytest.mark.parametrize("default_role_name", ["Owner", "Administrator", "Member"])
+def test_update_default_role_api_forbidden(auth_client_owner, test_organization, session: Session, default_role_name):
+    """
+    Test that attempting to update default roles via the API is forbidden (403).
+    Uses the owner client which has EDIT_ROLE permission.
+    Finds the role ID dynamically based on the name for the specific organization.
+    """
+    # Find the actual role ID for the current test organization instance
+    default_role = session.exec(
+        select(Role)
+        .where(Role.organization_id == test_organization.id)
+        .where(Role.name == default_role_name)
+    ).first()
+
+    if not default_role:
+        pytest.fail(f"Default role '{default_role_name}' not found for organization {test_organization.id}")
+        
+    default_role_id = default_role.id
+
+    response = auth_client_owner.post(
+        app.url_path_for("update_role"),
+        data={
+            "id": default_role_id, # Use dynamically fetched ID
+            "name": f"Attempt to Change {default_role_name} Role",
+            "organization_id": test_organization.id,
+            "permissions": [ValidPermissions.EDIT_ROLE.value] # Arbitrary permission
+        },
+        follow_redirects=False # We expect a direct 403, not a redirect
+    )
+
+    assert response.status_code == 403 # Expecting Forbidden
+
+
+@pytest.mark.parametrize("default_role_name", ["Owner", "Administrator", "Member"])
+def test_delete_default_role_api_forbidden(auth_client_owner, test_organization, session: Session, default_role_name):
+    """
+    Test that attempting to delete default roles via the API is forbidden (403).
+    Uses the owner client which has DELETE_ROLE permission.
+    Finds the role ID dynamically based on the name for the specific organization.
+    """
+    # Find the actual role ID for the current test organization instance
+    default_role = session.exec(
+        select(Role)
+        .where(Role.organization_id == test_organization.id)
+        .where(Role.name == default_role_name)
+    ).first()
+
+    if not default_role:
+        pytest.fail(f"Default role '{default_role_name}' not found for organization {test_organization.id}")
+
+    default_role_id = default_role.id
+    print(default_role_id)
+
+    response = auth_client_owner.post(
+        app.url_path_for("delete_role"),
+        data={
+            "id": default_role_id, # Use dynamically fetched ID
+            "organization_id": test_organization.id
+        },
+        follow_redirects=False # We expect a direct 403, not a redirect
+    )
+
+    assert response.status_code == 403 # Expecting Forbidden
 
 
 def test_create_role_form_modal(auth_client_owner, test_organization):

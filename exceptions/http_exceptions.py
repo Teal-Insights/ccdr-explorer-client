@@ -118,6 +118,15 @@ class RoleHasUsersError(HTTPException):
         )
 
 
+class CannotModifyDefaultRoleError(HTTPException):
+    """Raised when attempting to modify or delete a default system role."""
+    def __init__(self, action: str = "modify"):
+        super().__init__(
+            status_code=403,
+            detail=f"Default system roles cannot be {action}d."
+        )
+
+
 class DataIntegrityError(HTTPException):
     def __init__(
             self,

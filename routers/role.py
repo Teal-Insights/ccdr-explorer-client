@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from utils.db import get_session
 from utils.dependencies import get_authenticated_user
 from utils.models import Role, Permission, ValidPermissions, utc_time, User, DataIntegrityError
-from exceptions.http_exceptions import InsufficientPermissionsError, InvalidPermissionError, RoleAlreadyExistsError, RoleNotFoundError, RoleHasUsersError
+from exceptions.http_exceptions import InsufficientPermissionsError, InvalidPermissionError, RoleAlreadyExistsError, RoleNotFoundError, RoleHasUsersError, CannotModifyDefaultRoleError
 from routers.organization import router as organization_router
 
 logger = getLogger("uvicorn.error")
@@ -84,6 +84,10 @@ def update_role(
     if not db_role:
         raise RoleNotFoundError()
 
+    # Prevent modification of default roles
+    if db_role.name in ["Owner", "Administrator", "Member"]:
+        raise CannotModifyDefaultRoleError(action="update")
+
     # If any user-selected permissions are not valid, raise an error
     for permission in permissions:
         if permission not in ValidPermissions:
@@ -147,6 +151,10 @@ def delete_role(
 
     if not db_role:
         raise RoleNotFoundError()
+
+    # Prevent deletion of default roles
+    if db_role.name in ["Owner", "Administrator", "Member"]:
+        raise CannotModifyDefaultRoleError(action="delete")
 
     # Check that no users have the role
     if db_role.users:

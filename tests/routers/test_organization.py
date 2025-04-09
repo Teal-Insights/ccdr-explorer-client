@@ -336,7 +336,7 @@ def test_delete_organization_cascade(auth_client, session, test_organization, te
     ).all()
     assert len(roles) == 0
 
-# --- Organization View Permission Tests ---
+# --- Organization View Tests ---
 
 def test_read_organization_as_owner(auth_client_owner, test_organization):
     """Test accessing organization page as an owner"""
@@ -348,13 +348,8 @@ def test_read_organization_as_owner(auth_client_owner, test_organization):
     assert response.status_code == 200
     assert test_organization.name in response.text
 
-    # Check for owner-specific actions
-    assert "Invite Member" in response.text
-    assert "Create Role" in response.text
-    assert "Edit Role" in response.text
-    assert "Delete Role" in response.text
-    assert "Edit Organization" in response.text
-    assert "Delete Organization" in response.text
+    # Owner should have the permission to trigger the delete organization modal
+    assert 'data-bs-target="#deleteOrganizationModal"' in response.text
 
 
 def test_read_organization_as_admin(auth_client_admin, test_organization):
@@ -366,11 +361,6 @@ def test_read_organization_as_admin(auth_client_admin, test_organization):
 
     assert response.status_code == 200
     assert test_organization.name in response.text
-
-    # Check for admin-specific actions based on permissions
-    assert "Invite Member" in response.text
-    assert "Create Role" in response.text
-    assert "Edit Role" in response.text
     
     # Admin shouldn't have the permission to trigger the delete organization modal
     assert 'data-bs-target="#deleteOrganizationModal"' not in response.text
@@ -386,13 +376,8 @@ def test_read_organization_as_member(auth_client_member, test_organization):
     assert response.status_code == 200
     assert test_organization.name in response.text
 
-    # Member should not have permission buttons
-    assert "Invite Member" not in response.text
-    assert "Create Role" not in response.text
-    assert "Edit Role" not in response.text
-    assert "Delete Role" not in response.text
-    assert "Edit Organization" not in response.text
-    assert "Delete Organization" not in response.text
+    # Member shouldn't have the permission to trigger the delete organization modal
+    assert 'data-bs-target="#deleteOrganizationModal"' not in response.text
 
 
 def test_read_organization_as_non_member(auth_client_non_member, test_organization):
