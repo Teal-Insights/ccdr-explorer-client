@@ -5,7 +5,8 @@ from fastapi import FastAPI, Request, Depends, status
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.exceptions import RequestValidationError, StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from routers import account, dashboard, organization, role, user, static_pages
 from utils.dependencies import (
     get_optional_user

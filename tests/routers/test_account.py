@@ -27,7 +27,21 @@ def mock_email_response():
     """
     Returns a mock Email response object
     """
-    return resend.Email(id="mock_resend_id")
+    # Use dictionary unpacking to handle the 'from' keyword
+    email_data = {
+        "id": "mock_resend_id",
+        "from": "test@example.com",
+        "to": ["recipient@example.com"],
+        "created_at": "2023-01-01T00:00:00Z",
+        "subject": "Mock Subject",
+        "html": "<p>Mock HTML</p>",
+        "text": "Mock Text",
+        "bcc": [],
+        "cc": [],
+        "reply_to": [],
+        "last_event": "delivered"
+    }
+    return resend.Email(**email_data)
 
 
 @pytest.fixture

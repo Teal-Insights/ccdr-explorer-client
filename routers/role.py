@@ -10,6 +10,7 @@ from utils.db import get_session
 from utils.dependencies import get_authenticated_user
 from utils.models import Role, Permission, ValidPermissions, utc_time, User, DataIntegrityError
 from exceptions.http_exceptions import InsufficientPermissionsError, InvalidPermissionError, RoleAlreadyExistsError, RoleNotFoundError, RoleHasUsersError
+from routers.organization import router as organization_router
 
 logger = getLogger("uvicorn.error")
 
@@ -55,7 +56,10 @@ def create_role(
     # Commit transaction
     session.commit()
 
-    return RedirectResponse(url="/profile", status_code=303)
+    return RedirectResponse(
+        url=organization_router.url_path_for("read_organization", org_id=organization_id),
+        status_code=303
+    )
 
 
 @router.post("/update", response_class=RedirectResponse)
@@ -117,7 +121,10 @@ def update_role(
 
     session.commit()
     session.refresh(db_role)
-    return RedirectResponse(url="/profile", status_code=303)
+    return RedirectResponse(
+        url=organization_router.url_path_for("read_organization", org_id=organization_id),
+        status_code=303
+    )
 
 
 @router.post("/delete", response_class=RedirectResponse)
@@ -149,4 +156,7 @@ def delete_role(
     session.delete(db_role)
     session.commit()
 
-    return RedirectResponse(url="/profile", status_code=303)
+    return RedirectResponse(
+        url=organization_router.url_path_for("read_organization", org_id=organization_id),
+        status_code=303
+    )

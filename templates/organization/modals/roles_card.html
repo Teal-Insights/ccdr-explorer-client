@@ -1,0 +1,168 @@
+<!-- Organization Roles -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Roles</span>
+        {% if ValidPermissions.CREATE_ROLE in user_permissions %}
+        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createRoleModal">
+            Create Role
+        </button>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% set ns = namespace(custom_roles_exist=false) %}
+        {% for role in organization.roles %}
+            {% if role.name not in ["Owner", "Administrator", "Member"] %}
+                {% set ns.custom_roles_exist = true %}
+            {% endif %}
+        {% endfor %}
+        
+        {% if organization.roles %}
+            {% if ns.custom_roles_exist %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Role Name</th>
+                            <th>Members</th>
+                            <th>Permissions</th>
+                            {% if ValidPermissions.EDIT_ROLE in user_permissions or ValidPermissions.DELETE_ROLE in user_permissions %}
+                            <th>Actions</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for role in organization.roles %}
+                        <tr>
+                            <td>{{ role.name }}</td>
+                            <td>{{ role.users|length }}</td>
+                            <td>
+                                <ul class="list-unstyled mb-0">
+                                    {% for permission in role.permissions %}
+                                    <li><small>{{ permission.name.value }}</small></li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                            {% if ValidPermissions.EDIT_ROLE in user_permissions or ValidPermissions.DELETE_ROLE in user_permissions %}
+                            <td>
+                                {% if ValidPermissions.EDIT_ROLE in user_permissions and role.name != "Owner" %}
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#editRoleModal{{ role.id }}">
+                                    Edit Role
+                                </button>
+                                {% endif %}
+                                
+                                {% if ValidPermissions.DELETE_ROLE in user_permissions and role.name not in ["Owner", "Administrator", "Member"] %}
+                                <form method="POST" action="{{ url_for('delete_role') }}" class="d-inline">
+                                    <input type="hidden" name="id" value="{{ role.id }}">
+                                    <input type="hidden" name="organization_id" value="{{ organization.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" {% if role.users|length > 0 %}disabled{% endif %}>
+                                        Delete Role
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No custom roles defined</p>
+            {% endif %}
+        {% else %}
+        <p class="text-muted">No roles defined</p>
+        {% endif %}
+    </div>
+</div> 
+
+{# Create Role Modal #}
+{% if ValidPermissions.CREATE_ROLE in user_permissions %}
+<div class="modal fade" id="createRoleModal" tabindex="-1" aria-labelledby="createRoleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('create_role') }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="createRoleModalLabel">Create New Role</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="name" class="form-label">Role Name</label>
+            <input type="text" class="form-control" id="name" name="name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Permissions</label>
+            <div class="row">
+              {% for permission in ValidPermissions %}
+                <div class="col-md-6 mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="permissions" value="{{ permission.value }}" id="perm_{{ permission.value | replace(' ', '_') }}">
+                    <label class="form-check-label" for="perm_{{ permission.value | replace(' ', '_') }}">
+                      {{ permission.value }}
+                    </label>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+          <input type="hidden" name="organization_id" value="{{ organization.id }}">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Role</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# Edit Role Modals #}
+{% if ValidPermissions.EDIT_ROLE in user_permissions %}
+  {% for role in organization.roles %}
+    {% if role.name != "Owner" %}
+    <div class="modal fade" id="editRoleModal{{ role.id }}" tabindex="-1" aria-labelledby="editRoleModalLabel{{ role.id }}" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <form method="POST" action="{{ url_for('update_role') }}">
+            <div class="modal-header">
+              <h5 class="modal-title" id="editRoleModalLabel{{ role.id }}">Edit Role: {{ role.name }}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label for="name_{{ role.id }}" class="form-label">Role Name</label>
+                <input type="text" class="form-control" id="name_{{ role.id }}" name="name" value="{{ role.name }}" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Permissions</label>
+                <div class="row">
+                  {% set role_permission_names = role.permissions | map(attribute='name') | list %}
+                  {% for permission in ValidPermissions %}
+                    <div class="col-md-6 mb-2">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="permissions" value="{{ permission.value }}" 
+                               id="perm_{{ role.id }}_{{ permission.value | replace(' ', '_') }}"
+                               {% if permission in role_permission_names %}checked{% endif %}>
+                        <label class="form-check-label" for="perm_{{ role.id }}_{{ permission.value | replace(' ', '_') }}">
+                          {{ permission.value }}
+                        </label>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+              <input type="hidden" name="id" value="{{ role.id }}">
+              <input type="hidden" name="organization_id" value="{{ organization.id }}">
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+{% endif %} 

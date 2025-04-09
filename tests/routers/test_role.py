@@ -4,6 +4,7 @@ import pytest
 from tests.conftest import SetupError
 from utils.models import Role, Permission, ValidPermissions, User
 from sqlmodel import Session, select
+import re
 
 
 @pytest.fixture
@@ -463,3 +464,225 @@ def test_delete_role_unauthenticated(unauth_client, test_organization, session: 
     )
 
     assert response.status_code == 303  # Redirects to login page
+
+
+# --- Organization Page Role Tests ---
+
+def test_organization_page_role_creation_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization):
+    """Test that role creation UI elements are only shown to users with CREATE_ROLE permission"""
+    # Owner should see role creation
+    owner_response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert owner_response.status_code == 200
+    assert "Create Role" in owner_response.text
+    
+    # Admin should see role creation
+    admin_response = auth_client_admin.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert admin_response.status_code == 200
+    assert "Create Role" in admin_response.text
+    
+    # Member should not see role creation
+    member_response = auth_client_member.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert member_response.status_code == 200
+    assert "Create Role" not in member_response.text
+
+
+def test_organization_page_role_edit_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization):
+    """Test that role editing UI elements are only shown to users with EDIT_ROLE permission"""
+    # Owner should see role editing controls
+    owner_response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert owner_response.status_code == 200
+    assert "Edit Role" in owner_response.text
+    
+    # Admin should see role editing controls
+    admin_response = auth_client_admin.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert admin_response.status_code == 200
+    assert "Edit Role" in admin_response.text
+    
+    # Member should not see role editing controls
+    member_response = auth_client_member.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert member_response.status_code == 200
+    assert "Edit Role" not in member_response.text
+
+
+def test_organization_page_role_delete_access(auth_client_owner, auth_client_admin, auth_client_member, test_organization, session: Session):
+    """Test that role deletion UI elements are only shown to users with DELETE_ROLE permission"""
+    # Create a custom, deletable role for the test
+    custom_role = Role(name="Custom Role To Delete", organization_id=test_organization.id)
+    session.add(custom_role)
+    session.commit()
+    session.refresh(custom_role)
+
+    # Confirm that the custom role is accessible from organization object
+    assert custom_role in test_organization.roles
+
+    # Owner should see the delete role form action because a custom role exists and they have permission
+    owner_response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert owner_response.status_code == 200
+    expected_custom_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="{custom_role.id}">\\s*<input type="hidden" name="organization_id" value="{test_organization.id}">\\s*<button type="submit" class="btn btn-sm btn-outline-danger"\\s*>\\s*Delete Role\\s*</button>\\s*</form>'
+    assert re.search(expected_custom_delete_form, owner_response.text) is not None
+
+    # Admin should see the delete role form action
+    admin_response = auth_client_admin.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert admin_response.status_code == 200
+    assert f'<input type="hidden" name="id" value="{custom_role.id}">' in admin_response.text
+    assert 'action="http://testserver/roles/delete"' in admin_response.text
+
+    # Member should *not* see the delete role form action
+    member_response = auth_client_member.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert member_response.status_code == 200
+    assert f'<input type="hidden" name="id" value="{custom_role.id}">' not in member_response.text
+    assert 'action="http://testserver/roles/delete"' not in member_response.text
+
+    # Built-in roles should not have delete forms for anyone
+    # Check that the delete form is NOT present for the built-in "Owner" role (hardcoded ID 1 in fixtures)
+    expected_owner_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="1">' # Check only for the form targeting owner role ID
+    assert expected_owner_delete_form not in owner_response.text
+    assert expected_owner_delete_form not in admin_response.text
+    assert expected_owner_delete_form not in member_response.text
+    # Check that the delete form is NOT present for built-in Administrator role
+    expected_admin_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="2">' # Check only for the form targeting admin role ID
+    assert expected_admin_delete_form not in owner_response.text
+    assert expected_admin_delete_form not in admin_response.text
+    assert expected_admin_delete_form not in member_response.text
+    # Check that the delete form is NOT present for built-in Member role
+    expected_member_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="3">' # Check only for the form targeting member role ID
+    assert expected_member_delete_form not in owner_response.text
+    assert expected_member_delete_form not in admin_response.text
+    assert expected_member_delete_form not in member_response.text
+
+
+def test_create_role_form_modal(auth_client_owner, test_organization):
+    """Test that the create role modal form contains all required elements"""
+    response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 200
+    
+    # Check for modal elements
+    assert 'id="createRoleModal"' in response.text
+    assert 'action="http://testserver/roles/create"' in response.text
+    assert 'method="POST"' in response.text or 'method="post"' in response.text
+    assert 'name="name"' in response.text
+    assert 'name="organization_id"' in response.text
+    assert f'value="{test_organization.id}"' in response.text
+    
+    # Check for permission checkboxes
+    for permission in ValidPermissions:
+        assert permission.value in response.text
+
+
+def test_edit_role_form_modal(auth_client_owner, session, test_organization):
+    """Test that the edit role modal form contains all required elements and pre-fills data"""
+    # Create a test role to edit
+    test_role = Role(
+        name="Test Edit Role",
+        organization_id=test_organization.id
+    )
+
+    # Add some permissions
+    edit_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.EDIT_ROLE)
+    ).first()
+    invite_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.INVITE_USER)
+    ).first()
+
+    test_role.permissions.append(edit_permission)
+    test_role.permissions.append(invite_permission)
+
+    session.add(test_role)
+    session.commit()
+    session.refresh(test_role)
+
+    # Verify DELETE_ROLE permission is NOT in the role's permissions before making request
+    role_permission_names = [p.name for p in test_role.permissions]
+    assert ValidPermissions.DELETE_ROLE not in role_permission_names, "DELETE_ROLE should not be in permissions before test"
+
+    response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    assert response.status_code == 200
+
+    # Check for modal elements
+    assert f'id="editRoleModal{test_role.id}"' in response.text
+    assert 'action="http://testserver/roles/update"' in response.text
+    assert 'method="POST"' in response.text or 'method="post"' in response.text
+    assert 'name="name"' in response.text
+    assert f'value="{test_role.name}"' in response.text
+    assert 'name="id"' in response.text
+    assert f'value="{test_role.id}"' in response.text
+    assert 'name="organization_id"' in response.text
+    assert f'value="{test_organization.id}"' in response.text
+
+    # Check for permission checkboxes with correct checked state
+    for permission in ValidPermissions:
+        assert f'value="{permission.value}"' in response.text
+
+    # These should be checked - use regex for robustness
+    edit_role_pattern = f'<input(?=[^>]*\\svalue="{re.escape(ValidPermissions.EDIT_ROLE.value)}")(?=[^>]*\\sid="perm_{test_role.id}_{re.escape(ValidPermissions.EDIT_ROLE.value.replace(" ", "_"))}")[^>]*\\s+checked[^>]*>'
+    assert re.search(edit_role_pattern, response.text) is not None, f"Checkbox for {ValidPermissions.EDIT_ROLE.value} should be checked"
+    invite_user_pattern = f'<input(?=[^>]*\\svalue="{re.escape(ValidPermissions.INVITE_USER.value)}")(?=[^>]*\\sid="perm_{test_role.id}_{re.escape(ValidPermissions.INVITE_USER.value.replace(" ", "_"))}")[^>]*\\s+checked[^>]*>'
+    assert re.search(invite_user_pattern, response.text) is not None, f"Checkbox for {ValidPermissions.INVITE_USER.value} should be checked"
+
+    # Check for one that should NOT be checked
+    delete_role_pattern = f'<input(?=[^>]*\\svalue="{re.escape(ValidPermissions.DELETE_ROLE.value)}")(?=[^>]*\\sid="perm_{test_role.id}_{re.escape(ValidPermissions.DELETE_ROLE.value.replace(" ", "_"))}")[^>]*\\s+checked[^>]*>'
+    delete_match = re.search(delete_role_pattern, response.text)
+
+    assert delete_match is None, f"Checkbox for {ValidPermissions.DELETE_ROLE.value} should NOT be checked"
+
+
+def test_delete_role_form(auth_client_owner, session, test_organization):
+    """Test that the delete role form contains all required elements"""
+    # Create a test role to delete
+    test_role = Role(
+        name="Test Delete Role",
+        organization_id=test_organization.id
+    )
+    session.add(test_role)
+    session.commit()
+    session.refresh(test_role)
+    
+    response = auth_client_owner.get(
+        f"/organizations/{test_organization.id}",
+        follow_redirects=False
+    )
+    
+    assert response.status_code == 200
+    
+    # Check for delete form elements
+    assert 'action="http://testserver/roles/delete"' in response.text
+    assert 'method="POST"' in response.text or 'method="post"' in response.text
+    assert 'name="id"' in response.text
+    assert f'value="{test_role.id}"' in response.text
+    assert 'name="organization_id"' in response.text
+    assert f'value="{test_organization.id}"' in response.text
