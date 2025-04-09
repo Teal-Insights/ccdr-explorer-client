@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlmodel import Session, select
+from sqlmodel import Session
 from unittest.mock import patch, MagicMock
 from tests.conftest import SetupError
 from main import app
@@ -241,7 +241,7 @@ def test_profile_displays_multiple_organizations(
     session.commit()
 
     # Visit profile page
-    response = auth_client.get("/user/profile")
+    response = auth_client.get(app.url_path_for("read_profile"))
     assert response.status_code == 200
 
     # Check that both organizations are displayed
@@ -254,7 +254,7 @@ def test_profile_displays_organization_list(
     ):
     """Test that the profile page shows organizations in a macro-rendered list"""
     
-    response = auth_client_owner.get("/user/profile")
+    response = auth_client_owner.get(app.url_path_for("read_profile"))
     assert response.status_code == 200
     
     # Find the entire Organizations card section using regex
@@ -274,7 +274,7 @@ def test_profile_displays_organization_list(
     
     # Check that the organization name and link are rendered within this specific section
     assert test_organization.name in org_section_html, f"Organization name '{test_organization.name}' not found within the organizations card section"
-    assert f"/organizations/{test_organization.id}" in org_section_html, f"Organization link '/organizations/{test_organization.id}' not found within the organizations card section"
+    assert app.url_path_for("read_organization", org_id=test_organization.id) in org_section_html, f"Organization link '{app.url_path_for('read_organization', org_id=test_organization.id)}' not found within the organizations card section"
 
 
 def test_profile_no_organizations(
@@ -286,7 +286,7 @@ def test_profile_no_organizations(
     session.commit()
     
     # Visit profile page
-    response = auth_client.get("/user/profile")
+    response = auth_client.get(app.url_path_for("read_profile"))
     assert response.status_code == 200
     
     # Should show "no organizations" message

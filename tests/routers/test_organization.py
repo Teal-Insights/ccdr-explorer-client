@@ -9,7 +9,7 @@ from sqlmodel import Session
 def test_create_organization_success(auth_client, session, test_user):
     """Test successful organization creation"""
     response = auth_client.post(
-        "/organizations/create",
+        app.url_path_for("create_organization"),
         data={"name": "New Test Organization"},
         follow_redirects=False
     )
@@ -66,7 +66,7 @@ def test_create_organization_success(auth_client, session, test_user):
 def test_create_organization_empty_name(auth_client):
     """Test organization creation with empty name"""
     response = auth_client.post(
-        "/organizations/create",
+        app.url_path_for("create_organization"),
         data={"name": "   "},
         follow_redirects=True
     )
@@ -82,7 +82,7 @@ def test_create_organization_duplicate_name(auth_client, session, test_organizat
     org_count_before = len(session.exec(select(Organization)).all())
     
     response = auth_client.post(
-        "/organizations/create",
+        app.url_path_for("create_organization"),
         data={"name": test_organization.name},
         follow_redirects=False
     )
@@ -105,7 +105,7 @@ def test_create_organization_duplicate_name(auth_client, session, test_organizat
 def test_create_organization_unauthenticated(unauth_client):
     """Test organization creation without authentication"""
     response = unauth_client.post(
-        "/organizations/create",
+        app.url_path_for("create_organization"),
         data={"name": "Unauthorized Org"},
         follow_redirects=False
     )
@@ -130,7 +130,7 @@ def test_update_organization_success(
 
     new_name = "Updated Organization Name"
     response = auth_client.post(
-        f"/organizations/update/{test_organization.id}",
+        app.url_path_for("update_organization", org_id=test_organization.id),
         data={"id": str(test_organization.id), "name": new_name},
         follow_redirects=False
     )
@@ -156,7 +156,7 @@ def test_update_organization_unauthorized(auth_client, session, test_organizatio
     session.commit()
 
     response = auth_client.post(
-        f"/organizations/update/{test_organization.id}",
+        app.url_path_for("update_organization", org_id=test_organization.id),
         data={
             "id": test_organization.id,
             "name": "Unauthorized Update"
@@ -183,7 +183,7 @@ def test_update_organization_duplicate_name(auth_client, session, test_organizat
     session.commit()
 
     response = auth_client.post(
-        f"/organizations/update/{test_organization.id}",
+        app.url_path_for("update_organization", org_id=test_organization.id),
         data={
             "id": test_organization.id,
             "name": "Existing Org"
@@ -206,7 +206,7 @@ def test_update_organization_empty_name(auth_client, session, test_organization,
     session.commit()
 
     response = auth_client.post(
-        f"/organizations/update/{test_organization.id}",
+        app.url_path_for("update_organization", org_id=test_organization.id),
         data={
             "id": test_organization.id,
             "name": "   "
@@ -221,7 +221,7 @@ def test_update_organization_empty_name(auth_client, session, test_organization,
 def test_update_organization_unauthenticated(unauth_client, test_organization):
     """Test organization update without authentication"""
     response = unauth_client.post(
-        f"/organizations/update/{test_organization.id}",
+        app.url_path_for("update_organization", org_id=test_organization.id),
         data={
             "id": test_organization.id,
             "name": "Unauthorized Update"
@@ -246,12 +246,12 @@ def test_delete_organization_success(auth_client, session, test_organization, te
     session.commit()
 
     response = auth_client.post(
-        f"/organizations/delete/{org_id}",
+        app.url_path_for("delete_organization", org_id=org_id),
         follow_redirects=False
     )
 
     assert response.status_code == 303  # Redirect status code
-    assert "/profile" in response.headers["location"]
+    assert app.url_path_for("read_profile") in response.headers["location"]
 
     # Expire all objects in the session to force a refresh from the database
     session.expire_all()
@@ -266,7 +266,7 @@ def test_delete_organization_unauthorized(auth_client_member, session, test_orga
     """Test organization deletion without proper permissions"""
     # Use auth_client_member, who belongs to the org but has no delete permission
     response = auth_client_member.post(
-        f"/organizations/delete/{test_organization.id}",
+        app.url_path_for("delete_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -280,7 +280,7 @@ def test_delete_organization_unauthorized(auth_client_member, session, test_orga
 def test_delete_organization_not_member(auth_client_non_member, session, test_organization):
     """Test organization deletion by non-member"""
     response = auth_client_non_member.post(
-        f"/organizations/delete/{test_organization.id}",
+        app.url_path_for("delete_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -294,7 +294,7 @@ def test_delete_organization_not_member(auth_client_non_member, session, test_or
 def test_delete_organization_unauthenticated(unauth_client, test_organization):
     """Test organization deletion without authentication"""
     response = unauth_client.post(
-        f"/organizations/delete/{test_organization.id}",
+        app.url_path_for("delete_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -320,7 +320,7 @@ def test_delete_organization_cascade(auth_client, session, test_organization, te
     session.commit()
 
     response = auth_client.post(
-        f"/organizations/delete/{org_id}",
+        app.url_path_for("delete_organization", org_id=org_id),
         follow_redirects=False
     )
 
@@ -341,7 +341,7 @@ def test_delete_organization_cascade(auth_client, session, test_organization, te
 def test_read_organization_as_owner(auth_client_owner, test_organization):
     """Test accessing organization page as an owner"""
     response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -360,7 +360,7 @@ def test_read_organization_as_owner(auth_client_owner, test_organization):
 def test_read_organization_as_admin(auth_client_admin, test_organization):
     """Test accessing organization page as an admin"""
     response = auth_client_admin.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -379,7 +379,7 @@ def test_read_organization_as_admin(auth_client_admin, test_organization):
 def test_read_organization_as_member(auth_client_member, test_organization):
     """Test accessing organization page as a regular member"""
     response = auth_client_member.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -398,7 +398,7 @@ def test_read_organization_as_member(auth_client_member, test_organization):
 def test_read_organization_as_non_member(auth_client_non_member, test_organization):
     """Test accessing organization page as a non-member"""
     response = auth_client_non_member.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -410,7 +410,7 @@ def test_read_organization_as_non_member(auth_client_non_member, test_organizati
 def test_organization_page_displays_members_correctly(auth_client_owner, org_admin_user, org_member_user, test_organization):
     """Test that members and their roles are displayed correctly"""
     response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
 
@@ -463,7 +463,7 @@ def test_empty_organization_displays_no_members_message(auth_client_owner, sessi
     session.commit()
 
     response = auth_client_owner.get(
-        f"/organizations/{empty_org.id}",
+        app.url_path_for("read_organization", org_id=empty_org.id),
         follow_redirects=False
     )
 
@@ -481,14 +481,14 @@ def test_invite_user_success(auth_client_owner, session, test_organization, non_
 
     # Send invite
     response = auth_client_owner.post(
-        f"/organizations/invite/{test_organization.id}",
+        app.url_path_for("invite_member", org_id=test_organization.id),
         data={"email": non_member_user.account.email},
         follow_redirects=False
     )
 
     # Should redirect back to organization page
     assert response.status_code == 303
-    assert f"/organizations/{test_organization.id}" in response.headers["location"]
+    assert app.url_path_for("read_organization", org_id=test_organization.id) in response.headers["location"]
 
     # Verify database state - user should now have the Member role
     session.refresh(non_member_user)
@@ -508,7 +508,7 @@ def test_invite_user_success(auth_client_owner, session, test_organization, non_
 def test_invite_nonexistent_user(auth_client_owner, test_organization):
     """Test inviting a user that doesn't exist in the system"""
     response = auth_client_owner.post(
-        f"/organizations/invite/{test_organization.id}",
+        app.url_path_for("invite_member", org_id=test_organization.id),
         data={"email": "nonexistent@example.com"},
         follow_redirects=True
     )
@@ -521,7 +521,7 @@ def test_invite_nonexistent_user(auth_client_owner, test_organization):
 def test_invite_existing_member(auth_client_owner, test_organization, org_member_user):
     """Test inviting a user who is already a member"""
     response = auth_client_owner.post(
-        f"/organizations/invite/{test_organization.id}",
+        app.url_path_for("invite_member", org_id=test_organization.id),
         data={"email": org_member_user.account.email},
         follow_redirects=True
     )
@@ -534,7 +534,7 @@ def test_invite_existing_member(auth_client_owner, test_organization, org_member
 def test_invite_without_permission(auth_client_member, test_organization, non_member_user):
     """Test inviting a user without having the INVITE_USER permission"""
     response = auth_client_member.post(
-        f"/organizations/invite/{test_organization.id}",
+        app.url_path_for("invite_member", org_id=test_organization.id),
         data={"email": non_member_user.account.email},
         follow_redirects=True
     )
