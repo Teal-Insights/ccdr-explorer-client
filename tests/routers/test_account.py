@@ -285,7 +285,7 @@ def test_request_email_update_success(auth_client: TestClient, test_account: Acc
     )
     
     assert response.status_code == 303
-    assert "profile?email_update_requested=true" in response.headers["location"]
+    assert f"{app.url_path_for('read_profile')}?email_update_requested=true" in response.headers["location"]
     
     # Verify email was "sent"
     mock_resend_send.assert_called_once()
@@ -350,7 +350,7 @@ def test_confirm_email_update_success(unauth_client: TestClient, session: Sessio
     )
     
     assert response.status_code == 303
-    assert "profile?email_updated=true" in response.headers["location"]
+    assert f"{app.url_path_for('read_profile')}?email_updated=true" in response.headers["location"]
     
     # Verify email was updated
     session.refresh(test_account)

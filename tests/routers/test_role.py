@@ -5,6 +5,7 @@ from tests.conftest import SetupError
 from utils.models import Role, Permission, ValidPermissions, User
 from sqlmodel import Session, select
 import re
+from main import app
 
 
 @pytest.fixture
@@ -34,7 +35,7 @@ def admin_user(session: Session, test_user: User, test_organization):
 def test_create_role_success(auth_client, admin_user, test_organization, session: Session):
     """Test successful role creation"""
     response = auth_client.post(
-        "/roles/create",
+        app.url_path_for("create_role"),
         data={
             "name": "Test Role",
             "organization_id": test_organization.id,
@@ -44,6 +45,7 @@ def test_create_role_success(auth_client, admin_user, test_organization, session
     )
 
     assert response.status_code == 303
+    assert app.url_path_for("read_organization", org_id=test_organization.id) in response.headers["location"]
 
     # Verify role was created in database
     created_role = session.exec(
@@ -62,7 +64,7 @@ def test_create_role_success(auth_client, admin_user, test_organization, session
 def test_create_role_unauthorized(auth_client, test_user, test_organization):
     """Test role creation without proper permissions"""
     response = auth_client.post(
-        "/roles/create",
+        app.url_path_for("create_role"),
         data={
             "name": "Test Role",
             "organization_id": test_organization.id,
@@ -86,7 +88,7 @@ def test_create_duplicate_role(auth_client, admin_user, test_organization, sessi
 
     # Attempt to create role with same name
     response = auth_client.post(
-        "/roles/create",
+        app.url_path_for("create_role"),
         data={
             "name": "Existing Role",
             "organization_id": test_organization.id,
@@ -101,7 +103,7 @@ def test_create_duplicate_role(auth_client, admin_user, test_organization, sessi
 def test_create_role_unauthenticated(unauth_client, test_organization):
     """Test role creation without authentication"""
     response = unauth_client.post(
-        "/roles/create",
+        app.url_path_for("create_role"),
         data={
             "name": "Test Role",
             "organization_id": test_organization.id,
@@ -168,7 +170,7 @@ def test_update_role_success(auth_client, editor_user, test_organization, sessio
 
     # Update the role using the /roles/update endpoint
     response = auth_client.post(
-        "/roles/update",
+        app.url_path_for("update_role"),
         data={
             "id": existing_role.id,
             "name": "New Role Name",
@@ -179,6 +181,7 @@ def test_update_role_success(auth_client, editor_user, test_organization, sessio
     )
 
     assert response.status_code == 303
+    assert app.url_path_for("read_organization", org_id=test_organization.id) in response.headers["location"]
     
     # Expire all objects in the session to force a refresh from the database
     session.expire_all()
@@ -209,7 +212,7 @@ def test_update_role_unauthorized(auth_client, test_user, test_organization, ses
     session.refresh(some_role)
 
     response = auth_client.post(
-        "/roles/update",
+        app.url_path_for("update_role"),
         data={
             "id": some_role.id,
             "name": "Attempted Update",
@@ -228,7 +231,7 @@ def test_update_role_nonexistent(auth_client, editor_user, test_organization):
     A 404 (RoleNotFoundError) is expected.
     """
     response = auth_client.post(
-        "/roles/update",
+        app.url_path_for("update_role"),
         data={
             "id": 9999999,  # A role ID that doesn't exist
             "name": "Nonexistent Role",
@@ -254,7 +257,7 @@ def test_update_role_duplicate_name(auth_client, editor_user, test_organization,
 
     # Try to update 'role1' to have the same name as 'role2'
     response = auth_client.post(
-        "/roles/update",
+        app.url_path_for("update_role"),
         data={
             "id": role1.id,
             "name": "Conflict Role",
@@ -282,7 +285,7 @@ def test_update_role_invalid_permission(auth_client, editor_user, test_organizat
 
     # Provide an invalid permission string
     response = auth_client.post(
-        "/roles/update",
+        app.url_path_for("update_role"),
         data={
             "id": role_to_update.id,
             "name": "Invalid Permission Test",
@@ -311,7 +314,7 @@ def test_update_role_unauthenticated(unauth_client, test_organization, session: 
     session.refresh(some_role)
 
     response = unauth_client.post(
-        "/roles/update",
+        app.url_path_for("update_role"),
         data={
             "id": some_role.id,
             "name": "Should Not Succeed",
@@ -362,7 +365,7 @@ def test_delete_role_success(auth_client, delete_role_user, test_organization, s
     role_id = role_to_delete.id
 
     response = auth_client.post(
-        "/roles/delete",
+        app.url_path_for("delete_role"),
         data={
             "id": role_id,
             "organization_id": test_organization.id
@@ -393,7 +396,7 @@ def test_delete_role_unauthorized(auth_client, test_user, test_organization, ses
     session.commit()
 
     response = auth_client.post(
-        "/roles/delete",
+        app.url_path_for("delete_role"),
         data={
             "id": role.id,
             "organization_id": test_organization.id
@@ -407,7 +410,7 @@ def test_delete_role_unauthorized(auth_client, test_user, test_organization, ses
 def test_delete_nonexistent_role(auth_client, delete_role_user, test_organization):
     """Test attempting to delete a role that doesn't exist"""
     response = auth_client.post(
-        "/roles/delete",
+        app.url_path_for("delete_role"),
         data={
             "id": 99999,  # Non-existent role ID
             "organization_id": test_organization.id
@@ -433,7 +436,7 @@ def test_delete_role_with_users(auth_client, delete_role_user, test_organization
     session.commit()
 
     response = auth_client.post(
-        "/roles/delete",
+        app.url_path_for("delete_role"),
         data={
             "id": role_with_users.id,
             "organization_id": test_organization.id
@@ -455,7 +458,7 @@ def test_delete_role_unauthenticated(unauth_client, test_organization, session: 
     session.commit()
 
     response = unauth_client.post(
-        "/roles/delete",
+        app.url_path_for("delete_role"),
         data={
             "id": role.id,
             "organization_id": test_organization.id
@@ -472,7 +475,7 @@ def test_organization_page_role_creation_access(auth_client_owner, auth_client_a
     """Test that role creation UI elements are only shown to users with CREATE_ROLE permission"""
     # Owner should see role creation
     owner_response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert owner_response.status_code == 200
@@ -480,7 +483,7 @@ def test_organization_page_role_creation_access(auth_client_owner, auth_client_a
     
     # Admin should see role creation
     admin_response = auth_client_admin.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert admin_response.status_code == 200
@@ -488,7 +491,7 @@ def test_organization_page_role_creation_access(auth_client_owner, auth_client_a
     
     # Member should not see role creation
     member_response = auth_client_member.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert member_response.status_code == 200
@@ -499,7 +502,7 @@ def test_organization_page_role_edit_access(auth_client_owner, auth_client_admin
     """Test that role editing UI elements are only shown to users with EDIT_ROLE permission"""
     # Owner should see role editing controls
     owner_response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert owner_response.status_code == 200
@@ -507,7 +510,7 @@ def test_organization_page_role_edit_access(auth_client_owner, auth_client_admin
     
     # Admin should see role editing controls
     admin_response = auth_client_admin.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert admin_response.status_code == 200
@@ -515,7 +518,7 @@ def test_organization_page_role_edit_access(auth_client_owner, auth_client_admin
     
     # Member should not see role editing controls
     member_response = auth_client_member.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert member_response.status_code == 200
@@ -535,44 +538,44 @@ def test_organization_page_role_delete_access(auth_client_owner, auth_client_adm
 
     # Owner should see the delete role form action because a custom role exists and they have permission
     owner_response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert owner_response.status_code == 200
-    expected_custom_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="{custom_role.id}">\\s*<input type="hidden" name="organization_id" value="{test_organization.id}">\\s*<button type="submit" class="btn btn-sm btn-outline-danger"\\s*>\\s*Delete Role\\s*</button>\\s*</form>'
+    expected_custom_delete_form = f'<form method="POST" action="http://testserver{app.url_path_for('delete_role')}" class="d-inline">\\s*<input type="hidden" name="id" value="{custom_role.id}">\\s*<input type="hidden" name="organization_id" value="{test_organization.id}">\\s*<button type="submit" class="btn btn-sm btn-outline-danger"\\s*>\\s*Delete Role\\s*</button>\\s*</form>'
     assert re.search(expected_custom_delete_form, owner_response.text) is not None
 
     # Admin should see the delete role form action
     admin_response = auth_client_admin.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert admin_response.status_code == 200
     assert f'<input type="hidden" name="id" value="{custom_role.id}">' in admin_response.text
-    assert 'action="http://testserver/roles/delete"' in admin_response.text
+    assert f'action="http://testserver{app.url_path_for('delete_role')}"' in admin_response.text
 
     # Member should *not* see the delete role form action
     member_response = auth_client_member.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert member_response.status_code == 200
     assert f'<input type="hidden" name="id" value="{custom_role.id}">' not in member_response.text
-    assert 'action="http://testserver/roles/delete"' not in member_response.text
+    assert f'action="http://testserver{app.url_path_for('delete_role')}"' not in member_response.text
 
     # Built-in roles should not have delete forms for anyone
     # Check that the delete form is NOT present for the built-in "Owner" role (hardcoded ID 1 in fixtures)
-    expected_owner_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="1">' # Check only for the form targeting owner role ID
+    expected_owner_delete_form = f'<form method="POST" action="http://testserver{app.url_path_for('delete_role')}" class="d-inline">\\s*<input type="hidden" name="id" value="1">' # Check only for the form targeting owner role ID
     assert expected_owner_delete_form not in owner_response.text
     assert expected_owner_delete_form not in admin_response.text
     assert expected_owner_delete_form not in member_response.text
     # Check that the delete form is NOT present for built-in Administrator role
-    expected_admin_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="2">' # Check only for the form targeting admin role ID
+    expected_admin_delete_form = f'<form method="POST" action="http://testserver{app.url_path_for('delete_role')}" class="d-inline">\\s*<input type="hidden" name="id" value="2">' # Check only for the form targeting admin role ID
     assert expected_admin_delete_form not in owner_response.text
     assert expected_admin_delete_form not in admin_response.text
     assert expected_admin_delete_form not in member_response.text
     # Check that the delete form is NOT present for built-in Member role
-    expected_member_delete_form = f'<form method="POST" action="http://testserver/roles/delete" class="d-inline">\\s*<input type="hidden" name="id" value="3">' # Check only for the form targeting member role ID
+    expected_member_delete_form = f'<form method="POST" action="http://testserver{app.url_path_for('delete_role')}" class="d-inline">\\s*<input type="hidden" name="id" value="3">' # Check only for the form targeting member role ID
     assert expected_member_delete_form not in owner_response.text
     assert expected_member_delete_form not in admin_response.text
     assert expected_member_delete_form not in member_response.text
@@ -581,7 +584,7 @@ def test_organization_page_role_delete_access(auth_client_owner, auth_client_adm
 def test_create_role_form_modal(auth_client_owner, test_organization):
     """Test that the create role modal form contains all required elements"""
     response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     
@@ -589,7 +592,7 @@ def test_create_role_form_modal(auth_client_owner, test_organization):
     
     # Check for modal elements
     assert 'id="createRoleModal"' in response.text
-    assert 'action="http://testserver/roles/create"' in response.text
+    assert f'action="http://testserver{app.url_path_for('create_role')}"' in response.text
     assert 'method="POST"' in response.text or 'method="post"' in response.text
     assert 'name="name"' in response.text
     assert 'name="organization_id"' in response.text
@@ -628,14 +631,14 @@ def test_edit_role_form_modal(auth_client_owner, session, test_organization):
     assert ValidPermissions.DELETE_ROLE not in role_permission_names, "DELETE_ROLE should not be in permissions before test"
 
     response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     assert response.status_code == 200
 
     # Check for modal elements
     assert f'id="editRoleModal{test_role.id}"' in response.text
-    assert 'action="http://testserver/roles/update"' in response.text
+    assert f'action="http://testserver{app.url_path_for('update_role')}"' in response.text
     assert 'method="POST"' in response.text or 'method="post"' in response.text
     assert 'name="name"' in response.text
     assert f'value="{test_role.name}"' in response.text
@@ -673,14 +676,14 @@ def test_delete_role_form(auth_client_owner, session, test_organization):
     session.refresh(test_role)
     
     response = auth_client_owner.get(
-        f"/organizations/{test_organization.id}",
+        app.url_path_for("read_organization", org_id=test_organization.id),
         follow_redirects=False
     )
     
     assert response.status_code == 200
     
     # Check for delete form elements
-    assert 'action="http://testserver/roles/delete"' in response.text
+    assert f'action="http://testserver{app.url_path_for('delete_role')}"' in response.text
     assert 'method="POST"' in response.text or 'method="post"' in response.text
     assert 'name="id"' in response.text
     assert f'value="{test_role.id}"' in response.text
