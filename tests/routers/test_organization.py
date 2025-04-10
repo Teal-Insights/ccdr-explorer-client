@@ -116,17 +116,37 @@ def test_update_organization_success(
         auth_client: TestClient, session: Session, test_organization: Organization, test_user: User
     ):
     """Test successful organization update"""
-    # Set up test user as owner with edit permission
+    # Ensure test_user has the EDIT_ORGANIZATION permission via the Owner role (already created by fixture)
     if test_organization.id is None:
         raise SetupError("Test organization ID is None")
+        
+    owner_role = session.exec(
+        select(Role).where(
+            Role.organization_id == test_organization.id,
+            Role.name == "Owner"
+        )
+    ).first()
+    
+    if owner_role is None:
+        raise SetupError("Owner role not found for test organization.")
 
-    owner_role = Role(name="Owner", organization_id=test_organization.id)
-    owner_role.permissions = [
-        Permission(name=ValidPermissions.EDIT_ORGANIZATION)
-    ]
-    owner_role.users.append(test_user)
-    session.add(owner_role)
+    # Ensure the permission is present (it should be by default)
+    edit_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.EDIT_ORGANIZATION)
+    ).first()
+    if edit_permission is None:
+        raise SetupError("EDIT_ORGANIZATION permission not found.")
+        
+    if edit_permission not in owner_role.permissions:
+        owner_role.permissions.append(edit_permission) # Add just in case
+        
+    # Ensure the user is assigned to the role (it should be by default for the creating user)
+    if test_user not in owner_role.users:
+        owner_role.users.append(test_user)
+    
     session.commit()
+    session.refresh(owner_role)
+    session.refresh(test_user)
 
     new_name = "Updated Organization Name"
     response = auth_client.post(
@@ -168,19 +188,38 @@ def test_update_organization_unauthorized(auth_client, session, test_organizatio
     assert "permission" in response.text.lower()
 
 def test_update_organization_duplicate_name(auth_client, session, test_organization, test_user):
-    """Test organization update with duplicate name"""
-    # Create another organization with the target name
     existing_org = Organization(name="Existing Org")
     session.add(existing_org)
     
-    # Set up permissions
-    owner_role = Role(name="Owner", organization_id=test_organization.id)
-    owner_role.permissions = [
-        Permission(name=ValidPermissions.EDIT_ORGANIZATION)
-    ]
-    owner_role.users.append(test_user)
-    session.add(owner_role)
+    # Ensure test_user has EDIT_ORGANIZATION permission via the Owner role
+    if test_organization.id is None:
+        raise SetupError("Test organization ID is None")
+
+    owner_role = session.exec(
+        select(Role).where(
+            Role.organization_id == test_organization.id,
+            Role.name == "Owner"
+        )
+    ).first()
+
+    if owner_role is None:
+        raise SetupError("Owner role not found for test organization.")
+
+    edit_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.EDIT_ORGANIZATION)
+    ).first()
+    if edit_permission is None:
+        raise SetupError("EDIT_ORGANIZATION permission not found.")
+
+    if edit_permission not in owner_role.permissions:
+        owner_role.permissions.append(edit_permission)
+
+    if test_user not in owner_role.users:
+        owner_role.users.append(test_user)
+        
     session.commit()
+    session.refresh(owner_role)
+    session.refresh(test_user)
 
     response = auth_client.post(
         app.url_path_for("update_organization", org_id=test_organization.id),
@@ -196,14 +235,35 @@ def test_update_organization_duplicate_name(auth_client, session, test_organizat
 
 def test_update_organization_empty_name(auth_client, session, test_organization, test_user):
     """Test organization update with empty name"""
-    # Set up permissions
-    owner_role = Role(name="Owner", organization_id=test_organization.id)
-    owner_role.permissions = [
-        Permission(name=ValidPermissions.EDIT_ORGANIZATION)
-    ]
-    owner_role.users.append(test_user)
-    session.add(owner_role)
+    # Ensure test_user has EDIT_ORGANIZATION permission via the Owner role
+    if test_organization.id is None:
+        raise SetupError("Test organization ID is None")
+
+    owner_role = session.exec(
+        select(Role).where(
+            Role.organization_id == test_organization.id,
+            Role.name == "Owner"
+        )
+    ).first()
+
+    if owner_role is None:
+        raise SetupError("Owner role not found for test organization.")
+
+    edit_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.EDIT_ORGANIZATION)
+    ).first()
+    if edit_permission is None:
+        raise SetupError("EDIT_ORGANIZATION permission not found.")
+
+    if edit_permission not in owner_role.permissions:
+        owner_role.permissions.append(edit_permission)
+
+    if test_user not in owner_role.users:
+        owner_role.users.append(test_user)
+        
     session.commit()
+    session.refresh(owner_role)
+    session.refresh(test_user)
 
     response = auth_client.post(
         app.url_path_for("update_organization", org_id=test_organization.id),
@@ -235,15 +295,35 @@ def test_delete_organization_success(auth_client, session, test_organization, te
     """Test successful organization deletion"""
     # Store the organization ID for later verification
     org_id = test_organization.id
+    if org_id is None: # Add check for None
+        raise SetupError("Test organization ID is None")
     
-    # Set up test user as owner with delete permission
-    owner_role = Role(name="Owner", organization_id=org_id)
-    owner_role.permissions = [
-        Permission(name=ValidPermissions.DELETE_ORGANIZATION)
-    ]
-    owner_role.users.append(test_user)
-    session.add(owner_role)
-    session.commit()
+    # Ensure test_user has DELETE_ORGANIZATION permission via the Owner role
+    owner_role = session.exec(
+        select(Role).where(
+            Role.organization_id == org_id,
+            Role.name == "Owner"
+        )
+    ).first()
+
+    if owner_role is None:
+        raise SetupError("Owner role not found for test organization.")
+
+    delete_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.DELETE_ORGANIZATION)
+    ).first()
+    if delete_permission is None:
+        raise SetupError("DELETE_ORGANIZATION permission not found.")
+
+    if delete_permission not in owner_role.permissions:
+        owner_role.permissions.append(delete_permission) 
+
+    if test_user not in owner_role.users:
+        owner_role.users.append(test_user)
+        
+    session.commit() # Commit permission/user assignment changes
+    session.refresh(owner_role)
+    session.refresh(test_user)
 
     response = auth_client.post(
         app.url_path_for("delete_organization", org_id=org_id),
@@ -304,20 +384,44 @@ def test_delete_organization_cascade(auth_client, session, test_organization, te
     """Test that deleting organization cascades to roles"""
     # Store the organization ID for later verification
     org_id = test_organization.id
+    if org_id is None: # Add check for None
+        raise SetupError("Test organization ID is None")
     
-    # Set up test user as owner with delete permission
-    owner_role = Role(name="Owner", organization_id=org_id)
-    owner_role.permissions = [
-        Permission(name=ValidPermissions.DELETE_ORGANIZATION)
-    ]
-    owner_role.users.append(test_user)
-    
-    # Add another role to verify cascade
-    member_role = Role(name="Member", organization_id=org_id)
-    
-    session.add(owner_role)
-    session.add(member_role)
-    session.commit()
+    # Ensure test_user has DELETE_ORGANIZATION permission via the Owner role
+    owner_role = session.exec(
+        select(Role).where(
+            Role.organization_id == org_id,
+            Role.name == "Owner"
+        )
+    ).first()
+    if owner_role is None:
+        raise SetupError("Owner role not found for test organization.")
+
+    delete_permission = session.exec(
+        select(Permission).where(Permission.name == ValidPermissions.DELETE_ORGANIZATION)
+    ).first()
+    if delete_permission is None:
+        raise SetupError("DELETE_ORGANIZATION permission not found.")
+
+    if delete_permission not in owner_role.permissions:
+        owner_role.permissions.append(delete_permission)
+
+    if test_user not in owner_role.users:
+        owner_role.users.append(test_user)
+        
+    # Verify the Member role exists (created by fixture)
+    member_role = session.exec(
+        select(Role).where(
+            Role.organization_id == org_id,
+            Role.name == "Member"
+        )
+    ).first()
+    if member_role is None:
+        raise SetupError("Member role not found for test organization. Fixture might have changed.")
+
+    session.commit() # Commit permission/user assignment changes
+    session.refresh(owner_role)
+    session.refresh(test_user)
 
     response = auth_client.post(
         app.url_path_for("delete_organization", org_id=org_id),

@@ -4,7 +4,7 @@ from datetime import datetime, UTC, timedelta
 from typing import Optional, List, Union
 from pydantic import EmailStr
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Enum as SQLAlchemyEnum, LargeBinary
+from sqlalchemy import Column, Enum as SQLAlchemyEnum, LargeBinary, UniqueConstraint
 from sqlalchemy.orm import Mapped
 from utils.enums import ValidPermissions
 from exceptions.http_exceptions import DataIntegrityError
@@ -219,6 +219,10 @@ class Role(SQLModel, table=True):
     permissions: Mapped[List["Permission"]] = Relationship(
         back_populates="roles",
         link_model=RolePermissionLink
+    )
+    
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_role_organization_name"),
     )
 
 class Permission(SQLModel, table=True):

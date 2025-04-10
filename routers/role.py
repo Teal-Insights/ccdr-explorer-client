@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Form
 from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select, col
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 from utils.db import get_session
 from utils.dependencies import get_authenticated_user
 from utils.models import Role, Permission, ValidPermissions, utc_time, User, DataIntegrityError
@@ -54,7 +55,13 @@ def create_role(
     db_role.permissions.extend(db_permissions)
 
     # Commit transaction
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        # This likely means the unique constraint (org_id, name) was violated,
+        # potentially due to a race condition if the pre-check passed.
+        raise RoleAlreadyExistsError()
 
     return RedirectResponse(
         url=organization_router.url_path_for("read_organization", org_id=organization_id),
@@ -123,7 +130,14 @@ def update_role(
     db_role.name = name
     db_role.updated_at = utc_time()
 
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        # This likely means the unique constraint (org_id, name) was violated,
+        # potentially due to a race condition if the pre-check passed.
+        raise RoleAlreadyExistsError()
+
     session.refresh(db_role)
     return RedirectResponse(
         url=organization_router.url_path_for("read_organization", org_id=organization_id),
