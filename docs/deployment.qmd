@@ -36,6 +36,7 @@ The disadvantages are:
 The application relies on environment variables stored in `.env` (like `SECRET_KEY`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `RESEND_API_KEY`, `BASE_URL`). These sensitive values should be stored securely using Modal Secrets.
 
 Create a Modal Secret (e.g., named `fastapi-webapp-secrets`) either through the Modal UI or CLI:
+
 ```bash
 # Example using CLI
 modal secret create your-app-name-secret \
@@ -46,8 +47,10 @@ modal secret create your-app-name-secret \
     DB_PORT='your_db_port' \
     DB_NAME='your_db_name' \
     RESEND_API_KEY='your_resend_api_key' \
-    BASE_URL='https://your-modal-app-url' # Usually https://your-org-name--your-app-name-serve.modal.run
+    BASE_URL='https://your-username--your-app-name-serve.modal.run'
 ```
+
+You can probably guess what the `BASE_URL` will be from your user/organization name and the name of the Modal app, but you can also update it later after you get the official public base URL.
 
 **Important:** Ensure `DB_HOST` points to your *cloud* database host address, not `localhost` or `host.docker.internal`.
 
