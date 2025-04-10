@@ -1,7 +1,7 @@
 # FastAPI, Jinja2, PostgreSQL Webapp Template
 
 
-![Screenshot of homepage](docs/static/Screenshot.png)
+![Screenshot of homepage](docs/static/screenshot.jpg)
 
 ## Quickstart
 
@@ -151,7 +151,7 @@ account, verify a domain, get an API key, and paste the API key into the
 
 ### Start development database
 
-To start the development database, run the following command in your
+To start the development database and create default permissions/roles, run the following command in your
 terminal from the root directory:
 
 ``` bash
