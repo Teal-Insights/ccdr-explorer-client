@@ -1,0 +1,8 @@
+.invalid-feedback {
+    display: none;
+    color: red;
+}
+
+input:invalid:not(:placeholder-shown) + .invalid-feedback {
+    display: block;
+}

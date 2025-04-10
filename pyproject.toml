@@ -1,0 +1,35 @@
+[project]
+name = "fastapi-jinja2-postgres-webapp"
+version = "0.1.0"
+description = "A template webapp with a pure-Python FastAPI backend, frontend templating with Jinja2, and a Postgres database to power user auth"
+readme = "README.md"
+package-mode = false
+authors = [
+    {name = "Christopher Carroll Smith", email = "chriscarrollsmith@gmail.com"},
+]
+requires-python = "<4.0,>=3.13"
+dependencies = [
+    "sqlmodel<1.0.0,>=0.0.22",
+    "pyjwt<3.0.0,>=2.10.1",
+    "jinja2<4.0.0,>=3.1.4",
+    "uvicorn<1.0.0,>=0.32.0",
+    "psycopg2<3.0.0,>=2.9.10",
+    "pydantic[email]<3.0.0,>=2.9.2",
+    "python-multipart<1.0.0,>=0.0.17",
+    "python-dotenv<2.0.0,>=1.0.1",
+    "resend<3.0.0,>=2.4.0",
+    "bcrypt<5.0.0,>=4.2.0",
+    "fastapi<1.0.0,>=0.115.5",
+    "pillow>=11.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "graphviz<1.0.0,>=0.20.3",
+    "quarto<1.0.0,>=0.1.0",
+    "jupyter<2.0.0,>=1.1.1",
+    "notebook<8.0.0,>=7.2.2",
+    "pytest<9.0.0,>=8.3.3",
+    "sqlalchemy-schemadisplay<3.0,>=2.0",
+    "mypy>=1.15.0",
+]
