@@ -188,7 +188,7 @@ async def read_home(
     user: Optional[User] = Depends(get_optional_user)
 ):
     if user:
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url=app.url_path_for("read_dashboard"), status_code=302)
     return templates.TemplateResponse(
         request,
         "index.html",

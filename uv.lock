@@ -382,7 +382,6 @@ dev = [
     { name = "jupyter" },
     { name = "mypy" },
     { name = "notebook" },
-    { name = "perplexity-cli" },
     { name = "pytest" },
     { name = "quarto" },
     { name = "sqlalchemy-schemadisplay" },
@@ -410,7 +409,6 @@ dev = [
     { name = "jupyter", specifier = ">=1.1.1,<2.0.0" },
     { name = "mypy", specifier = ">=1.15.0" },
     { name = "notebook", specifier = ">=7.2.2,<8.0.0" },
-    { name = "perplexity-cli", git = "https://github.com/chriscarrollsmith/perplexity-cli.git" },
     { name = "pytest", specifier = ">=8.3.3,<9.0.0" },
     { name = "quarto", specifier = ">=0.1.0,<1.0.0" },
     { name = "sqlalchemy-schemadisplay", specifier = ">=2.0,<3.0" },
@@ -1091,15 +1089,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/66/94/68e2e17afaa9169cf6412ab0f28623903be73d1b32e208d9e8e541bb086d/parso-0.8.4.tar.gz", hash = "sha256:eb3a7b58240fb99099a345571deecc0f9540ea5f4dd2fe14c2a99d6b281ab92d", size = 400609 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c6/ac/dac4a63f978e4dcb3c6d3a78c4d8e0192a113d288502a1216950c41b1027/parso-0.8.4-py2.py3-none-any.whl", hash = "sha256:a418670a20291dacd2dddc80c377c5c3791378ee1e8d12bffc35420643d43f18", size = 103650 },
-]
-
-[[package]]
-name = "perplexity-cli"
-version = "0.1.0"
-source = { git = "https://github.com/chriscarrollsmith/perplexity-cli.git#9368a123026f31d351466640c31b2da6336f6a9f" }
-dependencies = [
-    { name = "click" },
-    { name = "requests" },
 ]
 
 [[package]]
