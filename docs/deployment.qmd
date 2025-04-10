@@ -13,6 +13,69 @@ There are *many* hosting options available for each of these services; this guid
 
 ### On Digital Ocean
 
+#### Getting Started
+
+- Create a [DigitalOcean](mdc:https:/www.digitalocean.com) account
+- Install the [`doctl` CLI tool](mdc:https:/docs.digitalocean.com/reference/doctl) and authenticate with `doctl auth init`
+- Install the [`psql` client](mdc:https:/www.postgresql.org/download)
+
+#### Create a Project
+
+Create a new project to organize your resources:
+
+```bash
+# List existing projects
+doctl projects list
+
+# Create a new project
+doctl projects create --name "YOUR-PROJECT-NAME" --purpose "YOUR-PROJECT-PURPOSE" --environment "Production"
+```
+
+Take note of the Project ID in the output for later use.
+
+#### Set Up a Managed PostgreSQL Database
+
+Create a managed, serverless PostgreSQL database instance:
+
+```bash
+doctl databases create your-db-name --engine pg --version 17 --size db-s-1vcpu-1gb --num-nodes 1 --wait
+```
+
+Get the database ID from the output of the create command and use it to retrieve the database connection details:
+
+```bash
+# Get the database ID from the output of the create command
+DATABASE_ID="your-database-id"
+
+# Get connection details
+doctl databases connection $DATABASE_ID --format Host,Port,User,Password,Database
+```
+
+Store these details securely in a `.env.production` file (you will need to set them later in application deployment as production secrets):
+
+```bash
+# Database connection parameters
+DB_HOST=your-host
+DB_PORT=your-port
+DB_USER=your-user
+DB_PASS=your-password
+DB_NAME=your-database
+```
+
+You may also want to save your database id, although you can always find it again later by listing your databases with `doctl databases list`.
+
+#### Setting Up a Firewall Rule (after Deploying Your Application Layer)
+
+Note that by default your database is publicly accessible from the Internet, so you should create a firewall rule to restrict access to only your application's IP address once you have deployed the application. The command to do this is:
+
+```bash
+doctl databases firewalls append <database-cluster-id> --rule <type>:<value>
+```
+
+where `<type>` is `ip_addr` and `<value>` is the IP address of the application server. See the [DigitalOcean documentation](https://docs.digitalocean.com/reference/doctl/reference/databases/firewalls/append/) for more details.
+
+**Note:** You can only complete this step after you have deployed your application layer and obtained the IP address of the application server.
+
 ## Deploying and Configuring the FastAPI App
 
 ### On Modal.com
