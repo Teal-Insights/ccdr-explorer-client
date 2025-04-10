@@ -1,6 +1,8 @@
 from datetime import timedelta, datetime, UTC
 from typing import Optional
 from sqlmodel import select, Session
+from sqlalchemy.exc import IntegrityError
+import pytest
 from utils.models import (
     Permission,
     Role,
@@ -29,6 +31,10 @@ def test_permissions_persist_after_role_deletion(session: Session):
     session.add(organization)
     session.commit()
     session.refresh(organization)
+    
+    # Ensure organization ID is not None (for type checking)
+    if organization.id is None:
+        pytest.fail("Organization ID is None, test setup failed.")
 
     # Create a role and link two specific permissions
     role = Role(name="Test Role", organization_id=organization.id)
@@ -70,6 +76,10 @@ def test_user_organizations_property(session: Session, test_user: User, test_org
     Test that User.organizations property correctly returns all organizations
     the user belongs to via their roles.
     """
+    # Ensure organization ID is not None (for type checking)
+    if test_organization.id is None:
+        pytest.fail("Organization ID is None, test setup failed.")
+        
     # Create a role in the test organization
     role = Role(name="Test Role", organization_id=test_organization.id)
     session.add(role)
@@ -91,6 +101,10 @@ def test_organization_users_property(session: Session, test_user: User, test_org
     Test that Organization.users property correctly returns all users
     in the organization via their roles.
     """
+    # Ensure organization ID is not None (for type checking)
+    if test_organization.id is None:
+        pytest.fail("Organization ID is None, test setup failed.")
+        
     # Create a role in the test organization
     role = Role(name="Test Role", organization_id=test_organization.id)
     session.add(role)
@@ -116,6 +130,10 @@ def test_cascade_delete_organization(session: Session, test_user: User, test_org
     - Deletes role-user links
     - Does not delete users
     """
+    # Ensure organization ID is not None (for type checking)
+    if test_organization.id is None:
+        pytest.fail("Organization ID is None, test setup failed.")
+        
     # Create a role in the test organization
     role = Role(name="Test Role", organization_id=test_organization.id)
     session.add(role)
@@ -193,6 +211,10 @@ def test_user_has_permission(session: Session, test_user: User, test_organizatio
     Test that User.has_permission method correctly checks if a user has a specific
     permission for a given organization.
     """
+    # Ensure organization ID is not None (for type checking)
+    if test_organization.id is None:
+        pytest.fail("Organization ID is None, test setup failed.")
+        
     # Create a role with specific permissions in the test organization
     role = Role(name="Test Role", organization_id=test_organization.id)
     session.add(role)
@@ -244,3 +266,50 @@ def test_cascade_delete_account_deletes_user(session: Session, test_account: Acc
     
     # Verify the user was cascade deleted
     assert session.exec(select(User).where(User.account_id == test_account.id)).first() is None
+
+
+def test_role_name_unique_per_organization(session: Session, test_organization: Organization, second_test_organization: Organization):
+    """
+    Test that role names must be unique within the same organization, 
+    but can be duplicated across different organizations.
+    """
+    role_name = "UniqueRoleTest"
+    
+    # Ensure organization IDs are not None (for type checking)
+    if test_organization.id is None or second_test_organization.id is None:
+        pytest.fail("Organization ID is None, test setup failed.")
+
+    # Create a role in the first organization
+    role1 = Role(name=role_name, organization_id=test_organization.id)
+    session.add(role1)
+    session.commit()
+    session.refresh(role1)
+    assert role1.id is not None
+
+    # Attempt to create another role with the same name in the same organization
+    role2_duplicate = Role(name=role_name, organization_id=test_organization.id)
+    session.add(role2_duplicate)
+    with pytest.raises(IntegrityError):
+        session.commit()
+    
+    # Rollback the session after the expected error
+    session.rollback()
+
+    # Create a role with the same name in the second organization (should succeed)
+    role3_different_org = Role(name=role_name, organization_id=second_test_organization.id)
+    session.add(role3_different_org)
+    session.commit()
+    session.refresh(role3_different_org)
+    assert role3_different_org.id is not None
+
+    # Verify the final state
+    roles_org1 = session.exec(select(Role).where(Role.organization_id == test_organization.id)).all()
+    roles_org2 = session.exec(select(Role).where(Role.organization_id == second_test_organization.id)).all()
+
+    # Org 1 should have exactly one role with the test name after the failed attempt
+    count_org1_roles_with_name = sum(1 for role in roles_org1 if role.name == role_name)
+    assert count_org1_roles_with_name == 1
+    
+    # Org 2 should only have the one role we added
+    assert len(roles_org2) == 1
+    assert roles_org2[0].name == role_name
