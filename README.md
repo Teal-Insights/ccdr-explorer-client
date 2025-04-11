@@ -18,14 +18,11 @@ Windows:
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-See the [uv installation
-docs](https://docs.astral.sh/uv/getting-started/installation/) for more
-information.
+See the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for more information.
 
 ### Install Python
 
-Install the latest version of Python from either the official [downloads
-page](https://www.python.org/downloads/) or using `uv`:
+Install the latest version of Python from either the official [downloads page](https://www.python.org/downloads/) or using `uv`:
 
 ``` bash
 # Installs the latest version
@@ -34,9 +31,7 @@ uv python install
 
 ### Install Docker Desktop and Docker Compose
 
-Install Docker Desktop and Coker Compose for your operating system by
-following the [instructions in the
-documentation](https://docs.docker.com/compose/install/).
+Install Docker Desktop and Coker Compose for your operating system by following the [instructions in the documentation](https://docs.docker.com/compose/install/).
 
 ### Install PostgreSQL headers
 
@@ -65,26 +60,21 @@ uv venv
 uv sync
 ```
 
-This will create an in-project virtual environment and install all
-dependencies.
+This will create an in-project virtual environment and install all dependencies.
 
 ### Set Environment Variables
 
 Copy `.env.example` to `.env` with `cp .env.example .env`.
 
-Generate a 256 bit secret key with `openssl rand -base64 32` and paste
-it into the .env file.
+Generate a 256 bit secret key with `openssl rand -base64 32` and paste it into the .env file.
 
 Set your desired database name, username, and password in the .env file.
 
-To use password recovery, register a [Resend](https://resend.com/)
-account, verify a domain, get an API key, and paste the API key into the
-.env file.
+To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
 
 ### Start development database
 
-To start the development database, run the following command in your
-terminal from the root directory:
+To start the development database, run the following command in your terminal from the root directory:
 
 ``` bash
 docker compose up -d
@@ -92,8 +82,7 @@ docker compose up -d
 
 ### Run the development server
 
-Make sure the development database is running and tables and default
-permissions/roles are created first.
+Make sure the development database is running and tables and default permissions/roles are created first.
 
 ``` bash
 uv run python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
@@ -135,5 +124,4 @@ graph TB
 
 ## License
 
-This project is created and maintained by Teal Insights and licensed under the MIT
-License. See the LICENSE file for more details.
+This project is created and maintained by Teal Insights and licensed under the MIT License. See the LICENSE file for more details.

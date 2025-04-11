@@ -4,11 +4,11 @@ from sqlmodel import Session, select
 from typing import Optional, List
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import selectinload
-from utils.models import User, DataIntegrityError, Organization
-from utils.db import get_session
-from utils.dependencies import get_authenticated_user, get_user_with_relations
-from utils.images import validate_and_process_image, MAX_FILE_SIZE, MIN_DIMENSION, MAX_DIMENSION, ALLOWED_CONTENT_TYPES
-from utils.enums import ValidPermissions
+from utils.core.models import User, DataIntegrityError, Organization
+from utils.core.db import get_session
+from utils.core.dependencies import get_authenticated_user, get_user_with_relations
+from utils.core.images import validate_and_process_image, MAX_FILE_SIZE, MIN_DIMENSION, MAX_DIMENSION, ALLOWED_CONTENT_TYPES
+from utils.core.enums import ValidPermissions
 from exceptions.http_exceptions import (
     InsufficientPermissionsError,
     UserNotFoundError,

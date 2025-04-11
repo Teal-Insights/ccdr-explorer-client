@@ -4,8 +4,8 @@ from sqlmodel import Session
 from unittest.mock import patch, MagicMock
 from tests.conftest import SetupError
 from main import app
-from utils.models import User, Role, Organization
-from utils.images import InvalidImageError
+from utils.core.models import User, Role, Organization
+from utils.core.images import InvalidImageError
 import re
 import pytest
 

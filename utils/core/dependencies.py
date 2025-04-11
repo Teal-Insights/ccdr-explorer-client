@@ -4,12 +4,12 @@ from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 from datetime import UTC, datetime
 from typing import Optional, Tuple
-from utils.auth import (
+from utils.core.auth import (
     validate_token, create_access_token, create_refresh_token,
     oauth2_scheme_cookie, verify_password
 )
-from utils.db import get_session
-from utils.models import User, Role, PasswordResetToken, EmailUpdateToken, Account
+from utils.core.db import get_session
+from utils.core.models import User, Role, PasswordResetToken, EmailUpdateToken, Account
 from exceptions.http_exceptions import AuthenticationError, CredentialsError, DataIntegrityError
 from exceptions.exceptions import NeedsNewTokens
 
