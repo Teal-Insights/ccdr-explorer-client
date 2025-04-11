@@ -131,8 +131,6 @@ graph TB
         G -- Stores --> I["Embeddings Table"]
         G -- Stores --> J["Key Concepts Table"]
     end
-
-    style G fill:#f9f,stroke:#333,stroke-width:2px
 ```
 
 ## License
