@@ -37,6 +37,14 @@ router: APIRouter = APIRouter(
 # Jinja2 templates
 templates = Jinja2Templates(directory="templates")
 
+# Check if environment variables are missing
+load_dotenv(override=True)
+openai_api_key = os.getenv("OPENAI_API_KEY")
+assistant_id = os.getenv("ASSISTANT_ID")
+
+if not openai_api_key or not assistant_id:
+    raise OpenAIError("OpenAI API key or assistant ID is missing")
+
 
 # --- Authenticated Routes ---
 
@@ -49,14 +57,6 @@ async def read_chat(
     messages: List[Dict[str, Any]] = []
 ) -> Response:
     logger.info("Home page requested")
-    
-    # Check if environment variables are missing
-    load_dotenv(override=True)
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    assistant_id = os.getenv("ASSISTANT_ID")
-    
-    if not openai_api_key or not assistant_id:
-        raise OpenAIError("OpenAI API key or assistant ID is missing")
     
     # Create a new assistant chat thread if no thread ID is provided
     if not thread_id or thread_id == "None" or thread_id == "null":

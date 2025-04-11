@@ -6,7 +6,7 @@ from openai.types.beta.assistant_stream_event import (
 )
 from openai.types.beta.threads.run import RequiredAction
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, AsyncIterable
 from fastapi import HTTPException
 from logging import getLogger
 from dataclasses import dataclass
@@ -111,3 +111,7 @@ async def post_tool_outputs(client: AsyncOpenAI, data: Dict[str, Any], thread_id
     except Exception as e:
         logger.error(f"Error submitting tool outputs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+async def stream_file_content(content: bytes) -> AsyncIterable[bytes]:
+    yield content
