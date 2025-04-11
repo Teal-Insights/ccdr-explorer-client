@@ -1,17 +1,40 @@
 import os
+import time
+import json
+from datetime import datetime
 from logging import getLogger
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator, Union
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Form, Depends, Request
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response, HTMLResponse, StreamingResponse
+from openai import AsyncOpenAI
+from openai.lib.streaming._assistants import AsyncAssistantStreamManager, AsyncAssistantEventHandler
+from openai.types.beta.assistant_stream_event import (
+    ThreadMessageCreated, ThreadMessageDelta, ThreadRunCompleted,
+    ThreadRunRequiresAction, ThreadRunStepCreated, ThreadRunStepDelta
+)
+from openai.types.beta import AssistantStreamEvent
+from openai.types.beta.threads.message_content_delta import MessageContentDelta
+from openai.types.beta.threads.text_delta_block import TextDeltaBlock
+from openai.types.beta.threads.run import RequiredAction
+
+from exceptions.http_exceptions import OpenAIError
+from utils.chat.functions import get_weather
+from utils.chat.sse import sse_format, post_tool_outputs
 from utils.core.dependencies import get_user_with_relations
 from utils.core.models import User
-from utils.chatbot.threads import create_thread
+from utils.chat.threads import create_thread
+from utils.chat.sse import AssistantStreamMetadata
 
 logger = getLogger("uvicorn.error")
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router: APIRouter = APIRouter(
+    prefix="/chat/{thread_id}",
+    tags=["chat"]
+)
+
+# Jinja2 templates
 templates = Jinja2Templates(directory="templates")
 
 
@@ -19,10 +42,10 @@ templates = Jinja2Templates(directory="templates")
 
 
 @router.get("/")
-async def read_dashboard(
+async def read_chat(
     request: Request,
     user: Optional[User] = Depends(get_user_with_relations),
-        thread_id: Optional[str] = None,
+    thread_id: Optional[str] = None,
     messages: List[Dict[str, Any]] = []
 ) -> Response:
     logger.info("Home page requested")
@@ -33,131 +56,22 @@ async def read_dashboard(
     assistant_id = os.getenv("ASSISTANT_ID")
     
     if not openai_api_key or not assistant_id:
-        return RedirectResponse(url=app.url_path_for("read_setup"))
+        raise OpenAIError("OpenAI API key or assistant ID is missing")
     
     # Create a new assistant chat thread if no thread ID is provided
     if not thread_id or thread_id == "None" or thread_id == "null":
         thread_id = await create_thread()
-    
+
     return templates.TemplateResponse(
-        "index.html",
+        "chat/index.html",
         {
             "request": request,
-            "user": user
+            "user": user,
             "assistant_id": assistant_id,
             "messages": messages,
             "thread_id": thread_id
         }
     )
-
-
-import logging
-import time
-from datetime import datetime
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union, cast
-from dataclasses import dataclass
-from fastapi.templating import Jinja2Templates
-from fastapi import APIRouter, Form, Depends, Request
-from fastapi.responses import StreamingResponse, HTMLResponse
-from openai import AsyncOpenAI
-from openai.resources.beta.threads.runs.runs import AsyncAssistantStreamManager
-from openai.types.beta.assistant_stream_event import (
-    ThreadMessageCreated, ThreadMessageDelta, ThreadRunCompleted,
-    ThreadRunRequiresAction, ThreadRunStepCreated, ThreadRunStepDelta
-)
-from openai.types.beta import AssistantStreamEvent
-from openai.lib.streaming._assistants import AsyncAssistantEventHandler
-from openai.types.beta.threads.run_submit_tool_outputs_params import ToolOutput
-from openai.types.beta.threads.run import RequiredAction, Run
-from fastapi.responses import StreamingResponse
-from fastapi import APIRouter, Depends, Form, HTTPException
-from pydantic import BaseModel
-
-import json
-
-from utils.custom_functions import get_weather
-from utils.sse import sse_format
-
-@dataclass
-class AssistantStreamMetadata:
-    """Metadata for assistant stream events that require further processing."""
-    type: str  # Always "metadata"
-    required_action: Optional[RequiredAction]
-    step_id: str
-    run_requires_action_event: Optional[ThreadRunRequiresAction]
-
-    @classmethod
-    def create(cls, 
-               required_action: Optional[RequiredAction],
-               step_id: str,
-               run_requires_action_event: Optional[ThreadRunRequiresAction]
-    ) -> "AssistantStreamMetadata":
-        """Factory method to create a metadata instance with validation."""
-        return cls(
-            type="metadata",
-            required_action=required_action,
-            step_id=step_id,
-            run_requires_action_event=run_requires_action_event
-        )
-
-    def requires_tool_call(self) -> bool:
-        """Check if this metadata indicates a required tool call."""
-        return (self.required_action is not None 
-                and self.required_action.submit_tool_outputs is not None 
-                and bool(self.required_action.submit_tool_outputs.tool_calls))
-
-    def get_run_id(self) -> str:
-        """Get the run ID from the requires action event, or empty string if none."""
-        return self.run_requires_action_event.data.id if self.run_requires_action_event else ""
-
-logger: logging.Logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.DEBUG)
-
-
-router: APIRouter = APIRouter(
-    prefix="/assistants/{assistant_id}/messages/{thread_id}",
-    tags=["assistants_messages"]
-)
-
-# Jinja2 templates
-templates = Jinja2Templates(directory="templates")
-
-# Utility function for submitting tool outputs to the assistant
-class ToolCallOutputs(BaseModel):
-    tool_outputs: Dict[str, Any]
-    runId: str
-
-async def post_tool_outputs(client: AsyncOpenAI, data: Dict[str, Any], thread_id: str) -> AsyncAssistantStreamManager:
-    """
-    data is expected to be something like
-    {
-      "tool_outputs": {
-        "output": [{"location": "City", "temperature": 70, "conditions": "Sunny"}],
-        "tool_call_id": "call_123"
-      },
-      "runId": "some-run-id",
-    }
-    """
-    try:
-        outputs_list = [
-            ToolOutput(
-                output=str(data["tool_outputs"]["output"]),
-                tool_call_id=data["tool_outputs"]["tool_call_id"]
-            )
-        ]
-
-
-        stream_manager = client.beta.threads.runs.submit_tool_outputs_stream(
-            thread_id=thread_id,
-            run_id=data["runId"],
-            tool_outputs=outputs_list,
-        )
-
-        return stream_manager
-
-    except Exception as e:
-        logger.error(f"Error submitting tool outputs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Route to submit a new user message to a thread and mount a component that
@@ -208,7 +122,6 @@ async def stream_response(
 
     async def handle_assistant_stream(
         templates: Jinja2Templates,
-        logger: logging.Logger,
         stream_manager: AsyncAssistantStreamManager,
         step_id: str = ""
     ) -> AsyncGenerator[Union[AssistantStreamMetadata, str], None]:
@@ -241,8 +154,8 @@ async def stream_response(
                     time.sleep(0.25)  # Give the client time to render the message
 
                 if isinstance(event, ThreadMessageDelta) and event.data.delta.content:
-                    content = event.data.delta.content[0]
-                    if hasattr(content, 'text') and content.text and content.text.value:
+                    content: MessageContentDelta = event.data.delta.content[0]
+                    if isinstance(content, TextDeltaBlock) and content.text and content.text.value:
                         yield sse_format(
                             f"textDelta{step_id}",
                             content.text.value
@@ -338,7 +251,7 @@ async def stream_response(
 
         while True:
             event: Union[AssistantStreamMetadata, str]
-            async for event in handle_assistant_stream(templates, logger, stream_manager, step_id):
+            async for event in handle_assistant_stream(templates, stream_manager, step_id):
                 if isinstance(event, AssistantStreamMetadata):
                     # Use the helper methods from our class
                     step_id = event.step_id
@@ -350,8 +263,8 @@ async def stream_response(
                                     location = args.get("location", "Unknown")
                                     dates_raw = args.get("dates", [datetime.today().strftime("%Y-%m-%d")])
                                     dates = [
-                                        datetime.strptime(d, "%Y-%m-%d") if isinstance(d, str) else d 
-                                        for d in dates_raw
+                                        datetime.strptime(d, "%Y-%m-%d")
+                                        for d in dates_raw if isinstance(d, str)
                                     ]
                                 except Exception as err:
                                     logger.error(f"Failed to parse function arguments: {err}")
@@ -415,136 +328,3 @@ async def stream_response(
             "Connection": "keep-alive",
         }
     )
-
-
-import os
-import logging
-from typing import List, Dict, Any, AsyncIterable
-from dotenv import load_dotenv
-from fastapi import APIRouter, Request, UploadFile, File, HTTPException, Depends, Form, Path
-from fastapi.responses import StreamingResponse
-from openai import AsyncOpenAI
-
-logger = logging.getLogger("uvicorn.error")
-
-# Get assistant ID from environment variables
-load_dotenv()
-assistant_id_env = os.getenv("ASSISTANT_ID")
-if not assistant_id_env:
-    raise ValueError("ASSISTANT_ID environment variable not set")
-assistant_id: str = assistant_id_env
-
-router = APIRouter(
-    prefix="/assistants/{assistant_id}/files",
-    tags=["assistants_files"]
-)
-
-# Helper function to get or create a vector store
-async def get_or_create_vector_store(assistantId: str, client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())) -> str:
-    assistant = await client.beta.assistants.retrieve(assistantId)
-    if assistant.tool_resources and assistant.tool_resources.file_search and assistant.tool_resources.file_search.vector_store_ids:
-        return assistant.tool_resources.file_search.vector_store_ids[0]
-    vector_store = await client.beta.vector_stores.create(name="sample-assistant-vector-store")
-    await client.beta.assistants.update(
-        assistantId,
-        tool_resources={
-            "file_search": {
-                "vector_store_ids": [vector_store.id],
-            },
-        }
-    )
-    return vector_store.id
-
-@router.get("/")
-async def list_files(client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())) -> List[Dict[str, str]]:
-    # List files in the vector store
-    vector_store_id = await get_or_create_vector_store(assistant_id, client)
-    file_list = await client.beta.vector_stores.files.list(vector_store_id)
-    files_array: List[Dict[str, str]] = []
-    
-    if file_list.data:
-        for file in file_list.data:
-            file_details = await client.files.retrieve(file.id)
-            vector_file_details = await client.beta.vector_stores.files.retrieve(
-                vector_store_id=vector_store_id,
-                file_id=file.id
-            )
-            files_array.append({
-                "file_id": file.id,
-                "filename": file_details.filename or "unknown_filename",
-                "status": vector_file_details.status or "unknown_status",
-            })
-    return files_array
-
-@router.post("/")
-async def upload_file(file: UploadFile = File(...)) -> Dict[str, str]:
-    try:
-        client = AsyncOpenAI()
-        vector_store_id = await get_or_create_vector_store(assistant_id)
-        openai_file = await client.files.create(
-            file=file.file,
-            purpose="assistants"
-        )
-        await client.beta.vector_stores.files.create(
-            vector_store_id=vector_store_id,
-            file_id=openai_file.id
-        )
-        return {"message": "File uploaded successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def stream_file_content(content: bytes) -> AsyncIterable[bytes]:
-    yield content
-
-@router.get("/{file_id}")
-async def get_file(
-    file_id: str = Path(..., description="The ID of the file to retrieve"),
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
-) -> StreamingResponse:
-    try:
-        file = await client.files.retrieve(file_id)
-        file_content = await client.files.content(file_id)
-        
-        if not hasattr(file_content, 'content'):
-            raise HTTPException(status_code=500, detail="File content not available")
-            
-        return StreamingResponse(
-            stream_file_content(file_content.content),
-            headers={"Content-Disposition": f'attachment; filename=\"{file.filename or "download"}\"'}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.delete("/delete")
-async def delete_file(
-    request: Request, 
-    fileId: str = Form(...), 
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
-) -> Dict[str, str]:
-    vector_store_id = await get_or_create_vector_store(assistant_id, client)
-    await client.beta.vector_stores.files.delete(vector_store_id=vector_store_id, file_id=fileId)
-    return {"message": "File deleted successfully"}
-
-@router.get("/{file_id}/content")
-async def get_file_content(
-    file_id: str,
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
-) -> StreamingResponse:
-    """
-    Streams file content from OpenAI API.
-    This route is used to serve images and other files generated by the code interpreter.
-    """
-    try:
-        # Get the file content from OpenAI
-        file_content = await client.files.content(file_id)
-        file_bytes = file_content.read()  # Remove await since read() returns bytes directly
-        
-        # Return the file content as a streaming response
-        # Note: In a production environment, you might want to add caching
-        return StreamingResponse(
-            content=iter([file_bytes]),
-            media_type="image/png"  # You might want to make this dynamic based on file type
-        )
-    except Exception as e:
-        logger.error(f"Error getting file content: {e}")
-        raise HTTPException(status_code=500, detail=str(e))

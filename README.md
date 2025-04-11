@@ -68,9 +68,11 @@ Copy `.env.example` to `.env` with `cp .env.example .env`.
 
 Generate a 256 bit secret key with `openssl rand -base64 32` and paste it into the .env file.
 
-Set your desired database name, username, and password in the .env file.
+Set your desired database name, username, and password in the `.env` file.
 
-To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
+[Create an OpenAI assistant](https://platform.openai.com/assistants/) and set your assistant's ID and your OpenAI API key in the `.env` file.
+
+To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the `.env` file.
 
 ### Start development database
 

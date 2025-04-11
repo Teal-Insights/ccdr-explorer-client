@@ -1,10 +1,11 @@
 import random
 import logging
 from datetime import datetime
+from typing import Sequence
 
 logger = logging.getLogger("uvicorn.error")
 
-def get_weather(location, dates: list[str | datetime] = [datetime.today()]):
+def get_weather(location, dates: Sequence[str | datetime] = [datetime.today()]):
     """
     Generate random weather reports for a given location over a date range.
 

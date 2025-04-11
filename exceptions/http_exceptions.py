@@ -145,3 +145,10 @@ class InvalidImageError(HTTPException):
 
     def __init__(self, message: str = "Invalid image file"):
         super().__init__(status_code=400, detail=message)
+
+
+class OpenAIError(HTTPException):
+    """Raised when an OpenAI API error occurs"""
+
+    def __init__(self, message: str = "OpenAI API error"):
+        super().__init__(status_code=500, detail=message)

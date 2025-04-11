@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from routers import account, dashboard, organization, role, user, static_pages
+from routers import account, chat, organization, role, user, static_pages
 from utils.core.dependencies import (
     get_optional_user
 )
@@ -45,7 +45,7 @@ templates = Jinja2Templates(directory="templates")
 
 
 app.include_router(account.router)
-app.include_router(dashboard.router)
+app.include_router(chat.router)
 app.include_router(organization.router)
 app.include_router(role.router)
 app.include_router(static_pages.router)
@@ -188,7 +188,7 @@ async def read_home(
     user: Optional[User] = Depends(get_optional_user)
 ):
     if user:
-        return RedirectResponse(url=app.url_path_for("read_dashboard"), status_code=302)
+        return RedirectResponse(url=app.url_path_for("read_chat"), status_code=302)
     return templates.TemplateResponse(
         request,
         "index.html",
