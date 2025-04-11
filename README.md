@@ -1,78 +1,10 @@
-# FastAPI, Jinja2, PostgreSQL Webapp Template
+# Nature Finance RAG client for working with IMF climate development reports
 
+This is the application layer for a web app for AI-powered semantic search over the International Monetary Fund's climate change development reports (CCDRs). It is built on the [FastAPI, Jinja2, PostgreSQL Webapp Template](https://github.com/Promptly-Technologies-LLC/fastapi-jinja2-postgres-webapp) and is meant to be used with the (Nature Finance RAG Database and API)[https://github.com/Teal-Insights/nature-finance-rag-api] as the data storage and retrieval layer.
 
-![Screenshot of homepage](docs/static/screenshot.jpg)
+## Getting Started
 
-## Quickstart
-
-This quickstart guide provides a high-level overview. See the full
-documentation for comprehensive information on
-[features](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/index.html),
-[installation](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/installation.html),
-[architecture](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/architecture.html),
-[conventions, code style, and
-customization](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/customization.html),
-[deployment to cloud
-platforms](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/deployment.html),
-and
-[contributing](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/contributing.html).
-
-## Features
-
-This template combines three of the most lightweight and performant
-open-source web development frameworks into a customizable webapp
-template with:
-
-- Pure Python backend
-- Minimal-Javascript frontend
-- Powerful, easy-to-manage database
-
-The template also includes full-featured secure auth with:
-
-- Token-based authentication
-- Password recovery flow
-- Role-based access control system
-
-## Design Philosophy
-
-The design philosophy of the template is to prefer low-level,
-best-in-class open-source frameworks that offer flexibility,
-scalability, and performance without vendor-lock-in. You’ll find the
-template amazingly easy not only to understand and customize, but also
-to deploy to any major cloud hosting platform.
-
-## Tech Stack
-
-**Core frameworks:**
-
-- [FastAPI](https://fastapi.tiangolo.com/): scalable, high-performance,
-  type-annotated Python web backend framework
-- [PostgreSQL](https://www.postgresql.org/): the world’s most advanced
-  open-source database engine
-- [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/): frontend HTML
-  templating engine
-- [SQLModel](https://sqlmodel.tiangolo.com/): easy-to-use Python ORM
-
-**Additional technologies:**
-
-- [uv](https://docs.astral.sh/uv/): Python dependency manager
-- [Pytest](https://docs.pytest.org/en/7.4.x/): testing framework
-- [Docker](https://www.docker.com/): development containerization
-- [Github Actions](https://docs.github.com/en/actions): CI/CD pipeline
-- [Quarto](https://quarto.org/docs/): simple documentation website
-  renderer
-- [MyPy](https://mypy.readthedocs.io/en/stable/): static type checker
-  for Python
-- [Bootstrap](https://getbootstrap.com/): HTML/CSS styler
-- [Resend](https://resend.com/): zero- or low-cost email service used
-  for password recovery
-
-## Installation
-
-For comprehensive installation instructions, see the [installation
-page](https://promptlytechnologies.com/fastapi-jinja2-postgres-webapp/docs/installation.html).
-
-### uv
+### Install `uv` for Dependency Management
 
 MacOS and Linux:
 
@@ -90,23 +22,23 @@ See the [uv installation
 docs](https://docs.astral.sh/uv/getting-started/installation/) for more
 information.
 
-### Python
+### Install Python
 
-Install Python 3.12 or higher from either the official [downloads
-page](https://www.python.org/downloads/) or using uv:
+Install the latest version of Python from either the official [downloads
+page](https://www.python.org/downloads/) or using `uv`:
 
 ``` bash
 # Installs the latest version
 uv python install
 ```
 
-### Docker and Docker Compose
+### Install Docker Desktop and Docker Compose
 
 Install Docker Desktop and Coker Compose for your operating system by
 following the [instructions in the
 documentation](https://docs.docker.com/compose/install/).
 
-### PostgreSQL headers
+### Install PostgreSQL headers
 
 For Ubuntu/Debian:
 
@@ -124,7 +56,7 @@ For Windows:
 
 - No installation required
 
-### Python dependencies
+### Install Python Dependencies
 
 From the root directory, run:
 
@@ -136,7 +68,7 @@ uv sync
 This will create an in-project virtual environment and install all
 dependencies.
 
-### Set environment variables
+### Set Environment Variables
 
 Copy `.env.example` to `.env` with `cp .env.example .env`.
 
@@ -169,38 +101,41 @@ uv run python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 Navigate to http://localhost:8000/
 
-### Lint types with mypy
+## Usage
 
-``` bash
-uv run mypy .
+To "chat with the CCDRs", register and/or sign in and navigate to the chat interface on the home page. Use the chat interface to ask the chatbot questions about the CCDRs.
+
+## Architecture
+
+```mermaid
+graph TB
+    subgraph "Browser"
+        A["Chat Client"] --> B["User Input"]
+    end
+
+    subgraph "Application Server"
+        C["Chat Application Server"] --> D["LLM Service<br>(GPT-4o/Claude)"]
+        D -->|"Returns messages<br>or tool calls"| C
+        C -->|"If tool call"| E["Query Embedding"]
+        E --> F["Vector Search"]
+    end
+
+    B --> C
+    C --> A
+
+    subgraph "Database"
+        F --> G["PostgreSQL with pgvector"]
+        G --> F
+        F --> C
+        G -- Stores --> H["Resources Table"]
+        G -- Stores --> I["Embeddings Table"]
+        G -- Stores --> J["Key Concepts Table"]
+    end
+
+    style G fill:#f9f,stroke:#333,stroke-width:2px
 ```
-
-## Developing with LLMs
-
-In line with the [llms.txt standard](https://llmstxt.org/), we have
-provided a Markdown-formatted prompt—designed to help LLM agents
-understand how to work with this template—as a text file:
-[llms.txt](docs/static/llms.txt).
-
-One use case for this file, if using the Cursor IDE, is to rename it to
-`.cursorrules` and place it in your project directory (see the [Cursor
-docs](https://docs.cursor.com/context/rules-for-ai) on this for more
-information). Alternatively, you could use it as a custom system prompt
-in the web interface for ChatGPT, Claude, or the LLM of your choice.
-
-We have also exposed the full Markdown-formatted project documentation
-as a [single text file](docs/static/documentation.txt) for easy
-downloading and embedding for RAG workflows.
-
-## Contributing
-
-Your contributions are welcome! See the [issues
-page](https://github.com/promptly-technologies-llc/fastapi-jinja2-postgres-webapp/issues)
-for ideas. Fork the repository, create a new branch, make your changes,
-and submit a pull request.
 
 ## License
 
-This project is created and maintained by [Promptly Technologies,
-LLC](https://promptlytechnologies.com/) and licensed under the MIT
+This project is created and maintained by Teal Insights and licensed under the MIT
 License. See the LICENSE file for more details.
