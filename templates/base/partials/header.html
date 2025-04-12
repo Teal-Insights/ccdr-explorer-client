@@ -6,18 +6,16 @@
     <div class="container-fluid">
         <!-- Logo/Branding -->
         <a class="navbar-brand" href="{{ url_for('read_home') }}">
-            {{ render_logo(classes="d-inline-block align-top me-2") }}
-            FastAPI-Jinja2-Postgres Webapp
+            {{ render_logo(classes="d-inline-block align-top me-3 text-light") }}
         </a>
+        <h4 class="d-inline align-middle text-light">CCDR Explorer</h1>
 
         <!-- Toggler for mobile -->
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
 
-        <div class="collapse navbar-collapse" id="navbarContent">
-            {% include 'base/partials/nav.html' %}
-            
+        <div class="collapse navbar-collapse" id="navbarContent">            
             <!-- User Profile Dropdown -->
             <ul class="navbar-nav ms-auto mb-lg-0">
                 {% if user %}

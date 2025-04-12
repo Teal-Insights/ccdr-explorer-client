@@ -441,3 +441,182 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
       border-radius: 0.5rem;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
+  
+  /* Fanned Report Covers */
+  .report-covers-container {
+      position: relative;
+      height: 300px; /* Adjust height as needed */
+      perspective: 1000px;
+      margin-bottom: 4rem !important; /* Add more space below */
+  }
+  
+  .cover-container {
+      position: absolute;
+      transform-style: preserve-3d;
+      transition: transform 0.5s ease;
+      width: 150px; /* Adjust width as needed */
+  }
+  
+  .report-cover {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      border: 2px solid #fff; /* White border */
+  }
+  
+  /* Positioning and rotation for each cover */
+  .cover1 {
+      transform: rotateZ(-10deg) translateZ(-10px) translateX(-50px);
+      z-index: 1;
+  }
+  
+  .cover2 {
+      transform: rotateZ(0deg) translateZ(0px);
+      z-index: 2;
+  }
+  
+  .cover3 {
+      transform: rotateZ(10deg) translateZ(-10px) translateX(50px);
+      z-index: 1;
+  }
+  
+  /* Hover effect */
+  .report-covers-container:hover .cover1 {
+      transform: rotateZ(-15deg) translateZ(10px) translateX(-70px) translateY(-10px) scale(1.05);
+  }
+  
+  .report-covers-container:hover .cover2 {
+      transform: rotateZ(0deg) translateZ(20px) translateY(-15px) scale(1.1);
+      z-index: 3; /* Bring middle cover to front on hover */
+  }
+  
+  .report-covers-container:hover .cover3 {
+      transform: rotateZ(15deg) translateZ(10px) translateX(70px) translateY(-10px) scale(1.05);
+  }
+  
+  /* Adjustments for smaller screens if needed */
+  @media (max-width: 768px) {
+      .report-covers-container {
+          height: 200px;
+          margin-bottom: 3rem !important;
+      }
+      .cover-container {
+          width: 100px;
+      }
+      .cover1 {
+          transform: rotateZ(-10deg) translateZ(-5px) translateX(-30px);
+      }
+      .cover3 {
+          transform: rotateZ(10deg) translateZ(-5px) translateX(30px);
+      }
+      .report-covers-container:hover .cover1 {
+          transform: rotateZ(-15deg) translateZ(5px) translateX(-40px) translateY(-5px) scale(1.05);
+      }
+      .report-covers-container:hover .cover2 {
+          transform: rotateZ(0deg) translateZ(10px) translateY(-10px) scale(1.1);
+      }
+      .report-covers-container:hover .cover3 {
+          transform: rotateZ(15deg) translateZ(5px) translateX(40px) translateY(-5px) scale(1.05);
+      }
+  }
+  
+  /* Custom styles for Nature Finance branding */
+  header.navbar {
+    background-color: #001926 !important; /* NF Dark Blue */
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+  
+  header.navbar .navbar-brand,
+  header.navbar .nav-link {
+    color: #ffffff !important; /* White text */
+  }
+  
+  header.navbar .nav-link:hover,
+  header.navbar .navbar-brand:hover {
+    color: #3ab287 !important; /* NF Green on hover */
+  }
+  
+  header.navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 0.75)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+  }
+  
+  header.navbar .navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  footer {
+    background-color: #001926 !important; /* NF Dark Blue */
+    color: #fff !important;
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+  }
+  
+  footer .text-muted,
+  footer a.text-muted {
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+  
+  footer a.text-muted:hover {
+    color: #3ab287 !important; /* NF Green */
+    text-decoration: none;
+  }
+  
+  /* Additional styling for the homepage */
+  .report-covers-container {
+    position: relative;
+    height: 300px;
+    perspective: 1000px;
+    margin-bottom: 4rem !important;
+  }
+  
+  /* Homepage specific styling */
+  .container.mt-5 {
+    position: relative;
+    z-index: 1;
+  }
+  
+  .display-4 {
+    color: #001926; /* NF Dark Blue */
+    font-weight: 600;
+  }
+  
+  .lead {
+    color: #3ab287; /* NF Green */
+    font-size: 1.3rem;
+    font-weight: 400;
+  }
+  
+  /* Add a subtle gradient background to the page */
+  body {
+    background: linear-gradient(to bottom, #ffffff, #f0f8f5);
+    min-height: 100vh;
+  }
+  
+  /* Style the buttons */
+  .btn-primary {
+    background-color: #3ab287 !important;
+    border-color: #3ab287 !important;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-primary:hover {
+    background-color: #2e8e6c !important;
+    border-color: #2e8e6c !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-outline-light {
+    color: #001926 !important;
+    border-color: #001926 !important;
+    background-color: transparent !important;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-outline-light:hover {
+    color: white !important;
+    background-color: #001926 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }

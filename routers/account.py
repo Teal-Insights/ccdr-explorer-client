@@ -34,7 +34,7 @@ from exceptions.http_exceptions import (
     CredentialsError,
     PasswordValidationError
 )
-from routers.chat import router as dashboard_router
+from routers.chat import router as chat_router
 from routers.user import router as user_router
 
 logger = getLogger("uvicorn.error")
@@ -104,7 +104,7 @@ async def read_login(
     Render login page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url=dashboard_router.url_path_for("read_chat"), status_code=302)
+        return RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=302)
     return templates.TemplateResponse(
         "account/login.html",
         {"request": request, "user": user, "email_updated": email_updated}
@@ -120,7 +120,7 @@ async def read_register(
     Render registration page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url=dashboard_router.url_path_for("read_chat"), status_code=302)
+        return RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=302)
 
     return templates.TemplateResponse(
         "account/register.html",
@@ -138,7 +138,7 @@ async def read_forgot_password(
     Render forgot password page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url=dashboard_router.url_path_for("read_chat"), status_code=302)
+        return RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=302)
 
     return templates.TemplateResponse(
         "account/forgot_password.html",
@@ -236,7 +236,7 @@ async def register(
     refresh_token = create_refresh_token(data={"sub": email})
     
     # Set cookie
-    response = RedirectResponse(url=dashboard_router.url_path_for("read_chat"), status_code=303)
+    response = RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=303)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -271,7 +271,7 @@ async def login(
     refresh_token = create_refresh_token(data={"sub": account.email})
 
     # Set cookie
-    response = RedirectResponse(url=dashboard_router.url_path_for("read_chat"), status_code=303)
+    response = RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=303)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -321,7 +321,7 @@ async def refresh_token(
     )
     new_refresh_token = create_refresh_token(data={"sub": account.email})
 
-    response = RedirectResponse(url=dashboard_router.url_path_for("read_chat"), status_code=303)
+    response = RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=303)
     response.set_cookie(
         key="access_token",
         value=new_access_token,

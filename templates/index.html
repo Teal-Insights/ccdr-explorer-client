@@ -7,45 +7,31 @@
 
 {% block content %}
 <div class="container mt-5">
-    <div class="row">
-        <div class="col-md-8 offset-md-2 text-center">
-            {{ render_logo(width=40, height=40, classes="d-inline-block align-middle mt-2 me-4") }}
-            <h1 class="display-4 mb-4 d-inline align-middle">FastAPI-Jinja2-Postgres Webapp</h1>
-            <p class="lead mb-5">A template webapp with a pure-Python FastAPI backend, Jinja2 templating and Bootstrap styling for the frontend, and a PostgreSQL database with SQLModel ORM to power user auth</p>
+    <div class="row mb-5">
+        <div class="col-lg-8 offset-lg-2 text-center">
+            {{ render_logo(classes="d-inline-block align-middle me-5 text-dark") }}
+            <h1 class="display-4 mb-4 d-inline align-middle">CCDR Explorer</h1>
+            <p class="lead mb-4">Explore the IMF's Climate Change Development Reports with AI-powered semantic search.</p>
         </div>
     </div>
 
-    <div class="row mb-5">
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">FastAPI</h5>
-                    <p class="card-text">A scalable, high-performance, type-annotated Python web framework</p>
-                </div>
-            </div>
+    <!-- Fanned Covers Section -->
+    <div class="row justify-content-center mb-5 report-covers-container">
+        <div class="col-auto cover-container">
+            <img src="{{ url_for('static', path='cover1.png') }}" alt="Report Cover 1" class="img-fluid report-cover cover1">
         </div>
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Jinja2</h5>
-                    <p class="card-text">Composable HTML templating engine for Python web servers</p>
-                </div>
-            </div>
+        <div class="col-auto cover-container">
+            <img src="{{ url_for('static', path='cover2.png') }}" alt="Report Cover 2" class="img-fluid report-cover cover2">
         </div>
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">PostgreSQL</h5>
-                    <p class="card-text">A fast, full-featured, open-source relational database engine</p>
-                </div>
-            </div>
+        <div class="col-auto cover-container">
+            <img src="{{ url_for('static', path='cover3.png') }}" alt="Report Cover 3" class="img-fluid report-cover cover3">
         </div>
     </div>
 
     <div class="row">
         <div class="col-md-6 offset-md-3 text-center">
-            <a href="{{ url_for('read_register') }}" class="btn btn-primary btn-lg mx-3 mb-3">Sign Up</a>
-            <a href="{{ url_for('read_login') }}" class="btn btn-outline-secondary btn-lg mb-3">Log In</a>
+            <a href="{{ url_for('read_login') }}" class="btn btn-outline-light btn-lg mx-2 mb-3 px-4 py-2">Log In</a>
+            <a href="{{ url_for('read_register') }}" class="btn btn-primary btn-lg mx-2 mb-3 px-4 py-2">Register</a>
         </div>
     </div>
 </div>
