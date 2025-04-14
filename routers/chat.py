@@ -2,7 +2,7 @@ import os
 import time
 import json
 from datetime import datetime
-from logging import getLogger
+from logging import getLogger, Logger
 from typing import Optional, List, Dict, Any, AsyncGenerator, Union
 from dotenv import load_dotenv
 from fastapi import APIRouter, Form, Depends, Request
@@ -122,6 +122,7 @@ async def stream_response(
 
     async def handle_assistant_stream(
         templates: Jinja2Templates,
+        logger: Logger,
         stream_manager: AsyncAssistantStreamManager,
         step_id: str = ""
     ) -> AsyncGenerator[Union[AssistantStreamMetadata, str], None]:
@@ -251,7 +252,7 @@ async def stream_response(
 
         while True:
             event: Union[AssistantStreamMetadata, str]
-            async for event in handle_assistant_stream(templates, stream_manager, step_id):
+            async for event in handle_assistant_stream(templates, logger, stream_manager, step_id):
                 if isinstance(event, AssistantStreamMetadata):
                     # Use the helper methods from our class
                     step_id = event.step_id
