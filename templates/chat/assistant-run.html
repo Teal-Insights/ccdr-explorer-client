@@ -1,8 +1,9 @@
 <!-- assistant-run.html -->
-<div class="assistant-run" hx-swap="beforeend" 
-     hx-ext="sse"     
-     sse-connect="/chat/{{ thread_id }}/receive" 
-     sse-swap="messageCreated,toolCallCreated,toolOutput,imageOutput,fileOutput" 
+<div class="mb-2"
+     hx-swap="beforeend"
+     hx-ext="sse"
+     sse-connect="{{ url_for('stream_response', thread_id=thread_id) }}"
+     sse-swap="messageCreated,toolCallCreated,toolOutput,imageOutput,fileOutput"
      sse-close="endStream"
      data-thread-id="{{ thread_id }}">
 </div>

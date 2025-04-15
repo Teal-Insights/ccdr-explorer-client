@@ -1,15 +1,15 @@
 <!-- weather-widget.html -->
-<div class="toolOutput">
-  <div class="weatherContainer">
+<div class="card bg-light mb-2">
+  <div class="card-body">
     <!-- Location -->
-    <div class="location"><h2>{{ reports[0].location }}</h2></div>
-    <div class="reports">
+    <h5 class="card-title text-center mb-3">{{ reports[0].location }}</h5>
+    <div class="row text-center">
       {% for report in reports %}
-      <div class="weatherReport">
+      <div class="col">
         <!-- Date -->
-        <p>{{ report.date }}</p>
+        <p class="small text-muted">{{ report.date }}</p>
         <!-- Temperature -->
-        <p>{{ report.temperature }}&deg;{{ report.unit }}</p>
+        <p class="h4">{{ report.temperature }}&deg;{{ report.unit }}</p>
         <!-- Conditions -->
         <p>{{ report.conditions }}</p>
       </div>

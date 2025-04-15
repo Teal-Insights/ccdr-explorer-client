@@ -22,15 +22,15 @@ from openai.types.beta.threads.run import RequiredAction
 from exceptions.http_exceptions import OpenAIError
 from utils.chat.functions import get_weather
 from utils.chat.sse import sse_format, post_tool_outputs
+from utils.chat.sse import AssistantStreamMetadata
 from utils.core.dependencies import get_user_with_relations
 from utils.core.models import User
 from utils.chat.threads import create_thread
-from utils.chat.sse import AssistantStreamMetadata
 
 logger = getLogger("uvicorn.error")
 
 router: APIRouter = APIRouter(
-    prefix="/chat/{thread_id}",
+    prefix="/chat",
     tags=["chat"]
 )
 
@@ -40,9 +40,11 @@ templates = Jinja2Templates(directory="templates")
 # Check if environment variables are missing
 load_dotenv(override=True)
 openai_api_key = os.getenv("OPENAI_API_KEY")
-assistant_id = os.getenv("ASSISTANT_ID")
+assistant_id_from_env = os.getenv("ASSISTANT_ID")
 
-if not openai_api_key or not assistant_id:
+if openai_api_key and assistant_id_from_env:
+    assistant_id = assistant_id_from_env
+else:
     raise OpenAIError("OpenAI API key or assistant ID is missing")
 
 
@@ -55,9 +57,7 @@ async def read_chat(
     user: Optional[User] = Depends(get_user_with_relations),
     thread_id: Optional[str] = None,
     messages: List[Dict[str, Any]] = []
-) -> Response:
-    logger.info("Home page requested")
-    
+) -> Response:    
     # Create a new assistant chat thread if no thread ID is provided
     if not thread_id or thread_id == "None" or thread_id == "null":
         thread_id = await create_thread()
@@ -67,7 +67,6 @@ async def read_chat(
         {
             "request": request,
             "user": user,
-            "assistant_id": assistant_id,
             "messages": messages,
             "thread_id": thread_id
         }
@@ -76,10 +75,9 @@ async def read_chat(
 
 # Route to submit a new user message to a thread and mount a component that
 # will start an assistant run stream
-@router.post("/send")
+@router.post("/{thread_id}/send")
 async def send_message(
     request: Request,
-    assistant_id: str,
     thread_id: str,
     userInput: str = Form(...),
     client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
@@ -92,8 +90,9 @@ async def send_message(
     )
 
     # Render the component templates with the context
-    user_message_html = templates.get_template("components/user-message.html").render(user_input=userInput)
-    assistant_run_html = templates.get_template("components/assistant-run.html").render(
+    user_message_html = templates.get_template("chat/user-message.html").render(user_input=userInput)
+    assistant_run_html = templates.get_template("chat/assistant-run.html").render(
+        request=request,
         assistant_id=assistant_id,
         thread_id=thread_id
     )
@@ -107,9 +106,8 @@ async def send_message(
 
 
 # Route to stream the response from the assistant via server-sent events
-@router.get("/receive")
+@router.get("/{thread_id}/receive")
 async def stream_response(
-    assistant_id: str,
     thread_id: str,
     client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
 ) -> StreamingResponse:
@@ -147,7 +145,7 @@ async def stream_response(
 
                     yield sse_format(
                         "messageCreated",
-                        templates.get_template("components/assistant-step.html").render(
+                        templates.get_template("chat/assistant-step.html").render(
                             step_type="assistantMessage",
                             stream_name=f"textDelta{step_id}"
                         )
@@ -168,7 +166,7 @@ async def stream_response(
 
                     yield sse_format(
                         f"toolCallCreated",
-                        templates.get_template('components/assistant-step.html').render(
+                        templates.get_template('chat/assistant-step.html').render(
                             step_type='toolCall',
                             stream_name=f'toolDelta{step_id}'
                         )
@@ -214,7 +212,7 @@ async def stream_response(
                                     elif output.type == "image" and output.image and output.image.file_id:
                                         logger.debug(f"Image Output - File ID: {output.image.file_id}")
                                         # Create the image HTML on the backend
-                                        image_html = f'<img src="/assistants/{assistant_id}/files/{output.image.file_id}/content" class="code-interpreter-image">'
+                                        image_html = f'<img src="/chat/files/{output.image.file_id}/content" class="code-interpreter-image">'
                                         yield sse_format(
                                             f"imageOutput",
                                             image_html
@@ -245,8 +243,8 @@ async def stream_response(
         """
         step_id: str = ""
         stream_manager: AsyncAssistantStreamManager[AsyncAssistantEventHandler] = client.beta.threads.runs.stream(
-            assistant_id=assistant_id,
             thread_id=thread_id,
+            assistant_id=assistant_id,
             parallel_tool_calls=False
         )
 
@@ -278,7 +276,7 @@ async def stream_response(
 
                                     # Render the weather widget
                                     weather_widget_html = templates.get_template(
-                                        "components/weather-widget.html"
+                                        "chat/weather-widget.html"
                                     ).render(
                                         reports=weather_output
                                     )

@@ -189,7 +189,7 @@ async def read_home(
     user: Optional[User] = Depends(get_optional_user)
 ):
     if user:
-        return RedirectResponse(url=app.url_path_for("read_chat", thread_id="None"), status_code=302)
+        return RedirectResponse(url=app.url_path_for("read_chat"), status_code=302)
     return templates.TemplateResponse(
         request,
         "index.html",

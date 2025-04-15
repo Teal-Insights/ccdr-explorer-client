@@ -1,2 +1,2 @@
 <!-- assistant-step.html -->
-<div class="{{ step_type }}" sse-swap="{{ stream_name }}"></div>
+<div class="{% if step_type == 'assistantMessage' %}alert alert-secondary text-start w-75 mb-2{% elif step_type == 'toolCall' %}alert alert-info text-start mb-2{% endif %}" sse-swap="{{ stream_name }}"></div>

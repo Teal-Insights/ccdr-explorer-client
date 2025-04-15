@@ -28,35 +28,6 @@ router = APIRouter(
     tags=["chat_files"]
 )
 
-# Helper function to get or create a vector store
-async def get_vector_store(assistantId: str, client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())) -> str:
-    assistant = await client.beta.assistants.retrieve(assistantId)
-    if assistant.tool_resources and assistant.tool_resources.file_search and assistant.tool_resources.file_search.vector_store_ids:
-        return assistant.tool_resources.file_search.vector_store_ids[0]
-    raise HTTPException(status_code=404, detail="Vector store not found")
-
-
-@router.get("/")
-async def list_files(client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())) -> List[Dict[str, str]]:
-    # List files in the vector store
-    vector_store_id = await get_vector_store(assistant_id, client)
-    file_list = await client.vector_stores.files.list(vector_store_id)
-    files_array: List[Dict[str, str]] = []
-    
-    if file_list.data:
-        for file in file_list.data:
-            file_details = await client.files.retrieve(file.id)
-            vector_file_details = await client.vector_stores.files.retrieve(
-                vector_store_id=vector_store_id,
-                file_id=file.id
-            )
-            files_array.append({
-                "file_id": file.id,
-                "filename": file_details.filename or "unknown_filename",
-                "status": vector_file_details.status or "unknown_status",
-            })
-    return files_array
-
 
 @router.get("/{file_id}")
 async def get_file(

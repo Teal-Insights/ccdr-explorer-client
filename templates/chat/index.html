@@ -2,42 +2,42 @@
 {% extends "base.html" %}
 
 {% block content %}
-        <div class="chatContainer">
-          <div id="messages" class="messages">
+         {# Container is vertical flex, fills parent height explicitly #}
+         <div class="container-md d-flex flex-column flex-grow-1 w-100">
+           {# Make messages area grow, add padding, enable scrolling #}
+           <div id="messages" class="mb-3 pt-3 flex-grow-1 overflow-auto">
 
             {% for msg in messages %}
               {% if msg.role == "user" %}
-                <div class="userMessage">{{ msg.text }}</div>
+                {% set user_input = msg.text %}
+                {% include "chat/user-message.html" %}
               {% elif msg.role == "assistant" %}
-                <div class="assistantMessage">
+                <div class="alert alert-info mb-2">
                   {{ msg.text | safe }}
                 </div>
               {% elif msg.role == "code" %}
-                <div class="codeMessage">
-                  {% for line in msg.text.split('\n') %}
-                    <div>
-                      <span>{{ loop.index }}. </span>{{ line }}
-                    </div>
-                  {% endfor %}
+                <div class="bg-light p-2 mb-2 rounded">
+                  <pre><code class="text-monospace">{{ msg.text }}</code></pre>
                 </div>
               {% endif %}
             {% endfor %}
           </div>
-          <form id="chatForm" class="inputForm clearfix"
-                hx-on::after-request="this.reset()">
+          <form id="chatForm" class="w-75 d-flex pb-3 ms-auto"
+                hx-on::after-request="this.reset()"
+                hx-post="{{ url_for('send_message', thread_id=thread_id) }}"
+                hx-target="#messages"
+                hx-swap="beforeend">
             <input
               type="text"
-              class="input"
+              class="form-control me-2"
               name="userInput"
               placeholder="Enter your question"
               id="userInput"
+              required
             />
             <button
               type="submit"
-              class="button"
-              hx-post="/chat/{{ thread_id }}/send"
-              hx-target="#messages"
-              hx-swap="beforeend"
+              class="btn btn-primary"
               {% if inputDisabled %}disabled{% endif %}
             >
               Send
