@@ -1,5 +1,4 @@
 import os
-import time
 import json
 from datetime import datetime
 from logging import getLogger, Logger
@@ -147,17 +146,20 @@ async def stream_response(
                         "messageCreated",
                         templates.get_template("chat/assistant-step.html").render(
                             step_type="assistantMessage",
-                            stream_name=f"textDelta{step_id}"
+                            step_id=step_id
                         )
                     )
-                    time.sleep(0.25)  # Give the client time to render the message
 
                 if isinstance(event, ThreadMessageDelta) and event.data.delta.content:
                     content: MessageContentDelta = event.data.delta.content[0]
                     if isinstance(content, TextDeltaBlock) and content.text and content.text.value:
+                        step_id = event.data.id
+                        text_value = content.text.value
+                        sse_data = f'<span hx-swap-oob="beforeend:#step-{step_id}">{text_value}</span>'
+
                         yield sse_format(
-                            f"textDelta{step_id}",
-                            content.text.value
+                            "textDelta",
+                            sse_data
                         )
 
                 if isinstance(event, ThreadRunStepCreated) and event.data.type == "tool_calls":
@@ -171,7 +173,6 @@ async def stream_response(
                             stream_name=f'toolDelta{step_id}'
                         )
                     )
-                    time.sleep(0.25)  # Give the client time to render the message
 
                 if isinstance(event, ThreadRunStepDelta) and event.data.delta.step_details and event.data.delta.step_details.type == "tool_calls":
                     tool_calls = event.data.delta.step_details.tool_calls
