@@ -1,7 +1,7 @@
 [project]
 name = "nature-finance-rag-client"
 version = "0.1.0"
-description = "A web application for exploring the International Monetary Fund's Climate Change Development Reports (CCDRs) with artificial intelligence and semantic search"
+description = "A web application for exploring the World Bank's Climate Change Development Reports (CCDRs) with artificial intelligence and semantic search"
 readme = "README.md"
 package-mode = false
 authors = [
