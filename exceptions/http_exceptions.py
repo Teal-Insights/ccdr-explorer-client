@@ -145,3 +145,43 @@ class InvalidImageError(HTTPException):
 
     def __init__(self, message: str = "Invalid image file"):
         super().__init__(status_code=400, detail=message)
+
+
+# --- Invitation-specific Errors ---
+
+class UserIsAlreadyMemberError(HTTPException):
+    """Raised when trying to invite a user who is already a member of the organization."""
+    def __init__(self):
+        super().__init__(
+            status_code=409,
+            detail="This user is already a member of the organization."
+        )
+
+
+class ActiveInvitationExistsError(HTTPException):
+    """Raised when trying to invite a user for whom an active invitation already exists."""
+    def __init__(self):
+        super().__init__(
+            status_code=409,
+            detail="An active invitation already exists for this email address in this organization."
+        )
+
+
+class InvalidRoleForOrganizationError(HTTPException):
+    """Raised when a role provided does not belong to the target organization.
+    Note: If the role ID simply doesn't exist, a standard 404 RoleNotFoundError should be raised.
+    """
+    def __init__(self):
+        super().__init__(
+            status_code=400,
+            detail="The selected role does not belong to this organization."
+        )
+
+
+class InvitationEmailSendError(HTTPException):
+    """Raised when the invitation email fails to send."""
+    def __init__(self):
+        super().__init__(
+            status_code=500, # Internal Server Error seems appropriate
+            detail="Failed to send invitation email. Please try again later or contact support."
+        )

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from routers import account, dashboard, organization, role, user, static_pages
+from routers import account, dashboard, organization, role, user, static_pages, invitations
 from utils.dependencies import (
     get_optional_user
 )
@@ -46,6 +46,7 @@ templates = Jinja2Templates(directory="templates")
 
 app.include_router(account.router)
 app.include_router(dashboard.router)
+app.include_router(invitations.router)
 app.include_router(organization.router)
 app.include_router(role.router)
 app.include_router(static_pages.router)

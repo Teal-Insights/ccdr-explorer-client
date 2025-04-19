@@ -21,38 +21,6 @@ from utils.auth import (
 # --- Fixture setup ---
 
 
-# Mock email response fixture
-@pytest.fixture
-def mock_email_response():
-    """
-    Returns a mock Email response object
-    """
-    # Use dictionary unpacking to handle the 'from' keyword
-    email_data = {
-        "id": "mock_resend_id",
-        "from": "test@example.com",
-        "to": ["recipient@example.com"],
-        "created_at": "2023-01-01T00:00:00Z",
-        "subject": "Mock Subject",
-        "html": "<p>Mock HTML</p>",
-        "text": "Mock Text",
-        "bcc": [],
-        "cc": [],
-        "reply_to": [],
-        "last_event": "delivered"
-    }
-    return resend.Email(**email_data)
-
-
-@pytest.fixture
-def mock_resend_send(mock_email_response):
-    """
-    Patches resend.Emails.send to return a mock response
-    """
-    with patch('resend.Emails.send', return_value=mock_email_response) as mock:
-        yield mock
-
-
 # --- API Endpoint Tests ---
 
 
