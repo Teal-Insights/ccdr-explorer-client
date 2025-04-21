@@ -21,6 +21,9 @@ from exceptions.http_exceptions import (
     InvitationEmailMismatchError,
 )
 from exceptions.exceptions import EmailSendFailedError
+# Import the account router to generate URLs for login/register
+from routers.account import router as account_router
+from routers.organization import router as org_router # Already imported, check usage
 
 # Setup logger
 logger = getLogger("uvicorn.error")
@@ -160,7 +163,7 @@ async def accept_invitation(
                 process_invitation(invitation, current_user, session)
                 session.commit()
                 # Redirect to the organization page
-                redirect_url = router.url_path_for("read_organization", org_id=invitation.organization_id)
+                redirect_url = org_router.url_path_for("read_organization", org_id=invitation.organization_id)
                 return RedirectResponse(url=str(redirect_url), status_code=status.HTTP_303_SEE_OTHER)
             except Exception as e:
                 logger.error(
@@ -176,7 +179,7 @@ async def accept_invitation(
             logger.info(
                 f"Invitation {invitation.id} requires login for {invitation.invitee_email}. Redirecting."
             )
-            login_url = router.url_path_for("read_login") # Assuming 'read_login' is the name of the GET /login route
+            login_url = account_router.url_path_for("read_login")
             redirect_url_with_token = f"{login_url}?invitation_token={invitation.token}"
             return RedirectResponse(url=redirect_url_with_token, status_code=status.HTTP_303_SEE_OTHER)
     else:
@@ -184,7 +187,7 @@ async def accept_invitation(
         logger.info(
             f"Invitation {invitation.id} requires registration for {invitation.invitee_email}. Redirecting."
         )
-        register_url = router.url_path_for("read_register") # Assuming 'read_register' is the name of the GET /register route
+        register_url = account_router.url_path_for("read_register")
         redirect_url_with_params = (
             f"{register_url}?email={invitation.invitee_email}&invitation_token={invitation.token}"
         )
