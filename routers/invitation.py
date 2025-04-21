@@ -1,21 +1,24 @@
 from uuid import uuid4
-from fastapi import APIRouter, Depends, Form
+from typing import Optional
+from fastapi import APIRouter, Depends, Form, Query, status
 from fastapi.responses import RedirectResponse
 from fastapi.exceptions import HTTPException
 from pydantic import EmailStr
 from sqlmodel import Session, select
 from logging import getLogger
 
-from utils.dependencies import get_authenticated_user
+from utils.dependencies import get_authenticated_user, get_optional_user
 from utils.db import get_session
 from utils.models import User, Role, Account, Invitation, ValidPermissions, Organization
-from utils.invitations import send_invitation_email
+from utils.invitations import send_invitation_email, process_invitation
 from exceptions.http_exceptions import (
     UserIsAlreadyMemberError,
     ActiveInvitationExistsError,
     InvalidRoleForOrganizationError,
     OrganizationNotFoundError,
     InvitationEmailSendError,
+    InvalidInvitationTokenError,
+    InvitationEmailMismatchError,
 )
 from exceptions.exceptions import EmailSendFailedError
 
@@ -26,6 +29,19 @@ router = APIRouter(
     prefix="/invitations",
     tags=["invitations"],
 )
+
+
+# Dependency to get a valid invitation
+def get_valid_invitation(
+    token: str = Query(...),
+    session: Session = Depends(get_session)
+) -> Invitation:
+    """Dependency to retrieve a valid, active invitation based on the token."""
+    statement = select(Invitation).where(Invitation.token == token)
+    invitation = session.exec(statement).first()
+    if not invitation or not invitation.is_active():
+        raise InvalidInvitationTokenError()
+    return invitation
 
 
 @router.post("/", name="create_invitation")
@@ -111,3 +127,65 @@ async def create_invitation(
 
     # Redirect back to organization page (PRG pattern)
     return RedirectResponse(url=f"/organizations/{organization_id}", status_code=303)
+
+
+@router.get("/accept", name="accept_invitation")
+async def accept_invitation(
+    invitation: Invitation = Depends(get_valid_invitation),
+    current_user: Optional[User] = Depends(get_optional_user),
+    session: Session = Depends(get_session),
+):
+    """Handles the acceptance of an invitation via the link in the email."""
+    # Check if an account exists for the invitee email
+    account_statement = select(Account).where(Account.email == invitation.invitee_email)
+    existing_account = session.exec(account_statement).first()
+
+    if existing_account:
+        # Account exists - check if user is logged in and matches the invitation
+        if current_user and current_user.account_id == existing_account.id:
+            # Ensure the account relationship is loaded before accessing its email
+            if not current_user.account:
+                session.refresh(current_user, attribute_names=["account"])
+            
+            # Check if refreshed account has an email (should always exist, but good practice)
+            if not current_user.account or not current_user.account.email:
+                logger.error(f"User {current_user.id} is missing account details after refresh.")
+                raise HTTPException(status_code=500, detail="Internal server error retrieving user account.")
+
+            # Logged in as the correct user, process the invitation directly
+            logger.info(
+                f"User {current_user.id} ({current_user.account.email}) accepting invitation {invitation.id} directly."
+            )
+            try:
+                process_invitation(invitation, current_user, session)
+                session.commit()
+                # Redirect to the organization page
+                redirect_url = router.url_path_for("read_organization", org_id=invitation.organization_id)
+                return RedirectResponse(url=str(redirect_url), status_code=status.HTTP_303_SEE_OTHER)
+            except Exception as e:
+                logger.error(
+                    f"Error processing invitation {invitation.id} for user {current_user.id}: {e}",
+                    exc_info=True
+                )
+                session.rollback()
+                # Re-raise or return a generic error response
+                raise HTTPException(status_code=500, detail="Failed to process invitation.")
+        else:
+            # Account exists, but user is not logged in or is the wrong user
+            # Redirect to login, passing the token
+            logger.info(
+                f"Invitation {invitation.id} requires login for {invitation.invitee_email}. Redirecting."
+            )
+            login_url = router.url_path_for("read_login") # Assuming 'read_login' is the name of the GET /login route
+            redirect_url_with_token = f"{login_url}?invitation_token={invitation.token}"
+            return RedirectResponse(url=redirect_url_with_token, status_code=status.HTTP_303_SEE_OTHER)
+    else:
+        # Account does not exist - redirect to registration
+        logger.info(
+            f"Invitation {invitation.id} requires registration for {invitation.invitee_email}. Redirecting."
+        )
+        register_url = router.url_path_for("read_register") # Assuming 'read_register' is the name of the GET /register route
+        redirect_url_with_params = (
+            f"{register_url}?email={invitation.invitee_email}&invitation_token={invitation.token}"
+        )
+        return RedirectResponse(url=redirect_url_with_params, status_code=status.HTTP_303_SEE_OTHER)

@@ -5,9 +5,10 @@ from sqlalchemy import Engine
 from fastapi.testclient import TestClient
 from dotenv import load_dotenv
 from utils.db import get_connection_url, tear_down_db, set_up_db, create_default_roles
-from utils.models import User, PasswordResetToken, EmailUpdateToken, Organization, Role, Account
+from utils.models import User, PasswordResetToken, EmailUpdateToken, Organization, Role, Account, Invitation
 from utils.auth import get_password_hash, create_access_token, create_refresh_token
 from main import app
+from datetime import datetime, UTC, timedelta
 
 # Load environment variables
 load_dotenv(override=True)
@@ -364,6 +365,131 @@ def second_test_organization(session: Session) -> Organization:
     session.add(organization)
     session.commit()
     return organization
+
+
+# --- Invitation Fixtures ---
+
+@pytest.fixture
+def member_role(session: Session, test_organization: Organization) -> Role:
+    """Returns the 'Member' role for the test_organization."""
+    member_role = session.exec(
+        select(Role)
+        .where(Role.organization_id == test_organization.id)
+        .where(Role.name == "Member")
+    ).first()
+
+    if member_role is None:
+        pytest.fail(f"Member role not found for organization {test_organization.id}")
+    return member_role
+
+
+@pytest.fixture
+def test_invitation(session: Session, test_organization: Organization, member_role: Role) -> Invitation:
+    """Creates a valid, active Invitation for invitee@example.com."""
+    # Assert IDs are not None to satisfy type checker
+    assert test_organization.id is not None
+    assert member_role.id is not None
+    invitation = Invitation(
+        organization_id=test_organization.id,
+        role_id=member_role.id,
+        invitee_email="invitee@example.com",
+        token="valid-test-token",
+        expires_at=datetime.now(UTC) + timedelta(days=7)
+    )
+    session.add(invitation)
+    session.commit()
+    session.refresh(invitation)
+    return invitation
+
+
+@pytest.fixture
+def expired_invitation(session: Session, test_organization: Organization, member_role: Role) -> Invitation:
+    """Creates an Invitation with an expiration date in the past."""
+    # Assert IDs are not None to satisfy type checker
+    assert test_organization.id is not None
+    assert member_role.id is not None
+    invitation = Invitation(
+        organization_id=test_organization.id,
+        role_id=member_role.id,
+        invitee_email="expired-invitee@example.com",
+        token="expired-test-token",
+        expires_at=datetime.now(UTC) - timedelta(days=1)
+    )
+    session.add(invitation)
+    session.commit()
+    session.refresh(invitation)
+    return invitation
+
+
+@pytest.fixture
+def used_invitation(session: Session, test_organization: Organization, member_role: Role, non_member_user: User) -> Invitation:
+    """Creates an Invitation that has already been used."""
+    # Assert IDs are not None to satisfy type checker
+    assert test_organization.id is not None
+    assert member_role.id is not None
+    assert non_member_user.id is not None
+    invitation = Invitation(
+        organization_id=test_organization.id,
+        role_id=member_role.id,
+        invitee_email="used-invitee@example.com",
+        token="used-test-token",
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+        used=True,
+        accepted_at=datetime.now(UTC),
+        accepted_by_user_id=non_member_user.id
+    )
+    session.add(invitation)
+    session.commit()
+    session.refresh(invitation)
+    return invitation
+
+
+@pytest.fixture
+def existing_invitee_account(session: Session) -> Account:
+    """Creates an Account for invitee@example.com."""
+    account = Account(
+        email="invitee@example.com",
+        hashed_password=get_password_hash("Invitee123!@#")
+    )
+    session.add(account)
+    session.commit()
+    session.refresh(account)
+    return account
+
+
+@pytest.fixture
+def existing_invitee_user(session: Session, existing_invitee_account: Account) -> User:
+    """Creates a User linked to existing_invitee_account."""
+    user = User(
+        name="Invitee User",
+        account_id=existing_invitee_account.id
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    # Refresh account to load user relationship
+    session.refresh(existing_invitee_account)
+    return user
+
+
+@pytest.fixture
+def auth_client_invitee(session: Session, existing_invitee_user: User) -> Generator[TestClient, None, None]:
+    """Provides a TestClient authenticated as the existing_invitee_user."""
+    client = TestClient(app)
+    
+    # Initialize tokens
+    access_token = ""
+    refresh_token = ""
+    
+    # Create and set valid tokens
+    if existing_invitee_user.account:
+        access_token = create_access_token({"sub": existing_invitee_user.account.email})
+        refresh_token = create_refresh_token({"sub": existing_invitee_user.account.email})
+        
+    client.cookies.set("access_token", access_token)
+    client.cookies.set("refresh_token", refresh_token)
+    
+    yield client
 
 # --- Email Mocking Fixtures ---
 

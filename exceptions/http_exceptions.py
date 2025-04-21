@@ -185,3 +185,30 @@ class InvitationEmailSendError(HTTPException):
             status_code=500, # Internal Server Error seems appropriate
             detail="Failed to send invitation email. Please try again later or contact support."
         )
+
+
+class InvalidInvitationTokenError(HTTPException):
+    """Raised when an invitation token is invalid, expired, or not found."""
+    def __init__(self):
+        super().__init__(
+            status_code=404,
+            detail="Invitation not found or expired"
+        )
+
+
+class InvitationEmailMismatchError(HTTPException):
+    """Raised when a user attempts to accept an invitation sent to a different email address."""
+    def __init__(self):
+        super().__init__(
+            status_code=403,
+            detail="This invitation was sent to a different email address"
+        )
+
+
+class InvitationProcessingError(HTTPException):
+    """Raised when an error occurs during the processing of a valid invitation."""
+    def __init__(self, detail: str = "Failed to process invitation. Please try again later."):
+        super().__init__(
+            status_code=500, # Internal Server Error
+            detail=detail
+        )

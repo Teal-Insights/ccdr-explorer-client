@@ -3,8 +3,6 @@ from fastapi.testclient import TestClient
 from starlette.datastructures import URLPath
 from sqlmodel import Session, select
 from datetime import timedelta
-from unittest.mock import patch
-import resend
 from urllib.parse import urlparse, parse_qs
 from html import unescape
 from sqlalchemy import inspect
