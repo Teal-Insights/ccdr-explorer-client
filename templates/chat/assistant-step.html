@@ -4,9 +4,9 @@
     if step_type == 'assistantMessage' 
       %} alert alert-secondary w-75{% 
     elif step_type == 'toolCall' 
-      %} alert alert-info{% 
+      %} alert alert-info w-75{% 
     else 
-      %} alert alert-warning{% 
+      %} alert alert-warning w-75{% 
     endif %}"
   id="step-{{ step_id }}">
     <!-- Ensure content placeholder or actual content exists -->

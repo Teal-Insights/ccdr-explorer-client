@@ -445,16 +445,18 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
   /* Fanned Report Covers */
   .report-covers-container {
       position: relative;
-      height: 300px; /* Adjust height as needed */
+      height: 250px; /* Adjust height as needed */
       perspective: 1000px;
-      margin-bottom: 4rem !important; /* Add more space below */
+      width: 300px; /* Constrain width to approximate visual width of the covers */
+      margin: 0 auto; /* Center the container */
   }
   
   .cover-container {
       position: absolute;
       transform-style: preserve-3d;
-      transition: transform 0.5s ease;
+      transition: all 0.5 ease-in-out;
       width: 150px; /* Adjust width as needed */
+      will-change: transform;
   }
   
   .report-cover {
@@ -481,18 +483,21 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
       z-index: 1;
   }
   
-  /* Hover effect */
+  /* Hover effect with transitions applied to hover state too */
   .report-covers-container:hover .cover1 {
       transform: rotateZ(-15deg) translateZ(10px) translateX(-70px) translateY(-10px) scale(1.05);
+      transition: all 0.5s ease-in-out;
   }
   
   .report-covers-container:hover .cover2 {
       transform: rotateZ(0deg) translateZ(20px) translateY(-15px) scale(1.1);
       z-index: 3; /* Bring middle cover to front on hover */
+      transition: all 0.5s ease-in-out;
   }
   
   .report-covers-container:hover .cover3 {
       transform: rotateZ(15deg) translateZ(10px) translateX(70px) translateY(-10px) scale(1.05);
+      transition: all 0.5s ease-in-out;
   }
   
   /* Adjustments for smaller screens if needed */
@@ -562,14 +567,6 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
     text-decoration: none;
   }
   
-  /* Additional styling for the homepage */
-  .report-covers-container {
-    position: relative;
-    height: 300px;
-    perspective: 1000px;
-    margin-bottom: 4rem !important;
-  }
-  
   /* Homepage specific styling */
   .container.mt-5 {
     position: relative;
@@ -597,7 +594,7 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
   .btn-primary {
     background-color: #3ab287 !important;
     border-color: #3ab287 !important;
-    transition: all 0.3s ease;
+    transition: all 0.5s ease;
   }
   
   .btn-primary:hover {
@@ -611,7 +608,7 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
     color: #001926 !important;
     border-color: #001926 !important;
     background-color: transparent !important;
-    transition: all 0.3s ease;
+    transition: all 0.5s ease;
   }
   
   .btn-outline-light:hover {

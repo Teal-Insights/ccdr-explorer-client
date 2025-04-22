@@ -104,6 +104,10 @@ async def send_message(
     )
 
 
+def wrap_for_oob_swap(step_id: str, text_value: str) -> str:
+    return f'<span hx-swap-oob="beforeend:#step-{step_id}">{text_value}</span>'
+
+
 # Route to stream the response from the assistant via server-sent events
 @router.get("/{thread_id}/receive")
 async def stream_response(
@@ -134,9 +138,6 @@ async def stream_response(
         async with stream_manager as event_handler:
             event: AssistantStreamEvent
             async for event in event_handler:
-                # Debug logging for all events
-                logger.debug(f"SSE Event Type: {type(event).__name__}")
-                logger.debug(f"SSE Event Data: {event.data}")
 
                 if isinstance(event, ThreadMessageCreated):
                     step_id = event.data.id
@@ -155,7 +156,7 @@ async def stream_response(
                     if isinstance(content, TextDeltaBlock) and content.text and content.text.value:
                         step_id = event.data.id
                         text_value = content.text.value
-                        sse_data = f'<span hx-swap-oob="beforeend:#step-{step_id}">{text_value}</span>'
+                        sse_data = wrap_for_oob_swap(step_id, text_value)
 
                         yield sse_format(
                             "textDelta",
@@ -163,19 +164,20 @@ async def stream_response(
                         )
 
                 if isinstance(event, ThreadRunStepCreated) and event.data.type == "tool_calls":
+                    logger.debug(f"Tool Call Created - Data: {str(event.data)}")
                     step_id = event.data.id
-                    logger.debug(f"Tool Call Created - Step ID: {step_id}")
 
                     yield sse_format(
                         f"toolCallCreated",
                         templates.get_template('chat/assistant-step.html').render(
                             step_type='toolCall',
-                            stream_name=f'toolDelta{step_id}'
+                            step_id=step_id
                         )
                     )
 
                 if isinstance(event, ThreadRunStepDelta) and event.data.delta.step_details and event.data.delta.step_details.type == "tool_calls":
                     tool_calls = event.data.delta.step_details.tool_calls
+                    step_id = event.data.id
                     if tool_calls:
                         # TODO: Support parallel function calling
                         tool_call = tool_calls[0]
@@ -185,13 +187,13 @@ async def stream_response(
                         if tool_call.type == "function":
                             if tool_call.function and tool_call.function.name:
                                 yield sse_format(
-                                    f"toolDelta{step_id}",
-                                    tool_call.function.name + "<br>"
+                                    f"toolDelta",
+                                    wrap_for_oob_swap(step_id, tool_call.function.name + "<br>")
                                 )
                             if tool_call.function and tool_call.function.arguments:
                                 yield sse_format(
-                                    f"toolDelta{step_id}",
-                                    tool_call.function.arguments
+                                    f"toolDelta",
+                                    wrap_for_oob_swap(step_id, tool_call.function.arguments)
                                 )
                         
                         # Handle code interpreter tool calls
@@ -199,16 +201,16 @@ async def stream_response(
                             if tool_call.code_interpreter and tool_call.code_interpreter.input:
                                 logger.debug(f"Code Interpreter Input: {tool_call.code_interpreter.input}")
                                 yield sse_format(
-                                    f"toolDelta{step_id}",
-                                    str(tool_call.code_interpreter.input)
+                                    f"toolDelta",
+                                    wrap_for_oob_swap(step_id, str(tool_call.code_interpreter.input))
                                 )
                             if tool_call.code_interpreter and tool_call.code_interpreter.outputs:
                                 for output in tool_call.code_interpreter.outputs:
                                     logger.debug(f"Code Interpreter Output Type: {output.type}")
                                     if output.type == "logs" and output.logs:
                                         yield sse_format(
-                                            f"toolDelta{step_id}",
-                                            str(output.logs)
+                                            f"toolDelta",
+                                            wrap_for_oob_swap(step_id, str(output.logs))
                                         )
                                     elif output.type == "image" and output.image and output.image.file_id:
                                         logger.debug(f"Image Output - File ID: {output.image.file_id}")
@@ -216,8 +218,13 @@ async def stream_response(
                                         image_html = f'<img src="/chat/files/{output.image.file_id}/content" class="code-interpreter-image">'
                                         yield sse_format(
                                             f"imageOutput",
-                                            image_html
+                                            wrap_for_oob_swap(step_id, image_html)
                                         )
+                        elif tool_call.type == "file_search":
+                            yield sse_format(
+                                f"toolDelta",
+                                wrap_for_oob_swap(step_id, "<em>File search tool call</em>")
+                            )
 
                 # If the assistant run requires an action (a tool call), break and handle it
                 if isinstance(event, ThreadRunRequiresAction):
