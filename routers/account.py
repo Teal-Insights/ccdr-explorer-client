@@ -315,7 +315,7 @@ async def register(
     refresh_token = create_refresh_token(data={"sub": account.email})
     
     # Set cookie
-    response = RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=303)
+    response = RedirectResponse(url=str(redirect_url), status_code=303)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -401,7 +401,7 @@ async def login(
     refresh_token = create_refresh_token(data={"sub": account.email})
 
     # Set cookie
-    response = RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=303)
+    response = RedirectResponse(url=str(redirect_url), status_code=303)
     response.set_cookie(
         key="access_token",
         value=access_token,

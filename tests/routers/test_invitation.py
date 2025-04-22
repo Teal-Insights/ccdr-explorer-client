@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, UTC
 from unittest.mock import MagicMock, patch
 from sqlmodel import Session, select
 from tests.conftest import SetupError
-from utils.models import Role, Permission, ValidPermissions, User, Invitation, Organization, Account
+from utils.core.models import Role, Permission, ValidPermissions, User, Invitation, Organization, Account
 from main import app
 from utils.invitations import generate_invitation_link
 from exceptions.exceptions import EmailSendFailedError

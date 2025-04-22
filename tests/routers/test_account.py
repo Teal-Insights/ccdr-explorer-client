@@ -124,7 +124,7 @@ def test_password_reset_flow(unauth_client: TestClient, session: Session, test_a
 
     # Verify content
     assert call_args["to"] == [test_account.email]
-    assert call_args["from"] == "noreply@promptlytechnologies.com"
+    assert call_args["from"] == "noreply@ccdrexplorer.com"
     assert "Password Reset Request" in call_args["subject"]
     assert "reset_password" in call_args["html"]
 
@@ -259,7 +259,7 @@ def test_request_email_update_success(auth_client: TestClient, test_account: Acc
     
     # Verify email content
     assert call_args["to"] == [test_account.email]
-    assert call_args["from"] == "noreply@promptlytechnologies.com"
+    assert call_args["from"] == "noreply@ccdrexplorer.com"
     assert "Confirm Email Update" in call_args["subject"]
     assert "confirm_email_update" in call_args["html"]
     assert new_email in call_args["html"]
