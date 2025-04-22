@@ -16,9 +16,9 @@ image = (
 
 # Define the Modal App
 app = modal.App(
-    name="fastapi-jinja2-postgres-webapp",
+    name="ccdr-explorer",
     image=image,
-    secrets=[modal.Secret.from_name("nature-finance-rag-client-secret")]
+    secrets=[modal.Secret.from_name("ccdr-explorer-client-secret")]
 )
 
 

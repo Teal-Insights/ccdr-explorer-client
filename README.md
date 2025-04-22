@@ -1,6 +1,6 @@
-# Nature Finance RAG client for working with World Bank climate development reports
+# CCDR Explorer RAG client for working with World Bank climate development reports
 
-This is the application layer for a web app for AI-powered semantic search over the World Bank's Country and Climate Development Reports (CCDRs). It is built on the [FastAPI, Jinja2, PostgreSQL Webapp Template](https://github.com/Promptly-Technologies-LLC/fastapi-jinja2-postgres-webapp) and is meant to be used with the (Nature Finance RAG Database and API)[https://github.com/Teal-Insights/nature-finance-rag-api] as the data storage and retrieval layer.
+This is the application layer for a web app for AI-powered semantic search over the World Bank's Country Climate and Development Reports (CCDRs). It is built on the [FastAPI, Jinja2, PostgreSQL Webapp Template](https://github.com/Promptly-Technologies-LLC/fastapi-jinja2-postgres-webapp) and is meant to be used with the (Sustainable Sovereign Debt Hub RAG Database and API)[https://github.com/Teal-Insights/nature-finance-rag-api] as the data storage and retrieval layer.
 
 ## Getting Started
 
