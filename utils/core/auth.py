@@ -205,7 +205,7 @@ def send_reset_email(email: str, session: Session) -> None:
             html_content: str = template.render({"reset_url": reset_url})
 
             params: resend.Emails.SendParams = {
-                "from": "noreply@promptlytechnologies.com",
+                "from": os.getenv("EMAIL_FROM", ""),
                 "to": [email],
                 "subject": "Password Reset Request",
                 "html": html_content,
@@ -267,7 +267,7 @@ def send_email_update_confirmation(
         })
 
         params: resend.Emails.SendParams = {
-            "from": "noreply@promptlytechnologies.com",
+            "from": os.getenv("EMAIL_FROM", ""),
             "to": [current_email],
             "subject": "Confirm Email Update",
             "html": html_content,
