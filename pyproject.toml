@@ -5,9 +5,9 @@ description = "A web application for exploring the World Bank's Country and Clim
 readme = "README.md"
 package-mode = false
 authors = [
-    {name = "Sustainable Sovereign Debt Hub},
+    {name = "Sustainable Sovereign Debt Hub"},
     {name = "Teal Insights", email = "lte@tealinsights.com"},
-    (name = "Promptly Technologies, LLC, email = "christopher.smith@promptlytechnologies.com")
+    {name = "Promptly Technologies, LLC", email = "christopher.smith@promptlytechnologies.com"}
 ]
 requires-python = "<4.0,>=3.13"
 dependencies = [
