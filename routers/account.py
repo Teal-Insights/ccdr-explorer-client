@@ -5,7 +5,6 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, BackgroundTasks, Form, Request, Query
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.exceptions import HTTPException
 from starlette.datastructures import URLPath
 from pydantic import EmailStr
 from sqlmodel import Session, select
