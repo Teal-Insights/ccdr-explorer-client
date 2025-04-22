@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from utils.db import get_session
 from utils.dependencies import get_authenticated_user
-from utils.models import Role, Permission, ValidPermissions, utc_time, User, DataIntegrityError
+from utils.models import Role, Permission, ValidPermissions, utc_now, User, DataIntegrityError
 from exceptions.http_exceptions import InsufficientPermissionsError, InvalidPermissionError, RoleAlreadyExistsError, RoleNotFoundError, RoleHasUsersError, CannotModifyDefaultRoleError
 from routers.organization import router as organization_router
 
@@ -128,7 +128,7 @@ def update_role(
 
     # Update role name and updated_at timestamp
     db_role.name = name
-    db_role.updated_at = utc_time()
+    db_role.updated_at = utc_now()
 
     try:
         session.commit()
