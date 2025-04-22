@@ -1,11 +1,13 @@
 [project]
 name = "nature-finance-rag-client"
 version = "0.1.0"
-description = "A web application for exploring the World Bank's Climate Change Development Reports (CCDRs) with artificial intelligence and semantic search"
+description = "A web application for exploring the World Bank's Country and Climate Development Reports (CCDRs) with artificial intelligence and semantic search"
 readme = "README.md"
 package-mode = false
 authors = [
+    {name = "Sustainable Sovereign Debt Hub},
     {name = "Teal Insights", email = "lte@tealinsights.com"},
+    (name = "Promptly Technologies, LLC, email = "christopher.smith@promptlytechnologies.com")
 ]
 requires-python = "<4.0,>=3.13"
 dependencies = [
