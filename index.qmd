@@ -116,7 +116,7 @@ Generate a 256 bit secret key with `openssl rand -base64 32` and paste it into t
 
 Set your desired database name, username, and password in the .env file.
 
-To use password recovery, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file.
+To use password recovery and other email features, register a [Resend](https://resend.com/) account, verify a domain, get an API key, and paste the API key into the .env file. Note that you will need to [verify your domain with Resend](https://resend.com/docs/dashboard/domains/introduction) to send emails, and you will not be able to send emails from the localhost development server.
 
 ### Start development database
 
