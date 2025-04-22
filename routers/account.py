@@ -40,7 +40,7 @@ from exceptions.http_exceptions import (
 from routers.chat import router as chat_router
 from routers.user import router as user_router
 from routers.organization import router as org_router
-from utils.invitations import process_invitation
+from utils.core.invitations import process_invitation
 
 logger = getLogger("uvicorn.error")
 

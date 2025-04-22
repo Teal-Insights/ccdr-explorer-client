@@ -10,7 +10,7 @@ from logging import getLogger
 from utils.core.dependencies import get_authenticated_user, get_optional_user
 from utils.core.db import get_session
 from utils.core.models import User, Role, Account, Invitation, ValidPermissions, Organization
-from utils.invitations import send_invitation_email, process_invitation
+from utils.core.invitations import send_invitation_email, process_invitation
 from exceptions.http_exceptions import (
     UserIsAlreadyMemberError,
     ActiveInvitationExistsError,
