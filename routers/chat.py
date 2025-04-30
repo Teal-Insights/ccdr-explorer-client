@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from datetime import datetime
 from logging import getLogger, Logger
 from typing import Optional, List, Dict, Any, AsyncGenerator, Union
@@ -18,6 +19,7 @@ from openai.types.beta.threads.message_content_delta import MessageContentDelta
 from openai.types.beta.threads.text_delta_block import TextDeltaBlock
 from openai.types.beta.threads.run import RequiredAction
 
+from routers.files import router as files_router
 from exceptions.http_exceptions import OpenAIError
 from utils.chat.functions import get_weather
 from utils.chat.sse import sse_format, post_tool_outputs
@@ -156,6 +158,30 @@ async def stream_response(
                     if isinstance(content, TextDeltaBlock) and content.text and content.text.value:
                         step_id = event.data.id
                         text_value = content.text.value
+                        annotations = content.text.annotations
+                        
+                        # Check for file citation annotations
+                        if annotations:
+                            for annotation in annotations:
+                                if annotation.type == 'file_citation' and hasattr(annotation, 'file_citation') and annotation.file_citation:
+                                    match = re.search(r'【.*?†(.*?)】', text_value)
+                                    if match:
+                                        file_name = match.group(1)
+                                        # Construct the URL dynamically
+                                        file_url = files_router.url_path_for(
+                                            "download_assistant_file",
+                                            file_name=file_name
+                                        )
+                                        text_value = f'[†]({file_url})'
+                                        logger.debug(f"Replacing citation with link: {text_value}")
+                                    else:
+                                        # Handle error: pattern not found in the text
+                                        logger.warning(f"Could not extract filename from citation text: {text_value}")
+                                        file_name = None # Indicate failure
+                                    
+                                    # Assuming one citation per delta for now
+                                    break 
+                        
                         sse_data = wrap_for_oob_swap(step_id, text_value)
 
                         yield sse_format(

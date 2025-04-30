@@ -1,13 +1,14 @@
 import os
 import logging
-from typing import List, Dict
+import tempfile
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Depends, Path
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Depends, Path, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from openai import AsyncOpenAI
+import boto3
 from exceptions.http_exceptions import OpenAIError
-from utils.chat.sse import stream_file_content
+from utils.chat.files import S3_FILE_PATHS, cleanup_temp_file
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,24 +30,57 @@ router = APIRouter(
 )
 
 
-@router.get("/{file_id}")
-async def get_file(
-    file_id: str = Path(..., description="The ID of the file to retrieve"),
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
-) -> StreamingResponse:
+@router.get("/{file_name}")
+async def download_assistant_file(
+    background_tasks: BackgroundTasks,
+    file_name: str = Path(..., description="The name of the file to retrieve")
+) -> FileResponse:
+    """Serves an assistant file stored locally in the uploads directory."""
+        # Initialize the S3 client
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+        region_name=os.getenv("AWS_REGION", "us-east-1")
+    )
+
+    bucket_name = os.getenv("S3_BUCKET", "")
+    s3_file_path = S3_FILE_PATHS.get(file_name)
+
+    if not s3_file_path:
+        raise HTTPException(
+            status_code=404,
+            detail=f"File configuration not found for: {file_name}"
+        )
+
+    # Create a temporary file that persists until manually deleted
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
+    temp_file_path = temp_file.name
+
     try:
-        file = await client.files.retrieve(file_id)
-        file_content = await client.files.content(file_id)
-        
-        if not hasattr(file_content, 'content'):
-            raise HTTPException(status_code=500, detail="File content not available")
-            
-        return StreamingResponse(
-            stream_file_content(file_content.content),
-            headers={"Content-Disposition": f'attachment; filename=\"{file.filename or "download"}\"'}
+        # Close the file handle immediately after creation, we only need the path
+        temp_file.close()
+
+        # Download the file directly to the temp file path
+        logger.info(f"Downloading s3://{bucket_name}/{s3_file_path} to {temp_file_path}")
+        s3.download_file(bucket_name, s3_file_path, temp_file_path)
+
+        # Schedule the cleanup task to run after the response is completely sent
+        background_tasks.add_task(cleanup_temp_file, temp_file_path)
+
+        # Return the file response
+        return FileResponse(
+            path=temp_file_path,
+            filename=file_name
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Ensure cleanup happens even if download or response creation fails
+        cleanup_temp_file(temp_file_path)
+        logger.error(f"Error downloading file s3://{bucket_name}/{s3_file_path}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download file: {e}"
+        )
 
 
 @router.get("/{file_id}/content")
