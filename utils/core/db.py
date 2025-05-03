@@ -4,15 +4,15 @@ from typing import Generator, Union, Sequence
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL
 from sqlmodel import create_engine, Session, SQLModel, select
-from utils.core.models import Role, Permission, RolePermissionLink
+from utils.core.models import Account, PasswordResetToken, EmailUpdateToken, UserRoleLink, RolePermissionLink, UserBase, User, Organization, Role, Permission, Invitation
 from utils.core.enums import ValidPermissions
+from utils.chat.models import Publication, Document, ContentNode, Embedding, FootnoteReference
 
 # Load environment variables from a .env file
-load_dotenv()
+load_dotenv(override=True)
 
 # Set up a logger for error reporting
 logger = logging.getLogger("uvicorn.error")
-
 
 # --- Constants ---
 
@@ -168,7 +168,30 @@ def create_permissions(session: Session) -> None:
             session.add(db_permission)
 
 
-def set_up_db(drop: bool = False) -> None:
+def verify_models() -> None:
+    """
+    Verifies that all models are registered with the SQLModel metadata.
+    Not intended for production use.
+    """
+    # SQLModel.metadata.tables contains full table names, not class objects
+    assert "publication" in SQLModel.metadata.tables
+    assert "document" in SQLModel.metadata.tables
+    assert "content_node" in SQLModel.metadata.tables
+    assert "embedding" in SQLModel.metadata.tables
+    assert "footnote_reference" in SQLModel.metadata.tables
+    assert "account" in SQLModel.metadata.tables
+    assert "passwordresettoken" in SQLModel.metadata.tables
+    assert "emailupdatetoken" in SQLModel.metadata.tables
+    assert "userrolelink" in SQLModel.metadata.tables
+    assert "rolepermissionlink" in SQLModel.metadata.tables
+    assert "user" in SQLModel.metadata.tables
+    assert "organization" in SQLModel.metadata.tables
+    assert "role" in SQLModel.metadata.tables
+    assert "permission" in SQLModel.metadata.tables
+    assert "invitation" in SQLModel.metadata.tables
+
+
+def set_up_db(drop: bool = False, verify: bool = False) -> None:
     """
     Sets up the database by creating tables and populating them with default permissions.
 
@@ -179,6 +202,10 @@ def set_up_db(drop: bool = False) -> None:
     if drop:
         SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
+
+    if verify:
+        verify_models()
+
     # Create default permissions
     with Session(engine) as session:
         create_permissions(session)
