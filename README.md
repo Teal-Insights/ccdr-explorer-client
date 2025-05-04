@@ -92,6 +92,12 @@ uv run python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 Navigate to http://localhost:8000/
 
+## Deploy to Production on Modal
+
+``` bash
+uv run modal deploy deploy.py
+```
+
 ## Usage
 
 To "chat with the CCDRs", register and/or sign in and navigate to the chat interface on the home page. Use the chat interface to ask the chatbot questions about the CCDRs.
