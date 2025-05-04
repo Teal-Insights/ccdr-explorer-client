@@ -6,7 +6,6 @@ from fastapi import HTTPException, Depends
 from sqlmodel import select, Session
 from utils.core.db import engine
 from utils.chat.models import Document
-from pydantic import HttpUrl
 
 load_dotenv(override=True)
 
@@ -23,10 +22,10 @@ async def get_vector_store(assistantId: str, client: AsyncOpenAI = Depends(lambd
 
 
 # Helper function to generate the FILE_PATHS dictionary (not for production use)
-def get_file_paths() -> dict[str, HttpUrl]:
+def get_file_paths() -> dict[str, str]:
     with Session(engine) as session:
         documents = session.exec(select(Document)).all()
-        document_dict = {doc.id: doc.download_url for doc in documents}
+        document_dict = {doc.id: doc.storage_url for doc in documents if doc.storage_url}
         return document_dict
 
 

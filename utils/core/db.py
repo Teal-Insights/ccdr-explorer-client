@@ -4,9 +4,8 @@ from typing import Generator, Union, Sequence
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL
 from sqlmodel import create_engine, Session, SQLModel, select
-from utils.core.models import Account, PasswordResetToken, EmailUpdateToken, UserRoleLink, RolePermissionLink, UserBase, User, Organization, Role, Permission, Invitation
+from utils.core.models import RolePermissionLink, Role, Permission
 from utils.core.enums import ValidPermissions
-from utils.chat.models import Publication, Document, ContentNode, Embedding, FootnoteReference
 
 # Load environment variables from a .env file
 load_dotenv(override=True)
