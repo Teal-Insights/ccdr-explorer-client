@@ -40,7 +40,7 @@ class BoundingBox(SQLModel):
 class Publication(SQLModel, table=True):
     __table_args__ = {'comment': 'Contains publication metadata and relationships to documents'}
     
-    publication_id: str = Field(primary_key=True, max_length=50, index=True)
+    id: str = Field(primary_key=True, max_length=50, index=True)
     title: str = Field(max_length=500)
     abstract: Optional[str] = None
     citation: str
@@ -57,8 +57,8 @@ class Publication(SQLModel, table=True):
 class Document(SQLModel, table=True):
     __table_args__ = {'comment': 'Contains document metadata and relationships to content nodes'}
     
-    document_id: str = Field(primary_key=True, max_length=50, index=True)
-    publication_id: str = Field(foreign_key="publication.publication_id", index=True)
+    id: str = Field(primary_key=True, max_length=50, index=True)
+    publication_id: str = Field(foreign_key="publication.id", index=True)
     type: DocumentType
     download_url: Annotated[HttpUrl, Field(sa_column=Column(VARCHAR(500)))]
     description: str
@@ -76,9 +76,9 @@ class ContentNode(SQLModel, table=True):
     __tablename__ = "content_node" # type: ignore
     __table_args__ = {'comment': 'Contains hierarchical document content with relationships to embeddings and footnotes'}
     
-    node_id: str = Field(primary_key=True, max_length=50, index=True)
-    document_id: str = Field(foreign_key="document.document_id", index=True)
-    parent_node_id: Optional[str] = Field(default=None, foreign_key="content_node.node_id", index=True)
+    id: str = Field(primary_key=True, max_length=50, index=True)
+    document_id: str = Field(foreign_key="document.id", index=True)
+    parent_node_id: Optional[str] = Field(default=None, foreign_key="content_node.id", index=True)
     node_type: NodeType
     raw_content: Optional[str] = None
     content: Optional[str] = None
@@ -97,7 +97,7 @@ class ContentNode(SQLModel, table=True):
     document: Document = Relationship(back_populates="content_nodes")
     parent: Optional["ContentNode"] = Relationship(
         back_populates="children",
-        sa_relationship_kwargs={"remote_side": "ContentNode.node_id"}
+        sa_relationship_kwargs={"remote_side": "ContentNode.id"}
     )
     children: List["ContentNode"] = Relationship(back_populates="parent")
     embeddings: List["Embedding"] = Relationship(back_populates="content_node")
@@ -114,8 +114,8 @@ class ContentNode(SQLModel, table=True):
 class Embedding(SQLModel, table=True):
     __table_args__ = {'comment': 'Contains vector embeddings for content nodes'}
     
-    embedding_id: str = Field(primary_key=True, max_length=50, index=True)
-    node_id: str = Field(foreign_key="content_node.node_id", index=True)
+    id: str = Field(primary_key=True, max_length=50, index=True)
+    node_id: str = Field(foreign_key="content_node.id", index=True)
     embedding_vector: List[float] = Field(
         sa_column=Column(ARRAY(FLOAT))
     )
@@ -129,13 +129,13 @@ class Embedding(SQLModel, table=True):
 class FootnoteReference(SQLModel, table=True):
     __tablename__ = "footnote_reference" # type: ignore
     __table_args__ = {'comment': 'Contains bidirectional footnote references between content nodes'}
-    
-    footnote_ref_id: str = Field(primary_key=True, max_length=50, index=True)
-    referencing_node_id: str = Field(foreign_key="content_node.node_id", index=True)
-    definition_node_id: str = Field(foreign_key="content_node.node_id", index=True)
+
+    id: str = Field(primary_key=True, max_length=50, index=True)
+    referencing_node_id: str = Field(foreign_key="content_node.id", index=True)
+    definition_node_id: str = Field(foreign_key="content_node.id", index=True)
     marker_text: str = Field(max_length=50)
     sequence_in_node: int
-    
+
     # Relationships
     referencing_node: ContentNode = Relationship(
         back_populates="referencing_footnotes",

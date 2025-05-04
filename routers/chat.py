@@ -19,11 +19,11 @@ from openai.types.beta.threads.message_content_delta import MessageContentDelta
 from openai.types.beta.threads.text_delta_block import TextDeltaBlock
 from openai.types.beta.threads.run import RequiredAction
 
-from routers.files import router as files_router
 from exceptions.http_exceptions import OpenAIError
 from utils.chat.functions import get_weather
 from utils.chat.sse import sse_format, post_tool_outputs
 from utils.chat.sse import AssistantStreamMetadata
+from utils.chat.files import FILE_PATHS
 from utils.core.dependencies import get_user_with_relations
 from utils.core.models import User
 from utils.chat.threads import create_thread
@@ -166,19 +166,17 @@ async def stream_response(
                                 if annotation.type == 'file_citation' and hasattr(annotation, 'file_citation') and annotation.file_citation:
                                     match = re.search(r'【.*?†(.*?)】', text_value)
                                     if match:
-                                        file_name = match.group(1)
+                                        document_id = match.group(1).split(".")[0]
                                         # Construct the URL dynamically
-                                        file_url = files_router.url_path_for(
-                                            "download_assistant_file",
-                                            file_name=file_name
-                                        )
-                                        text_value = f'[†]({file_url})'
-                                        logger.debug(f"Replacing citation with link: {text_value}")
+                                        file_url = FILE_PATHS.get(document_id, None)
+                                        if file_url:
+                                            text_value = f'[†]({file_url})'
+                                        else:
+                                            # Handle error: pattern not found in the text
+                                            logger.warning(f"Could not extract document ID from citation text: {text_value}")
                                     else:
-                                        # Handle error: pattern not found in the text
-                                        logger.warning(f"Could not extract filename from citation text: {text_value}")
-                                        file_name = None # Indicate failure
-                                    
+                                        logger.warning(f"Could not find citation in text: {text_value}")
+
                                     # Assuming one citation per delta for now
                                     break 
                         

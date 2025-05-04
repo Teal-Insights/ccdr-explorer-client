@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from openai import AsyncOpenAI
 import boto3
 from exceptions.http_exceptions import OpenAIError
-from utils.chat.files import S3_FILE_PATHS, cleanup_temp_file
+from utils.chat.files import FILE_PATHS, cleanup_temp_file
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -30,6 +30,7 @@ router = APIRouter(
 )
 
 
+# TODO: FILE_PATHS no longer points to s3 urls; we will need to get these from Document.storage_url instead
 @router.get("/{file_name}")
 async def download_assistant_file(
     background_tasks: BackgroundTasks,
@@ -45,7 +46,7 @@ async def download_assistant_file(
     )
 
     bucket_name = os.getenv("S3_BUCKET", "")
-    s3_file_path = S3_FILE_PATHS.get(file_name)
+    s3_file_path = FILE_PATHS.get(file_name)
 
     if not s3_file_path:
         raise HTTPException(
