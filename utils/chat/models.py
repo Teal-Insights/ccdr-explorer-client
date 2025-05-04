@@ -3,7 +3,7 @@ from typing import List, Optional, Annotated, Dict, Any
 from enum import Enum
 from dotenv import load_dotenv
 from sqlmodel import Field, Relationship, SQLModel, Column
-from pydantic import HttpUrl
+from pydantic import HttpUrl, AnyUrl, field_validator
 from sqlalchemy.dialects.postgresql import ARRAY, FLOAT, JSONB, VARCHAR
 
 # Load environment variables
@@ -47,8 +47,16 @@ class Publication(SQLModel, table=True):
     authors: str
     publication_date: date = Field(index=True)
     source: str = Field(max_length=100)
-    source_url: Annotated[HttpUrl, Field(sa_column=Column(VARCHAR(500)))]
-    uri: Annotated[HttpUrl, Field(sa_column=Column(VARCHAR(500)))]
+    source_url: str = Field(max_length=500)
+    uri: str = Field(max_length=500)
+    
+    # Validators for URLs
+    @field_validator('source_url', 'uri')
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        # Validate the URL format but return as string
+        HttpUrl(v)
+        return v
     
     # Relationships
     documents: List["Document"] = Relationship(back_populates="publication")
@@ -60,13 +68,29 @@ class Document(SQLModel, table=True):
     id: str = Field(primary_key=True, max_length=50, index=True)
     publication_id: str = Field(foreign_key="publication.id", index=True)
     type: DocumentType
-    download_url: Annotated[HttpUrl, Field(sa_column=Column(VARCHAR(500)))]
+    download_url: str = Field(max_length=500)
     description: str
     mime_type: str = Field(max_length=100)
     charset: str = Field(max_length=50)
     storage_url: Optional[str] = Field(default=None, max_length=500)
     file_size: Optional[int] = None
     
+    # Validator for URL
+    @field_validator('download_url')
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        # Validate the URL format but return as string
+        HttpUrl(v)
+        return v
+
+    @field_validator('storage_url')
+    @classmethod
+    def validate_optional_url(cls, v: Optional[str]) -> Optional[str]:
+        # Validate the URL format but return as string
+        if v is not None:
+            HttpUrl(v)
+        return v
+
     # Relationships
     publication: Publication = Relationship(back_populates="documents")
     content_nodes: List["ContentNode"] = Relationship(back_populates="document")
@@ -92,7 +116,16 @@ class ContentNode(SQLModel, table=True):
     start_page_logical: str
     end_page_logical: str
     bounding_box: Dict[str, Any] = Field(sa_column=Column(JSONB))
-    
+
+    # Validator for optional URL
+    @field_validator('storage_url')
+    @classmethod
+    def validate_optional_url(cls, v: Optional[str]) -> Optional[str]:
+        # Validate the URL format but return as string
+        if v is not None:
+            HttpUrl(v)
+        return v
+
     # Relationships
     document: Document = Relationship(back_populates="content_nodes")
     parent: Optional["ContentNode"] = Relationship(
