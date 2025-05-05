@@ -1,14 +1,18 @@
+# TODO: These need to be authenticated routes, or else they could be intercepted and/or abused
+
 import os
 import json
 import re
 from datetime import datetime
 from logging import getLogger, Logger
-from typing import Optional, List, Dict, Any, AsyncGenerator, Union
+from typing import Optional, List, Dict, Any, AsyncGenerator, Union, cast
 from dotenv import load_dotenv
 from fastapi import APIRouter, Form, Depends, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import Response, HTMLResponse, StreamingResponse
 from openai import AsyncOpenAI
+from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload, InstrumentedAttribute
 from openai.lib.streaming._assistants import AsyncAssistantStreamManager, AsyncAssistantEventHandler
 from openai.types.beta.assistant_stream_event import (
     ThreadMessageCreated, ThreadMessageDelta, ThreadRunCompleted,
@@ -24,8 +28,9 @@ from utils.chat.functions import get_weather
 from utils.chat.sse import sse_format, post_tool_outputs
 from utils.chat.sse import AssistantStreamMetadata
 from utils.chat.files import FILE_PATHS
-from utils.core.dependencies import get_user_with_relations
+from utils.core.dependencies import get_user_with_relations, get_authenticated_user, get_session
 from utils.core.models import User
+from utils.chat.models import Document, Publication
 from utils.chat.threads import create_thread
 
 logger = getLogger("uvicorn.error")
@@ -81,6 +86,7 @@ async def send_message(
     request: Request,
     thread_id: str,
     userInput: str = Form(...),
+    user: User = Depends(get_authenticated_user),
     client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
 ) -> HTMLResponse:
     # Create a new message in the thread
@@ -114,6 +120,8 @@ def wrap_for_oob_swap(step_id: str, text_value: str) -> str:
 @router.get("/{thread_id}/receive")
 async def stream_response(
     thread_id: str,
+    user: User = Depends(get_authenticated_user),
+    session: Session = Depends(get_session),
     client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
 ) -> StreamingResponse:
     """
@@ -170,16 +178,36 @@ async def stream_response(
                                         # Construct the URL dynamically
                                         file_url = FILE_PATHS.get(document_id, None)
                                         if file_url:
-                                            text_value = f'[†]({file_url})'
+                                            # Get document and publication info using session with eager loading
+                                            statement = select(Document).where(Document.id == document_id).options(
+                                                selectinload(cast(InstrumentedAttribute, Document.publication))
+                                            )
+                                            document = session.exec(statement).first()
+
+                                            # Access the eager-loaded publication
+                                            if document and document.publication:
+                                                publication = document.publication
+                                                # Format citation for tooltip
+                                                citation_text = f"{publication.title} - {publication.authors} ({publication.publication_date.year})"
+                                                text_value = f'<a href="{file_url}" target="_blank" rel="noopener noreferrer" title="{citation_text}">†</a>'
+                                                logger.debug(f"Link text: {text_value}")
+                                            else:
+                                                # Document found, but no publication or publication link missing
+                                                text_value = f'<a href="{file_url}" target="_blank" rel="noopener noreferrer">†</a>'
+                                                logger.debug(f"Link text: {text_value}")
                                         else:
-                                            # Handle error: pattern not found in the text
-                                            logger.warning(f"Could not extract document ID from citation text: {text_value}")
+                                            # file_url not found for document_id
+                                            logger.warning(f"Could not find file URL for document ID: {document_id}")
+                                            # Keep original text_value if file_url is None
+                                            pass # text_value remains unchanged
+
                                     else:
-                                        logger.warning(f"Could not find citation in text: {text_value}")
+                                        logger.warning(f"Could not find citation pattern in text: {text_value}")
 
                                     # Assuming one citation per delta for now
-                                    break 
+                                    break # Exit annotation loop once a citation is processed
                         
+                        # Ensure text_value has been potentially modified before wrapping
                         sse_data = wrap_for_oob_swap(step_id, text_value)
 
                         yield sse_format(
