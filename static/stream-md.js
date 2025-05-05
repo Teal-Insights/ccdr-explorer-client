@@ -26,7 +26,7 @@ if (!oobElement || !oobElement.getAttribute || oobElement.nodeType !== Node.ELEM
 }
 
 const swapOobAttr = oobElement.getAttribute('hx-swap-oob');
-const markdownChunk = oobElement.innerHTML || '';
+const markdownChunk = oobElement.textContent || '';
 
 if (!swapOobAttr) {
     // Might be a non-OOB textDelta, handle differently or ignore?
@@ -72,17 +72,21 @@ if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
 }
 
 try {
-    // Use marked.parse() for incremental updates.
-    const rawHtml = marked.parse(updatedMarkdown, {
-        allowDangerousHtml: true,
-        gfm: true
-    });
+    // Create custom renderer with link target
+    const renderer = new marked.Renderer();
+    // Override link renderer: destructure the token object for href and text
+    renderer.link = ({ href, title, text }) => {
+        const titleAttr = title ? ` title="${title}"` : '';
+        return `<a target="_blank" rel="noopener noreferrer" href="${href}"${titleAttr}>${text}</a>`;
+    };
+
+    // Use marked.parse() with custom renderer
+    const rawHtml = marked.parse(updatedMarkdown, { renderer });
     // Configure DOMPurify
     const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
+        // Allows standard HTML elements
         USE_PROFILES: { html: true },
-        ADD_ATTR: ['target'],
-        ALLOWED_TAGS: ['a', 'p', 'br', 'ul', 'ol', 'li', 'strong', 'em', 'code', 'pre', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-        ALLOWED_ATTR: ['href', 'target', 'rel', 'title']
+        ADD_ATTR: ['target']
     });
     targetElement.innerHTML = sanitizedHtml;
 

@@ -5,14 +5,13 @@ import json
 import re
 from datetime import datetime
 from logging import getLogger, Logger
-from typing import Optional, List, Dict, Any, AsyncGenerator, Union, cast
+from typing import Optional, List, Dict, Any, AsyncGenerator, Union
 from dotenv import load_dotenv
 from fastapi import APIRouter, Form, Depends, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import Response, HTMLResponse, StreamingResponse
 from openai import AsyncOpenAI
-from sqlmodel import Session, select
-from sqlalchemy.orm import selectinload, InstrumentedAttribute
+from sqlmodel import Session
 from openai.lib.streaming._assistants import AsyncAssistantStreamManager, AsyncAssistantEventHandler
 from openai.types.beta.assistant_stream_event import (
     ThreadMessageCreated, ThreadMessageDelta, ThreadRunCompleted,
@@ -27,10 +26,9 @@ from exceptions.http_exceptions import OpenAIError
 from utils.chat.functions import get_weather
 from utils.chat.sse import sse_format, post_tool_outputs
 from utils.chat.sse import AssistantStreamMetadata
-from utils.chat.files import FILE_PATHS
+from utils.chat.files import FILE_PATHS, DOCUMENT_CITATIONS
 from utils.core.dependencies import get_user_with_relations, get_authenticated_user, get_session
 from utils.core.models import User
-from utils.chat.models import Document, Publication
 from utils.chat.threads import create_thread
 
 logger = getLogger("uvicorn.error")
@@ -175,29 +173,15 @@ async def stream_response(
                                     match = re.search(r'【.*?†(.*?)】', text_value)
                                     if match:
                                         document_id = match.group(1).split(".")[0]
-                                        # Construct the URL dynamically
+                                        # Get the file URL from the FILE_PATHS dictionary
                                         file_url = FILE_PATHS.get(document_id, None)
-                                        if file_url:
-                                            # Get document and publication info using session with eager loading
-                                            statement = select(Document).where(Document.id == document_id).options(
-                                                selectinload(cast(InstrumentedAttribute, Document.publication))
-                                            )
-                                            document = session.exec(statement).first()
-
-                                            # Access the eager-loaded publication
-                                            if document and document.publication:
-                                                publication = document.publication
-                                                # Format citation for tooltip
-                                                citation_text = f"{publication.title} - {publication.authors} ({publication.publication_date.year})"
-                                                text_value = f'<a href="{file_url}" target="_blank" rel="noopener noreferrer" title="{citation_text}">†</a>'
-                                                logger.debug(f"Link text: {text_value}")
-                                            else:
-                                                # Document found, but no publication or publication link missing
-                                                text_value = f'<a href="{file_url}" target="_blank" rel="noopener noreferrer">†</a>'
-                                                logger.debug(f"Link text: {text_value}")
+                                        # Get the citation text from the DOCUMENT_CITATIONS dictionary
+                                        citation_text = DOCUMENT_CITATIONS.get(document_id, None)
+                                        if file_url and citation_text:
+                                            text_value = f' ([{citation_text}]({file_url}))'
                                         else:
                                             # file_url not found for document_id
-                                            logger.warning(f"Could not find file URL for document ID: {document_id}")
+                                            logger.warning(f"Could not find file URL or citation text for document ID: {document_id}")
                                             # Keep original text_value if file_url is None
                                             pass # text_value remains unchanged
 
