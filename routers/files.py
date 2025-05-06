@@ -9,6 +9,8 @@ from openai import AsyncOpenAI
 import boto3
 from exceptions.http_exceptions import OpenAIError
 from utils.chat.files import FILE_PATHS, cleanup_temp_file
+from utils.core.dependencies import get_authenticated_user
+from utils.core.models import User
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -34,7 +36,8 @@ router = APIRouter(
 @router.get("/{file_name}")
 async def download_assistant_file(
     background_tasks: BackgroundTasks,
-    file_name: str = Path(..., description="The name of the file to retrieve")
+    file_name: str = Path(..., description="The name of the file to retrieve"),
+    user: User = Depends(get_authenticated_user),
 ) -> FileResponse:
     """Serves an assistant file stored locally in the uploads directory."""
         # Initialize the S3 client
@@ -87,6 +90,7 @@ async def download_assistant_file(
 @router.get("/{file_id}/content")
 async def get_file_content(
     file_id: str,
+    user: User = Depends(get_authenticated_user),
     client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
 ) -> StreamingResponse:
     """
