@@ -22,7 +22,7 @@
               {% endif %}
             {% endfor %}
           </div>
-          <form id="chatForm" class="w-100 d-flex align-items-end pb-3"
+          <form id="chatForm" class="w-75 d-flex align-items-end pb-3 ms-auto"
                 hx-on::after-request="this.reset()"
                 hx-post="{{ url_for('send_message', thread_id=thread_id) }}"
                 hx-target="#messages"
