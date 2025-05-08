@@ -22,19 +22,21 @@
               {% endif %}
             {% endfor %}
           </div>
-          <form id="chatForm" class="w-75 d-flex pb-3 ms-auto"
+          <form id="chatForm" class="w-100 d-flex align-items-end pb-3"
                 hx-on::after-request="this.reset()"
                 hx-post="{{ url_for('send_message', thread_id=thread_id) }}"
                 hx-target="#messages"
                 hx-swap="beforeend">
-            <input
-              type="text"
+            <textarea
               class="form-control me-2"
               name="userInput"
               placeholder="Enter your question"
               id="userInput"
+              autocomplete="off"
+              rows="1" {# Start with one row, will expand with CSS #}
+              oninput="this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';"
               required
-            />
+            ></textarea>
             <button
               type="submit"
               class="btn btn-primary"
