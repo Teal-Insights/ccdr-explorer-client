@@ -1,6 +1,9 @@
 import logging
+import os
+from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
+from datetime import datetime, UTC
 from fastapi import FastAPI, Request, Depends, status
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,11 +27,58 @@ from utils.core.models import User
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
 
+STATIC_DIR = Path("static")
+
+# Initialize with a sensible default; will be updated at startup
+LAST_MODIFIED_STATIC_FILES = {
+    "last_updated": datetime.now(UTC)
+}
+
+def get_last_modified_time_of_static_files(static_dir: Path) -> datetime:
+    """
+    Scans the static directory and returns the most recent modification time
+    of any file within it, as a timezone-aware datetime object (UTC).
+    """
+    latest_mod_time_float = 0.0
+    if static_dir.exists() and static_dir.is_dir():
+        for root, _, files in os.walk(static_dir):
+            for file_name in files:
+                file_path = Path(root) / file_name
+                try:
+                    # os.path.getmtime returns a float (timestamp)
+                    mod_time = file_path.stat().st_mtime
+                    if mod_time > latest_mod_time_float:
+                        latest_mod_time_float = mod_time
+                except FileNotFoundError:
+                    # This might happen in rare race conditions if a file is deleted
+                    # during the scan. Log and continue.
+                    logger.warning(f"File not found during static scan: {file_path}")
+                    pass
+    
+    if latest_mod_time_float == 0.0:
+        # Fallback if static dir is empty, doesn't exist, or no files found.
+        # Using current time means cache will be short initially.
+        logger.warning(
+            "No static files found or static directory missing. "
+            "Using current time as last_updated for cache control."
+        )
+        return datetime.now(UTC)
+    
+    # Convert the timestamp to a timezone-aware datetime object
+    return datetime.fromtimestamp(latest_mod_time_float, tz=UTC)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Optional startup logic
     set_up_db()
+    # Determine and set the actual last modified time for static files
+    actual_last_updated = get_last_modified_time_of_static_files(STATIC_DIR)
+    LAST_MODIFIED_STATIC_FILES["last_updated"] = actual_last_updated
+    logger.info(
+        f"Static files last updated at: {actual_last_updated}. "
+        "Cache-Control headers will be set accordingly."
+    )
     yield
     # Optional shutdown logic
 
@@ -196,6 +246,18 @@ async def read_home(
         "index.html",
         {"user": user}
     )
+
+
+# Add middleware to set Cache-Control header for static files
+@app.middleware("http")
+async def add_cache_control_header(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static"):
+        last_updated = LAST_MODIFIED_STATIC_FILES["last_updated"]
+        time_since_update = (datetime.now(UTC) - last_updated).total_seconds()
+        cache_duration = min(time_since_update, 3600)
+        response.headers["Cache-Control"] = f"public, max-age={int(cache_duration)}"
+    return response
 
 
 if __name__ == "__main__":
