@@ -8,5 +8,7 @@
     else 
       %} alert alert-warning w-75{% 
     endif %}"
-  style="white-space: pre-wrap;"
+    {% if step_type == 'toolCall' %}
+      style="white-space: pre-wrap;"
+    {% endif %}
   id="step-{{ step_id }}"></div>

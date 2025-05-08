@@ -23,10 +23,6 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
     height: 100%;
   }
   
-  .assistantMessage {
-    white-space: pre-wrap;
-  }
-  
   .toolCall {
     white-space: pre-wrap;
   }
