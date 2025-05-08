@@ -1,14 +1,12 @@
 import os
 import logging
-import tempfile
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Depends, Path, BackgroundTasks
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi import APIRouter, HTTPException, Depends, Path
+from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from openai import AsyncOpenAI
-import boto3
 from exceptions.http_exceptions import OpenAIError
-from utils.chat.files import FILE_PATHS, cleanup_temp_file
+from utils.chat.streaming import stream_file_content
 from utils.core.dependencies import get_authenticated_user
 from utils.core.models import User
 
@@ -32,59 +30,27 @@ router = APIRouter(
 )
 
 
-# TODO: FILE_PATHS no longer points to s3 urls; we will need to get these from Document.storage_url instead
-@router.get("/{file_name}")
-async def download_assistant_file(
-    background_tasks: BackgroundTasks,
-    file_name: str = Path(..., description="The name of the file to retrieve"),
-    user: User = Depends(get_authenticated_user),
-) -> FileResponse:
-    """Serves an assistant file stored locally in the uploads directory."""
-        # Initialize the S3 client
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
-        region_name=os.getenv("AWS_REGION", "us-east-1")
-    )
-
-    bucket_name = os.getenv("S3_BUCKET", "")
-    s3_file_path = FILE_PATHS.get(file_name)
-
-    if not s3_file_path:
-        raise HTTPException(
-            status_code=404,
-            detail=f"File configuration not found for: {file_name}"
-        )
-
-    # Create a temporary file that persists until manually deleted
-    temp_file = tempfile.NamedTemporaryFile(delete=False)
-    temp_file_path = temp_file.name
-
+@router.get("/{file_id}/openai_content")
+async def download_openai_file(
+    file_id: str = Path(..., description="The ID of the file stored in OpenAI"),
+    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
+) -> StreamingResponse:
+    """This endpoint retrieves files created by the code interpreter"""
     try:
-        # Close the file handle immediately after creation, we only need the path
-        temp_file.close()
-
-        # Download the file directly to the temp file path
-        logger.info(f"Downloading s3://{bucket_name}/{s3_file_path} to {temp_file_path}")
-        s3.download_file(bucket_name, s3_file_path, temp_file_path)
-
-        # Schedule the cleanup task to run after the response is completely sent
-        background_tasks.add_task(cleanup_temp_file, temp_file_path)
-
-        # Return the file response
-        return FileResponse(
-            path=temp_file_path,
-            filename=file_name
+        file = await client.files.retrieve(file_id)
+        file_content = await client.files.content(file_id)
+        
+        if not hasattr(file_content, 'content'):
+            raise HTTPException(status_code=500, detail="File content not available")
+            
+        # Use stream_file_content helper
+        return StreamingResponse(
+            stream_file_content(file_content.content), # Assuming stream_file_content handles bytes
+            headers={"Content-Disposition": f'attachment; filename="{file.filename or file_id}"'}
         )
     except Exception as e:
-        # Ensure cleanup happens even if download or response creation fails
-        cleanup_temp_file(temp_file_path)
-        logger.error(f"Error downloading file s3://{bucket_name}/{s3_file_path}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to download file: {e}"
-        )
+        logger.error(f"Error downloading file {file_id} from OpenAI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error downloading file from OpenAI: {str(e)}")
 
 
 @router.get("/{file_id}/content")

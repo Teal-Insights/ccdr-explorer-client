@@ -17,6 +17,7 @@ from openai.types.beta.assistant_stream_event import (
     ThreadMessageCreated, ThreadMessageDelta, ThreadRunCompleted,
     ThreadRunRequiresAction, ThreadRunStepCreated, ThreadRunStepDelta
 )
+from openai.types.beta.threads.text_delta import TextDelta
 from openai.types.beta import AssistantStreamEvent
 from openai.types.beta.threads.message_content_delta import MessageContentDelta
 from openai.types.beta.threads.text_delta_block import TextDeltaBlock
@@ -30,6 +31,7 @@ from utils.chat.files import FILE_PATHS, DOCUMENT_CITATIONS
 from utils.core.dependencies import get_user_with_relations, get_authenticated_user, get_session
 from utils.core.models import User
 from utils.chat.threads import create_thread
+from routers.files import router as files_router
 
 logger = getLogger("uvicorn.error")
 
@@ -160,44 +162,68 @@ async def stream_response(
                     )
 
                 if isinstance(event, ThreadMessageDelta) and event.data.delta.content:
-                    content: MessageContentDelta = event.data.delta.content[0]
-                    if isinstance(content, TextDeltaBlock) and content.text and content.text.value:
+                    delta_content_item: MessageContentDelta = event.data.delta.content[0]
+                    if isinstance(delta_content_item, TextDeltaBlock) and delta_content_item.text:
                         step_id = event.data.id
-                        text_value = content.text.value
-                        annotations = content.text.annotations
-                        
+                        text_delta: TextDelta = delta_content_item.text
+                        current_delta_text_value: Optional[str] = text_delta.value
+                        annotations = text_delta.annotations
+
+                        # This will be the text actually sent in textDelta
+                        final_text_for_this_delta = current_delta_text_value
+
                         # Check for file citation annotations
                         if annotations:
                             for annotation in annotations:
+                                logger.debug(f"Annotation: {str(annotation)}")
                                 if annotation.type == 'file_citation' and hasattr(annotation, 'file_citation') and annotation.file_citation:
-                                    match = re.search(r'【.*?†(.*?)】', text_value)
-                                    if match:
-                                        document_id = match.group(1).split(".")[0]
-                                        # Get the file URL from the FILE_PATHS dictionary
-                                        file_url = FILE_PATHS.get(document_id, None)
-                                        # Get the citation text from the DOCUMENT_CITATIONS dictionary
-                                        citation_text = DOCUMENT_CITATIONS.get(document_id, None)
-                                        if file_url and citation_text:
-                                            text_value = f' ([{citation_text}]({file_url}))'
+                                    if current_delta_text_value:
+                                        match = re.search(r'【.*?†(.*?)】', current_delta_text_value)
+                                        if match:
+                                            document_id = match.group(1).split(".")[0]
+                                            # Get the file URL from the FILE_PATHS dictionary
+                                            file_url = FILE_PATHS.get(document_id, None)
+                                            # Get the citation text from the DOCUMENT_CITATIONS dictionary
+                                            citation_text = DOCUMENT_CITATIONS.get(document_id, None)
+                                            if file_url and citation_text:
+                                                final_text_for_this_delta = f' ([{citation_text}]({file_url}))'
+                                            else:
+                                                # file_url not found for document_id
+                                                logger.warning(f"Could not find file URL or citation text for document ID: {document_id}")
+                                                # Keep original text_value if file_url is None
+                                                pass # text_value remains unchanged
+
                                         else:
-                                            # file_url not found for document_id
-                                            logger.warning(f"Could not find file URL or citation text for document ID: {document_id}")
-                                            # Keep original text_value if file_url is None
-                                            pass # text_value remains unchanged
-
+                                            logger.warning(f"Could not find citation pattern in text: {current_delta_text_value}")
                                     else:
-                                        logger.warning(f"Could not find citation pattern in text: {text_value}")
-
-                                    # Assuming one citation per delta for now
-                                    break # Exit annotation loop once a citation is processed
+                                        # This case shouldn't occur
+                                        logger.warning(f"File citation annotation found, but text_delta.value is unexpectedly None.")
                         
-                        # Ensure text_value has been potentially modified before wrapping
-                        sse_data = wrap_for_oob_swap(step_id, text_value)
+                                # Handle file_path (code interpreter generated files)
+                                elif annotation.type == 'file_path' and hasattr(annotation, 'file_path') and annotation.file_path and annotation.file_path.file_id:
+                                    file_id = annotation.file_path.file_id
+                                    # annotation.text is the "key" for replacement (e.g., "sandbox:/mnt/data/file.csv")
+                                    sandbox_link_text_in_markdown = annotation.text 
 
-                        yield sse_format(
-                            "textDelta",
-                            sse_data
-                        )
+                                    # We will replace it with our app's download URL for the OpenAI-hosted file
+                                    download_url = files_router.url_path_for(
+                                        'download_openai_file', file_id=file_id
+                                    )
+
+                                    replacement_payload = f"{sandbox_link_text_in_markdown}|{download_url}"
+                                    logger.debug(f"Replacement payload: {replacement_payload}")
+                                    # Use step_id (message_id) for OOB targeting the correct message container
+                                    sse_replacement_data = wrap_for_oob_swap(step_id, replacement_payload)
+                                    yield sse_format("textReplacement", sse_replacement_data)
+                                    logger.debug(f"Sent textReplacement event for {sandbox_link_text_in_markdown} with {download_url}")
+
+                                    break
+
+                        # Only send SSE if there's a non-None text value to transmit
+                        if final_text_for_this_delta is not None:
+                            # Use step_id (message_id) for OOB targeting the correct message container
+                            sse_data = wrap_for_oob_swap(step_id, final_text_for_this_delta)
+                            yield sse_format("textDelta", sse_data)
 
                 if isinstance(event, ThreadRunStepCreated) and event.data.type == "tool_calls":
                     logger.debug(f"Tool Call Created - Data: {str(event.data)}")
@@ -217,7 +243,6 @@ async def stream_response(
                     if tool_calls:
                         # TODO: Support parallel function calling
                         tool_call = tool_calls[0]
-                        logger.debug(f"Tool Call Delta - Type: {tool_call.type}")
 
                         # Handle function tool call
                         if tool_call.type == "function":
@@ -234,19 +259,26 @@ async def stream_response(
                         
                         # Handle code interpreter tool calls
                         elif tool_call.type == "code_interpreter":
-                            if tool_call.code_interpreter and tool_call.code_interpreter.input:
-                                logger.debug(f"Code Interpreter Input: {tool_call.code_interpreter.input}")
-                                yield sse_format(
-                                    f"toolDelta",
-                                    wrap_for_oob_swap(step_id, str(tool_call.code_interpreter.input))
-                                )
+                            if tool_call.code_interpreter and tool_call.code_interpreter.input is not None:
+                                if tool_call.code_interpreter.input == "":
+                                    yield sse_format(
+                                        "toolDelta",
+                                        wrap_for_oob_swap(step_id, "<em>Code Interpreter tool call</em><br>")
+                                    )
+                                else:
+                                    yield sse_format(
+                                        "toolDelta",
+                                        wrap_for_oob_swap(step_id, str(tool_call.code_interpreter.input))
+                                    )
                             if tool_call.code_interpreter and tool_call.code_interpreter.outputs:
                                 for output in tool_call.code_interpreter.outputs:
                                     logger.debug(f"Code Interpreter Output Type: {output.type}")
                                     if output.type == "logs" and output.logs:
+                                        # Replace "\n" in the logs with "\n> " to format it as console output
+                                        output_logs = "\n\n> " + str(output.logs).strip().replace("\n", "\n> ")
                                         yield sse_format(
-                                            f"toolDelta",
-                                            wrap_for_oob_swap(step_id, str(output.logs))
+                                            "toolDelta",
+                                            wrap_for_oob_swap(step_id, output_logs)
                                         )
                                     elif output.type == "image" and output.image and output.image.file_id:
                                         logger.debug(f"Image Output - File ID: {output.image.file_id}")

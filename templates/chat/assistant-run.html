@@ -3,8 +3,8 @@
      hx-swap="beforeend"
      hx-ext="sse"
      sse-connect="{{ url_for('stream_response', thread_id=thread_id) }}"
-     sse-swap="messageCreated,toolCallCreated,toolOutput,imageOutput,fileOutput,textDelta,toolDelta"
-     hx-on:htmx:sse-before-message="handleSSETextDelta(event)"
+     sse-swap="messageCreated,toolCallCreated,toolOutput,imageOutput,fileOutput,textDelta,toolDelta,textReplacement"
+     hx-on:htmx:sse-before-message="handleCustomSseEvents(event)"
      sse-close="endStream"
      data-thread-id="{{ thread_id }}">
 </div>
