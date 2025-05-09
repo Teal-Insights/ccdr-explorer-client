@@ -1,6 +1,8 @@
 # CCDR Explorer RAG client for working with World Bank climate development reports
 
-This is the application layer for a web app for AI-powered semantic search over the World Bank's Country Climate and Development Reports (CCDRs). It is built on the [FastAPI, Jinja2, PostgreSQL Webapp Template](https://github.com/Promptly-Technologies-LLC/fastapi-jinja2-postgres-webapp) and is meant to be used with the (Sustainable Sovereign Debt Hub RAG Database and API)[https://github.com/Teal-Insights/nature-finance-rag-api] as the data storage and retrieval layer.
+This is the application layer for a web app for AI-powered semantic search over the World Bank's Country Climate and Development Reports (CCDRs). It is built on the [FastAPI, Jinja2, PostgreSQL Webapp Template](https://github.com/Promptly-Technologies-LLC/fastapi-jinja2-postgres-webapp) and the OpenAI Assistants API.
+
+Eventually, we plan to migrate from OpenAI's infrastructure to our custom infrastructure, which will support a wider range of AI models as the agent driver, and which will use the (Sustainable Sovereign Debt Hub RAG Database and API)[https://github.com/Teal-Insights/nature-finance-rag-api] as the data storage and retrieval layer.
 
 ## Getting Started
 
@@ -106,27 +108,17 @@ To "chat with the CCDRs", register and/or sign in and navigate to the chat inter
 
 ```mermaid
 graph TB
-    subgraph "Browser"
-        A["Chat Client"] --> B["User Input"]
+    subgraph "Application"
+        A[Browser Client] --> |"User messages"|C[Chat Application Server]
+        C -->|"Assistant messages, tool calls, tool results"| A
     end
 
-    subgraph "Application Server"
-        C["Chat Application Server"] --> D["LLM Service<br>(GPT-4o/Claude)"]
-        D -->|"Returns messages<br>or tool calls"| C
-        C -->|"If tool call"| E["Query Embedding"]
-        E --> F["Vector Search"]
-    end
-
-    B --> C
-    C --> A
-
-    subgraph "Database"
-        F --> G["PostgreSQL with pgvector"]
-        G --> F
-        F --> C
-        G -- Stores --> H["Resources Table"]
-        G -- Stores --> I["Embeddings Table"]
-        G -- Stores --> J["Key Concepts Table"]
+    subgraph "OpenAI Assistants API"
+        D[Assistant Model] -->|"Assistant messages"| C
+        D -->|"Code Interpreter<br>or File Search tool calls"| E[OpenAI Function Executor]
+        E -->|"Result"| D
+        C -->|"User messages"| D
+        E -->|"Result"| C
     end
 ```
 
