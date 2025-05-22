@@ -5,9 +5,13 @@ window._streamingMarkdown = new WeakMap();
 // or for all events if hx-on:htmx:sse-before-message is used.
 function handleCustomSseEvents(evt) {
 	const originalSSEEvent = evt.detail;
-	if (!originalSSEEvent || !originalSSEEvent.data) {
-		// For endStream, originalSSEEvent.data might be null or empty, which is fine.
-		// We only care about events that carry data for custom processing here.
+	if (!originalSSEEvent || !originalSSEEvent.type) {
+		console.warn("Malformed SSE event:", originalSSEEvent);
+		return;
+	}
+
+	if (!originalSSEEvent.data) {
+		// endStream can have null data; other event types should not
 		if (originalSSEEvent.type !== 'endStream') {
 			console.warn("SSE event without data or unexpected structure:", originalSSEEvent);
 		}
@@ -23,7 +27,6 @@ function handleCustomSseEvents(evt) {
 		processTextReplacement(originalSSEEvent);
 	}
 	// Other event types (messageCreated, toolCallCreated, etc.) will be handled by HTMX default swap
-	// if they are listed in sse-swap and not prevented here.
 }
 
 function processTextDelta(sseEvent) {
@@ -72,7 +75,7 @@ function processTextReplacement(sseEvent) {
 	let currentMarkdown = window._streamingMarkdown.get(targetElement) || '';
 	
 	// Regex to find the markdown link URL part: (sandbox:/path/to/file)
-	const regex = new RegExp(`\\(\s*${escapeRegExp(textToReplace)}\s*\\)`, 'g');
+	const regex = new RegExp(`\\(\\s*${escapeRegExp(textToReplace)}\\s*\\)`, 'g');
 
 	if (regex.test(currentMarkdown)) {
 		currentMarkdown = currentMarkdown.replace(regex, `(${replacementUrl})`);
@@ -159,4 +162,30 @@ function renderMarkdown(targetElement, markdownToRender, fallbackChunkOnError) {
 		console.error("Error processing markdown:", e);
 		targetElement.textContent = (window._streamingMarkdown.get(targetElement) || '') + (fallbackChunkOnError || '');
 	}
+}
+
+// Function to disable the send button and show loader
+function disableSendButton() {
+    const sendButton = document.getElementById('sendButton');
+    if (sendButton) {
+        sendButton.disabled = true;
+        sendButton.setAttribute('aria-busy', 'true');
+        sendButton.querySelector('.button__text').style.display = 'none';
+        sendButton.querySelector('.button__loader').style.display = 'inline-block';
+        console.log("sendButton disabled and loader shown via hx-on from form.");
+    } else {
+        console.warn("sendButton is not found.");
+    }
+}
+
+// Function to re-enable the send button
+function reEnableSendButton() {
+    const sendButton = document.getElementById('sendButton');
+    if (sendButton && sendButton.disabled) {
+        sendButton.disabled = false;
+        sendButton.setAttribute('aria-busy', 'false');
+        sendButton.querySelector('.button__text').style.display = 'inline-block';
+        sendButton.querySelector('.button__loader').style.display = 'none';
+        console.log("sendButton re-enabled via hx-on from partial.");
+    }
 }
