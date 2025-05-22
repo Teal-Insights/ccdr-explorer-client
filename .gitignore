@@ -20,3 +20,4 @@ package.json
 .cursor
 repomix-output.txt
 artifacts/
+.venv/

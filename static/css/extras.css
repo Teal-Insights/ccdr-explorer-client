@@ -574,4 +574,17 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
   /* height: calc(1.5em + .75rem + 2px); */
   /* Or, more simply, ensure it aligns well without a fixed height by relying on flex-end */
   flex-shrink: 0; /* Prevent button from shrinking */
+  position: relative;
+}
+
+#chatForm .btn .button__loader {
+    display: none;
+}
+
+#chatForm .btn[aria-busy="true"] .button__text {
+    display: none;
+}
+
+#chatForm .btn[aria-busy="true"] .button__loader {
+    display: inline-block;
 }
