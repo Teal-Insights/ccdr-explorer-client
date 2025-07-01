@@ -8,7 +8,7 @@ from utils.core.models import RolePermissionLink, Role, Permission
 from utils.core.enums import ValidPermissions
 
 # Load environment variables from a .env file
-load_dotenv(override=True)
+load_dotenv(os.getenv("ENVIRONMENT", ".env"), override=True)
 
 # Set up a logger for error reporting
 logger = logging.getLogger("uvicorn.error")
@@ -27,22 +27,22 @@ def get_connection_url() -> URL:
     Constructs a SQLModel URL object for connecting to the PostgreSQL database.
 
     The connection details are sourced from environment variables, which should include:
-    - DB_USER: Database username
-    - DB_PASSWORD: Database password
-    - DB_HOST: Database host address
-    - DB_PORT: Database port (default is 5432)
-    - DB_NAME: Database name
+    - POSTGRES_USER: Database username
+    - POSTGRES_PASSWORD: Database password
+    - POSTGRES_HOST: Database host address
+    - POSTGRES_PORT: Database port (default is 5432)
+    - POSTGRES_NAME: Database name
 
     Returns:
         URL: A SQLModel URL object containing the connection details.
     """
     database_url: URL = URL.create(
         drivername="postgresql",
-        username=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=int(os.getenv("DB_PORT") or "5432"),
-        database=os.getenv("DB_NAME"),
+        username=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host=os.getenv("POSTGRES_HOST"),
+        port=int(os.getenv("POSTGRES_PORT") or "5432"),
+        database=os.getenv("POSTGRES_NAME"),
     )
 
     return database_url

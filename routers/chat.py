@@ -44,7 +44,7 @@ router: APIRouter = APIRouter(
 templates = Jinja2Templates(directory="templates")
 
 # Check if environment variables are missing
-load_dotenv(override=True)
+load_dotenv(os.getenv("ENVIRONMENT", ".env"), override=True)
 openai_api_key = os.getenv("OPENAI_API_KEY")
 assistant_id_from_env = os.getenv("ASSISTANT_ID")
 
