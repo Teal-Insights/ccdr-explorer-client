@@ -15,7 +15,7 @@ from utils.core.auth import (
     COMPILED_PASSWORD_PATTERN,
     convert_python_regex_to_html,
     generate_email_update_url,
-    send_email_update_confirmation
+    send_email_update_confirmation,
 )
 from unittest.mock import patch, MagicMock
 from utils.core.models import EmailUpdateToken
@@ -69,6 +69,7 @@ def test_invalid_token_type() -> None:
     decoded = validate_token(access_token, "refresh")
     assert decoded is None
 
+
 def test_password_reset_url_generation() -> None:
     """
     Tests that the password reset URL is correctly formatted and contains
@@ -95,6 +96,7 @@ def test_password_reset_url_generation() -> None:
     assert query_params["email"][0] == test_email
     assert query_params["token"][0] == test_token
 
+
 def test_password_pattern() -> None:
     """
     Tests that the password pattern is correctly defined. to require at least
@@ -111,7 +113,7 @@ def test_password_pattern() -> None:
         "special": special_characters,
         "uppercase": uppercase_letters,
         "lowercase": lowercase_letters,
-        "digit": digits
+        "digit": digits,
     }
 
     # Valid password tests
@@ -122,8 +124,10 @@ def test_password_pattern() -> None:
                 if other_element != element:
                     password += random.choice(required_elements[other_element])
             # Randomize the order of the characters in the string
-            password = ''.join(random.sample(password, len(password)))
-            assert re.match(COMPILED_PASSWORD_PATTERN, password) is not None, f"Password {password} does not match the pattern"
+            password = "".join(random.sample(password, len(password)))
+            assert re.match(COMPILED_PASSWORD_PATTERN, password) is not None, (
+                f"Password {password} does not match the pattern"
+            )
 
     # Invalid password tests
 
@@ -150,6 +154,7 @@ def test_password_pattern() -> None:
     # No special character
     password = "aA1" * 3
     assert re.match(COMPILED_PASSWORD_PATTERN, password) is None
+
 
 def test_email_update_url_generation() -> None:
     """
@@ -180,7 +185,8 @@ def test_email_update_url_generation() -> None:
     assert query_params["token"][0] == test_token
     assert query_params["new_email"][0] == test_new_email
 
-@patch('resend.Emails.send')
+
+@patch("resend.Emails.send")
 def test_send_email_update_confirmation(mock_send: MagicMock) -> None:
     """
     Tests the email update confirmation sending functionality.
@@ -188,7 +194,7 @@ def test_send_email_update_confirmation(mock_send: MagicMock) -> None:
     # Mock session and dependencies
     session = MagicMock()
     session.exec.return_value.first.return_value = None  # No existing token
-    
+
     current_email = "current@example.com"
     new_email = "new@example.com"
     account_id = 123
@@ -202,7 +208,7 @@ def test_send_email_update_confirmation(mock_send: MagicMock) -> None:
     # Verify session interactions
     assert session.add.called
     assert session.commit.called
-    
+
     # Verify email was sent with correct parameters
     mock_send.assert_called_once()
     call_args = mock_send.call_args[0][0]
@@ -213,7 +219,9 @@ def test_send_email_update_confirmation(mock_send: MagicMock) -> None:
 
     # Test existing token case
     session.reset_mock()
-    session.exec.return_value.first.return_value = EmailUpdateToken(account_id=account_id)
+    session.exec.return_value.first.return_value = EmailUpdateToken(
+        account_id=account_id
+    )
 
     send_email_update_confirmation(current_email, new_email, account_id, session)
 

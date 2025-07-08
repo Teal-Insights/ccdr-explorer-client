@@ -1,4 +1,3 @@
-
 from sqlmodel import Session, select, inspect
 from sqlalchemy import Engine
 from utils.core.db import (
@@ -9,8 +8,15 @@ from utils.core.db import (
     tear_down_db,
     set_up_db,
 )
-from utils.core.models import Role, Permission, Organization, RolePermissionLink, ValidPermissions
+from utils.core.models import (
+    Role,
+    Permission,
+    Organization,
+    RolePermissionLink,
+    ValidPermissions,
+)
 from tests.conftest import SetupError
+
 
 def test_get_connection_url():
     """Test that get_connection_url returns a valid URL object"""
@@ -47,8 +53,7 @@ def test_create_default_roles(session: Session, test_organization: Organization)
         roles = create_default_roles(session, test_organization.id)
         session.commit()
     else:
-        raise SetupError(
-            "Test setup failed; test_organization.id is None")
+        raise SetupError("Test setup failed; test_organization.id is None")
 
     # Verify roles were created
     assert len(roles) == 3  # Owner, Administrator, Member
@@ -72,7 +77,8 @@ def test_create_default_roles(session: Session, test_organization: Organization)
     # Admin should have all permissions except DELETE_ORGANIZATION
     assert len(admin_permissions) == len(ValidPermissions) - 1
     assert ValidPermissions.DELETE_ORGANIZATION not in {
-        p.name for p in admin_permissions}
+        p.name for p in admin_permissions
+    }
 
 
 def test_assign_permissions_to_role(session: Session, test_organization: Organization):
@@ -102,10 +108,14 @@ def test_assign_permissions_to_role(session: Session, test_organization: Organiz
 
     assert len(db_permissions) == 2
     assert {p.name for p in db_permissions} == {
-        ValidPermissions.CREATE_ROLE, ValidPermissions.DELETE_ROLE}
+        ValidPermissions.CREATE_ROLE,
+        ValidPermissions.DELETE_ROLE,
+    }
 
 
-def test_assign_permissions_to_role_duplicate_check(session: Session, test_organization: Organization):
+def test_assign_permissions_to_role_duplicate_check(
+    session: Session, test_organization: Organization
+):
     """Test that assign_permissions_to_role doesn't create duplicates"""
     # Create a test role with the organization from fixture
     role = Role(name="Test Role", organization_id=test_organization.id)
@@ -121,10 +131,9 @@ def test_assign_permissions_to_role_duplicate_check(session: Session, test_organ
 
     # Verify only one assignment exists
     link_count = session.exec(
-        select(RolePermissionLink)
-        .where(
+        select(RolePermissionLink).where(
             RolePermissionLink.role_id == role.id,
-            RolePermissionLink.permission_id == perm.id
+            RolePermissionLink.permission_id == perm.id,
         )
     ).all()
     assert len(link_count) == 1
@@ -149,7 +158,7 @@ def test_set_up_db_creates_tables(engine: Engine, session: Session):
         "role",
         "permission",
         "rolepermissionlink",
-        "passwordresettoken"
+        "passwordresettoken",
     }
     assert expected_tables.issubset(set(table_names))
 
@@ -176,5 +185,9 @@ def test_set_up_db_drop_flag(engine: Engine, session: Session):
     set_up_db(drop=False)
 
     # Verify organization exists
-    assert session.exec(select(Organization).where(
-        Organization.name == "Test Organization")).first() is not None
+    assert (
+        session.exec(
+            select(Organization).where(Organization.name == "Test Organization")
+        ).first()
+        is not None
+    )

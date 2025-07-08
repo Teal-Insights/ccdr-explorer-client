@@ -20,14 +20,14 @@ from utils.core.auth import (
     create_refresh_token,
     validate_token,
     send_reset_email,
-    send_email_update_confirmation
+    send_email_update_confirmation,
 )
 from utils.core.dependencies import (
     get_authenticated_account,
     get_optional_user,
     get_account_from_reset_token,
     get_account_from_email_update_token,
-    get_account_from_credentials
+    get_account_from_credentials,
 )
 from exceptions.http_exceptions import (
     EmailAlreadyRegisteredError,
@@ -35,7 +35,7 @@ from exceptions.http_exceptions import (
     PasswordValidationError,
     InvalidInvitationTokenError,
     InvitationEmailMismatchError,
-    InvitationProcessingError
+    InvitationProcessingError,
 )
 from routers.chat import router as chat_router
 from routers.user import router as user_router
@@ -52,36 +52,33 @@ templates = Jinja2Templates(directory="templates")
 
 
 def validate_password_strength_and_match(
-    password: str = Form(...),
-    confirm_password: str = Form(...)
+    password: str = Form(...), confirm_password: str = Form(...)
 ) -> str:
     """
     Validates password strength and confirms passwords match.
-    
+
     Args:
         password: Password from form
         confirm_password: Confirmation password from form
-        
+
     Raises:
         PasswordValidationError: If password is weak or passwords don't match
-    
+
     Returns:
         str: The validated password
     """
     # Validate password strength
     if not COMPILED_PASSWORD_PATTERN.match(password):
         raise PasswordValidationError(
-            field="password",
-            message="Password does not satisfy the security policy"
+            field="password", message="Password does not satisfy the security policy"
         )
-    
+
     # Validate passwords match
     if password != confirm_password:
         raise PasswordValidationError(
-            field="confirm_password",
-            message="The passwords you entered do not match"
+            field="confirm_password", message="The passwords you entered do not match"
         )
-    
+
     return password
 
 
@@ -104,21 +101,23 @@ async def read_login(
     request: Request,
     user: Optional[User] = Depends(get_optional_user),
     email_updated: Optional[str] = Query("false"),
-    invitation_token: Optional[str] = Query(None)
+    invitation_token: Optional[str] = Query(None),
 ):
     """
     Render login page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=302)
+        return RedirectResponse(
+            url=chat_router.url_path_for("read_chat"), status_code=302
+        )
     return templates.TemplateResponse(
         "account/login.html",
         {
             "request": request,
             "user": user,
             "email_updated": email_updated,
-            "invitation_token": invitation_token
-        }
+            "invitation_token": invitation_token,
+        },
     )
 
 
@@ -127,13 +126,15 @@ async def read_register(
     request: Request,
     user: Optional[User] = Depends(get_optional_user),
     email: Optional[EmailStr] = Query(None),
-    invitation_token: Optional[str] = Query(None)
+    invitation_token: Optional[str] = Query(None),
 ):
     """
     Render registration page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=302)
+        return RedirectResponse(
+            url=chat_router.url_path_for("read_chat"), status_code=302
+        )
 
     return templates.TemplateResponse(
         "account/register.html",
@@ -142,8 +143,8 @@ async def read_register(
             "user": user,
             "password_pattern": HTML_PASSWORD_PATTERN,
             "email": email,
-            "invitation_token": invitation_token
-        }
+            "invitation_token": invitation_token,
+        },
     )
 
 
@@ -157,11 +158,13 @@ async def read_forgot_password(
     Render forgot password page or redirect to dashboard if already logged in.
     """
     if user:
-        return RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=302)
+        return RedirectResponse(
+            url=chat_router.url_path_for("read_chat"), status_code=302
+        )
 
     return templates.TemplateResponse(
         "account/forgot_password.html",
-        {"request": request, "user": user, "show_form": show_form == "true"}
+        {"request": request, "user": user, "show_form": show_form == "true"},
     )
 
 
@@ -171,7 +174,7 @@ async def read_reset_password(
     email: str,
     token: str,
     user: Optional[User] = Depends(get_optional_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     """
     Render reset password page after validating token.
@@ -184,7 +187,13 @@ async def read_reset_password(
 
     return templates.TemplateResponse(
         "account/reset_password.html",
-        {"request": request, "user": user, "email": email, "token": token, "password_pattern": HTML_PASSWORD_PATTERN}
+        {
+            "request": request,
+            "user": user,
+            "email": email,
+            "token": token,
+            "password_pattern": HTML_PASSWORD_PATTERN,
+        },
     )
 
 
@@ -193,7 +202,7 @@ async def delete_account(
     email: EmailStr = Form(...),
     password: str = Form(...),
     account: Account = Depends(get_authenticated_account),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     """
     Delete a user account after verifying credentials.
@@ -204,10 +213,7 @@ async def delete_account(
 
     # Verify password
     if not verify_password(password, account.hashed_password):
-        raise PasswordValidationError(
-            field="password",
-            message="Password is incorrect"
-        )
+        raise PasswordValidationError(field="password", message="Password is incorrect")
 
     # Delete the account and associated user
     # Note: The user will be deleted automatically by cascade relationship
@@ -225,14 +231,15 @@ async def register(
     session: Session = Depends(get_session),
     _: None = Depends(validate_password_strength_and_match),
     password: str = Form(...),
-    invitation_token: Optional[str] = Form(None)
+    invitation_token: Optional[str] = Form(None),
 ) -> RedirectResponse:
     """
     Register a new user account, optionally processing an invitation.
     """
     # Check if the email is already registered
-    existing_account: Optional[Account] = session.exec(select(Account).where(
-        Account.email == email)).one_or_none()
+    existing_account: Optional[Account] = session.exec(
+        select(Account).where(Account.email == email)
+    ).one_or_none()
 
     if existing_account:
         raise EmailAlreadyRegisteredError()
@@ -243,15 +250,17 @@ async def register(
     # Create the account and user instances (don't commit yet)
     account = Account(email=email, hashed_password=hashed_password)
     session.add(account)
-    session.flush() # Flush here to get account.id before creating User
+    session.flush()  # Flush here to get account.id before creating User
 
     # Ensure account has an ID after flush
     if not account.id:
-        logger.error(f"Account ID not generated after flush for email {email}. Aborting registration.")
-        session.rollback() # Rollback the account add
+        logger.error(
+            f"Account ID not generated after flush for email {email}. Aborting registration."
+        )
+        session.rollback()  # Rollback the account add
         raise DataIntegrityError(resource="Account ID generation")
 
-    new_user = User(name=name, account_id=account.id) # Use account.id
+    new_user = User(name=name, account_id=account.id)  # Use account.id
     session.add(new_user)
 
     # Default redirect target
@@ -259,13 +268,17 @@ async def register(
 
     # Process invitation if token is provided (BEFORE final commit)
     if invitation_token:
-        logger.info(f"Registration attempt with invitation token: {invitation_token} for email {email}")
+        logger.info(
+            f"Registration attempt with invitation token: {invitation_token} for email {email}"
+        )
         # Fetch the invitation
         statement = select(Invitation).where(Invitation.token == invitation_token)
         invitation = session.exec(statement).first()
 
         if not invitation or not invitation.is_active():
-            logger.warning(f"Invalid or inactive invitation token provided during registration: {invitation_token}")
+            logger.warning(
+                f"Invalid or inactive invitation token provided during registration: {invitation_token}"
+            )
             # Consider raising a more generic error to avoid exposing token validity
             raise InvalidInvitationTokenError()
 
@@ -280,27 +293,38 @@ async def register(
 
         # Process the invitation (adds changes to the session)
         try:
-            logger.info(f"Processing invitation {invitation.id} for new user {new_user.name} ({email}) during registration.")
+            logger.info(
+                f"Processing invitation {invitation.id} for new user {new_user.name} ({email}) during registration."
+            )
             process_invitation(invitation, new_user, session)
             # Set redirect to the organization page
-            redirect_url = org_router.url_path_for("read_organization", org_id=invitation.organization_id)
-            logger.info(f"Redirecting new user {new_user.name} to organization {invitation.organization_id} after accepting invitation {invitation.id}.")
+            redirect_url = org_router.url_path_for(
+                "read_organization", org_id=invitation.organization_id
+            )
+            logger.info(
+                f"Redirecting new user {new_user.name} to organization {invitation.organization_id} after accepting invitation {invitation.id}."
+            )
         except Exception as e:
-             logger.error(
-                 f"Error processing invitation {invitation.id} for new user {new_user.name} ({email}) during registration: {e}",
-                 exc_info=True
-             )
-             session.rollback()
-             raise InvitationProcessingError()
+            logger.error(
+                f"Error processing invitation {invitation.id} for new user {new_user.name} ({email}) during registration: {e}",
+                exc_info=True,
+            )
+            session.rollback()
+            raise InvitationProcessingError()
 
     else:
-        logger.info(f"Standard registration for email {email}. Redirecting to dashboard.")
+        logger.info(
+            f"Standard registration for email {email}. Redirecting to dashboard."
+        )
 
     # Commit all changes (Account, User, potentially Invitation)
     try:
         session.commit()
     except Exception as e:
-        logger.error(f"Error committing transaction during registration for {email}: {e}", exc_info=True)
+        logger.error(
+            f"Error committing transaction during registration for {email}: {e}",
+            exc_info=True,
+        )
         session.rollback()
         # Use DataIntegrityError for commit failure
         raise DataIntegrityError(resource="Account/User registration")
@@ -313,7 +337,7 @@ async def register(
     # Create access token using the committed account's email
     access_token = create_access_token(data={"sub": account.email, "fresh": True})
     refresh_token = create_refresh_token(data={"sub": account.email})
-    
+
     # Set cookie
     response = RedirectResponse(url=str(redirect_url), status_code=303)
     response.set_cookie(
@@ -321,14 +345,14 @@ async def register(
         value=access_token,
         httponly=True,
         secure=True,
-        samesite="strict"
+        samesite="strict",
     )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
         secure=True,
-        samesite="strict"
+        samesite="strict",
     )
 
     return response
@@ -336,8 +360,10 @@ async def register(
 
 @router.post("/login", response_class=RedirectResponse)
 async def login(
-    account_and_session: Tuple[Account, Session] = Depends(get_account_from_credentials),
-    invitation_token: Optional[str] = Form(None)
+    account_and_session: Tuple[Account, Session] = Depends(
+        get_account_from_credentials
+    ),
+    invitation_token: Optional[str] = Form(None),
 ) -> RedirectResponse:
     """
     Log in a user with valid credentials and process invitation if token is provided.
@@ -348,13 +374,17 @@ async def login(
     redirect_url = chat_router.url_path_for("read_chat")
 
     if invitation_token:
-        logger.info(f"Login attempt with invitation token: {invitation_token} for account {account.email}")
+        logger.info(
+            f"Login attempt with invitation token: {invitation_token} for account {account.email}"
+        )
         # Fetch the invitation
         statement = select(Invitation).where(Invitation.token == invitation_token)
         invitation = session.exec(statement).first()
 
         if not invitation or not invitation.is_active():
-            logger.warning(f"Invalid or inactive invitation token provided during login: {invitation_token}")
+            logger.warning(
+                f"Invalid or inactive invitation token provided during login: {invitation_token}"
+            )
             raise InvalidInvitationTokenError()
 
         # Verify email matches
@@ -370,34 +400,42 @@ async def login(
             logger.debug(f"Refreshing user relationship for account {account.id}")
             session.refresh(account, attribute_names=["user"])
             if not account.user:
-                 # This should not happen if the account has a valid user relationship
-                 logger.error(f"Failed to load user for account {account.id} during invitation processing.")
-                 raise DataIntegrityError(resource="User relation")
+                # This should not happen if the account has a valid user relationship
+                logger.error(
+                    f"Failed to load user for account {account.id} during invitation processing."
+                )
+                raise DataIntegrityError(resource="User relation")
 
         # Process the invitation
         try:
-            logger.info(f"Processing invitation {invitation.id} for user {account.user.id} during login.")
+            logger.info(
+                f"Processing invitation {invitation.id} for user {account.user.id} during login."
+            )
             process_invitation(invitation, account.user, session)
             session.commit()
             # Set redirect to the organization page
-            redirect_url = org_router.url_path_for("read_organization", org_id=invitation.organization_id)
-            logger.info(f"Redirecting user {account.user.id} to organization {invitation.organization_id} after accepting invitation {invitation.id}.")
+            redirect_url = org_router.url_path_for(
+                "read_organization", org_id=invitation.organization_id
+            )
+            logger.info(
+                f"Redirecting user {account.user.id} to organization {invitation.organization_id} after accepting invitation {invitation.id}."
+            )
         except Exception as e:
-             logger.error(
-                 f"Error processing invitation {invitation.id} for user {account.user.id} during login: {e}",
-                 exc_info=True
-             )
-             session.rollback()
-             # Raise the specific invitation processing error
-             raise InvitationProcessingError()
+            logger.error(
+                f"Error processing invitation {invitation.id} for user {account.user.id} during login: {e}",
+                exc_info=True,
+            )
+            session.rollback()
+            # Raise the specific invitation processing error
+            raise InvitationProcessingError()
 
     else:
-        logger.info(f"Standard login for account {account.email}. Redirecting to dashboard.")
+        logger.info(
+            f"Standard login for account {account.email}. Redirecting to dashboard."
+        )
 
     # Create access token
-    access_token = create_access_token(
-        data={"sub": account.email, "fresh": True}
-    )
+    access_token = create_access_token(data={"sub": account.email, "fresh": True})
     refresh_token = create_refresh_token(data={"sub": account.email})
 
     # Set cookie
@@ -435,23 +473,26 @@ async def refresh_token(
 
     decoded_token = validate_token(refresh_token, token_type="refresh")
     if not decoded_token:
-        response = RedirectResponse(url=router.url_path_for("read_login"), status_code=303)
+        response = RedirectResponse(
+            url=router.url_path_for("read_login"), status_code=303
+        )
         response.delete_cookie("access_token")
         response.delete_cookie("refresh_token")
         return response
 
     user_email = decoded_token.get("sub")
-    account = session.exec(select(Account).where(
-        Account.email == user_email)).one_or_none()
+    account = session.exec(
+        select(Account).where(Account.email == user_email)
+    ).one_or_none()
     if not account:
         return RedirectResponse(url=router.url_path_for("read_login"), status_code=303)
 
-    new_access_token = create_access_token(
-        data={"sub": account.email, "fresh": False}
-    )
+    new_access_token = create_access_token(data={"sub": account.email, "fresh": False})
     new_refresh_token = create_refresh_token(data={"sub": account.email})
 
-    response = RedirectResponse(url=chat_router.url_path_for("read_chat"), status_code=303)
+    response = RedirectResponse(
+        url=chat_router.url_path_for("read_chat"), status_code=303
+    )
     response.set_cookie(
         key="access_token",
         value=new_access_token,
@@ -475,14 +516,13 @@ async def forgot_password(
     background_tasks: BackgroundTasks,
     request: Request,
     email: EmailStr = Form(...),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     """
     Send a password reset email to the user.
     """
     # TODO: Make this a dependency?
-    account = session.exec(select(Account).where(
-        Account.email == email)).one_or_none()
+    account = session.exec(select(Account).where(Account.email == email)).one_or_none()
 
     if account:
         background_tasks.add_task(send_reset_email, email, session)
@@ -502,19 +542,21 @@ async def reset_password(
     email: EmailStr = Form(...),
     token: str = Form(...),
     new_password: str = Depends(validate_password_strength_and_match),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     """
     Reset a user's password using a valid token.
     """
-    
+
     # Get account from reset token
     authorized_account, reset_token = get_account_from_reset_token(
         email, token, session
     )
 
     if not authorized_account or not reset_token:
-        raise CredentialsError("Invalid or expired password reset token; please request a new one")
+        raise CredentialsError(
+            "Invalid or expired password reset token; please request a new one"
+        )
 
     # Update password and mark token as used
     authorized_account.hashed_password = get_password_hash(new_password)
@@ -531,7 +573,7 @@ async def request_email_update(
     email: EmailStr = Form(...),
     new_email: EmailStr = Form(...),
     account: Account = Depends(get_authenticated_account),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     """
     Request to update a user's email address.
@@ -556,28 +598,19 @@ async def request_email_update(
 
     # Send confirmation email
     send_email_update_confirmation(
-        current_email=email,
-        new_email=new_email,
-        account_id=account.id,
-        session=session
+        current_email=email, new_email=new_email, account_id=account.id, session=session
     )
 
     # Generate URL with query parameters separately
     profile_path: URLPath = user_router.url_path_for("read_profile")
     redirect_url = f"{profile_path}?email_update_requested=true"
 
-    return RedirectResponse(
-        url=redirect_url,
-        status_code=303
-    )
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 @router.get("/confirm_email_update")
 async def confirm_email_update(
-    account_id: int,
-    token: str,
-    new_email: str,
-    session: Session = Depends(get_session)
+    account_id: int, token: str, new_email: str, session: Session = Depends(get_session)
 ):
     """
     Confirm an email update using a valid token.
@@ -588,8 +621,10 @@ async def confirm_email_update(
     )
 
     if not account or not update_token:
-        raise CredentialsError("Invalid or expired email update token; please request a new one")
-        
+        raise CredentialsError(
+            "Invalid or expired email update token; please request a new one"
+        )
+
     account.email = new_email
     update_token.used = True
     session.commit()
@@ -601,12 +636,9 @@ async def confirm_email_update(
     # Generate URL with query parameters separately
     profile_path: URLPath = user_router.url_path_for("read_profile")
     redirect_url = f"{profile_path}?email_updated=true"
-    
+
     # Set cookies before redirecting
-    response = RedirectResponse(
-        url=redirect_url,
-        status_code=303
-    )
+    response = RedirectResponse(url=redirect_url, status_code=303)
 
     # Add secure cookie attributes
     response.set_cookie(
@@ -614,13 +646,13 @@ async def confirm_email_update(
         value=access_token,
         httponly=True,
         secure=True,
-        samesite="lax"
+        samesite="lax",
     )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
         secure=True,
-        samesite="lax"
+        samesite="lax",
     )
     return response

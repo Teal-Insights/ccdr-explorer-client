@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ValidPermissions(Enum):
     DELETE_ORGANIZATION = "Delete Organization"
     EDIT_ORGANIZATION = "Edit Organization"

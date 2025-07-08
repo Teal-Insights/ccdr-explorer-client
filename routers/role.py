@@ -9,8 +9,22 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from utils.core.db import get_session
 from utils.core.dependencies import get_authenticated_user
-from utils.core.models import Role, Permission, ValidPermissions, utc_now, User, DataIntegrityError
-from exceptions.http_exceptions import InsufficientPermissionsError, InvalidPermissionError, RoleAlreadyExistsError, RoleNotFoundError, RoleHasUsersError, CannotModifyDefaultRoleError
+from utils.core.models import (
+    Role,
+    Permission,
+    ValidPermissions,
+    utc_now,
+    User,
+    DataIntegrityError,
+)
+from exceptions.http_exceptions import (
+    InsufficientPermissionsError,
+    InvalidPermissionError,
+    RoleAlreadyExistsError,
+    RoleNotFoundError,
+    RoleHasUsersError,
+    CannotModifyDefaultRoleError,
+)
 from routers.organization import router as organization_router
 
 logger = getLogger("uvicorn.error")
@@ -19,20 +33,18 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 
 # --- Routes ---
 
+
 @router.post("/create", response_class=RedirectResponse)
 def create_role(
     name: str = Form(...),
     organization_id: int = Form(...),
     permissions: List[ValidPermissions] = Form(...),
     user: User = Depends(get_authenticated_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
     # Check that the user-selected role name is unique for the organization
     if session.exec(
-        select(Role).where(
-            Role.name == name,
-            Role.organization_id == organization_id
-        )
+        select(Role).where(Role.name == name, Role.organization_id == organization_id)
     ).first():
         raise RoleAlreadyExistsError()
 
@@ -41,10 +53,7 @@ def create_role(
         raise InsufficientPermissionsError()
 
     # Create role
-    db_role = Role(
-        name=name,
-        organization_id=organization_id
-    )
+    db_role = Role(name=name, organization_id=organization_id)
     session.add(db_role)
 
     # Select Permission records corresponding to the user-selected permissions
@@ -64,8 +73,10 @@ def create_role(
         raise RoleAlreadyExistsError()
 
     return RedirectResponse(
-        url=organization_router.url_path_for("read_organization", org_id=organization_id),
-        status_code=303
+        url=organization_router.url_path_for(
+            "read_organization", org_id=organization_id
+        ),
+        status_code=303,
     )
 
 
@@ -76,7 +87,7 @@ def update_role(
     organization_id: int = Form(...),
     permissions: List[ValidPermissions] = Form(...),
     user: User = Depends(get_authenticated_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
     # Check that the user is authorized to update the role
     if not user.has_permission(ValidPermissions.EDIT_ROLE, organization_id):
@@ -84,8 +95,7 @@ def update_role(
 
     # Select db_role to update, along with its permissions, by ID
     db_role: Optional[Role] = session.exec(
-        select(Role).where(Role.id == id).options(
-            selectinload(Role.permissions))
+        select(Role).where(Role.id == id).options(selectinload(Role.permissions))
     ).first()
 
     if not db_role:
@@ -119,9 +129,7 @@ def update_role(
     # Check that no existing organization role has the same name but a different ID
     if session.exec(
         select(Role).where(
-            Role.name == name,
-            Role.organization_id == organization_id,
-            Role.id != id
+            Role.name == name, Role.organization_id == organization_id, Role.id != id
         )
     ).first():
         raise RoleAlreadyExistsError()
@@ -140,8 +148,10 @@ def update_role(
 
     session.refresh(db_role)
     return RedirectResponse(
-        url=organization_router.url_path_for("read_organization", org_id=organization_id),
-        status_code=303
+        url=organization_router.url_path_for(
+            "read_organization", org_id=organization_id
+        ),
+        status_code=303,
     )
 
 
@@ -150,7 +160,7 @@ def delete_role(
     id: int = Form(...),
     organization_id: int = Form(...),
     user: User = Depends(get_authenticated_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
     # Check that the user is authorized to delete the role
     if not user.has_permission(ValidPermissions.DELETE_ROLE, organization_id):
@@ -158,9 +168,7 @@ def delete_role(
 
     # Select the role to delete by ID, along with its users
     db_role: Role | None = session.exec(
-        select(Role).where(Role.id == id).options(
-            selectinload(Role.users)
-        )
+        select(Role).where(Role.id == id).options(selectinload(Role.users))
     ).first()
 
     if not db_role:
@@ -179,6 +187,8 @@ def delete_role(
     session.commit()
 
     return RedirectResponse(
-        url=organization_router.url_path_for("read_organization", org_id=organization_id),
-        status_code=303
+        url=organization_router.url_path_for(
+            "read_organization", org_id=organization_id
+        ),
+        status_code=303,
     )

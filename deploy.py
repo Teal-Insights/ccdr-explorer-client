@@ -18,7 +18,7 @@ image = (
 app = modal.App(
     name="ccdr-explorer",
     image=image,
-    secrets=[modal.Secret.from_name("ccdr-explorer-client-secret")]
+    secrets=[modal.Secret.from_name("ccdr-explorer-client-secret")],
 )
 
 

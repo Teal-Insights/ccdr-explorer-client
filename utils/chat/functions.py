@@ -5,6 +5,7 @@ from typing import Sequence
 
 logger = logging.getLogger("uvicorn.error")
 
+
 def get_weather(location, dates: Sequence[str | datetime] = [datetime.today()]):
     """
     Generate random weather reports for a given location over a date range.
@@ -28,13 +29,14 @@ def get_weather(location, dates: Sequence[str | datetime] = [datetime.today()]):
         conditions = ["Cloudy", "Sunny", "Rainy", "Snowy", "Windy"]
         random_condition = random.choice(conditions)
 
-        weather_reports.append({
-            "location": location,
-            "date": date,
-            "temperature": random_temperature,
-            "unit": "F",
-            "conditions": random_condition,
-        })
+        weather_reports.append(
+            {
+                "location": location,
+                "date": date,
+                "temperature": random_temperature,
+                "unit": "F",
+                "conditions": random_condition,
+            }
+        )
 
     return weather_reports
-

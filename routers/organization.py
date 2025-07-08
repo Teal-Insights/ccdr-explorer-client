@@ -10,9 +10,13 @@ from utils.core.dependencies import get_authenticated_user, get_user_with_relati
 from utils.core.models import Organization, User, Role, Account, utc_now, Invitation
 from utils.core.enums import ValidPermissions
 from exceptions.http_exceptions import (
-    OrganizationNotFoundError, OrganizationNameTakenError, 
-    InsufficientPermissionsError, OrganizationSetupError,
-    UserNotFoundError, UserAlreadyMemberError, DataIntegrityError
+    OrganizationNotFoundError,
+    OrganizationNameTakenError,
+    InsufficientPermissionsError,
+    OrganizationSetupError,
+    UserNotFoundError,
+    UserAlreadyMemberError,
+    DataIntegrityError,
 )
 from pydantic import EmailStr
 
@@ -30,68 +34,71 @@ async def read_organization(
     org_id: int,
     request: Request,
     user: User = Depends(get_user_with_relations),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     # Get the organization only if the user is a member of it
-    org = next(
-        (org for org in user.organizations if org.id == org_id),
-        None
-    )
+    org = next((org for org in user.organizations if org.id == org_id), None)
     if not org:
         raise OrganizationNotFoundError()
-    
+
     # Calculate the user's permissions for this organization
     user_permissions = set()
     for role in user.roles:
         if role.organization_id == org_id:
             for permission in role.permissions:
                 user_permissions.add(permission.name)
-    
+
     # Load the organization with fully loaded roles and users
     organization = session.exec(
         select(Organization)
         .where(Organization.id == org_id)
         .options(
-            selectinload(Organization.roles).selectinload(Role.users).selectinload(User.account),
-            selectinload(Organization.roles).selectinload(Role.users).selectinload(User.roles),
-            selectinload(Organization.roles).selectinload(Role.permissions)
+            selectinload(Organization.roles)
+            .selectinload(Role.users)
+            .selectinload(User.account),
+            selectinload(Organization.roles)
+            .selectinload(Role.users)
+            .selectinload(User.roles),
+            selectinload(Organization.roles).selectinload(Role.permissions),
         )
     ).first()
-    
+
     # Fetch active invitations for the organization
     active_invitations = Invitation.get_active_for_org(session, org_id)
-    
+
     # Pass all required context to the template
     return templates.TemplateResponse(
-        request, 
-        "organization/organization.html", 
+        request,
+        "organization/organization.html",
         {
-            "organization": organization, 
+            "organization": organization,
             "user": user,
             "user_permissions": user_permissions,
             "ValidPermissions": ValidPermissions,
-            "active_invitations": active_invitations
-        }
+            "active_invitations": active_invitations,
+        },
     )
 
 
 @router.post("/create", response_class=RedirectResponse)
 def create_organization(
-    name: Annotated[str, Form(
-        min_length=1,
-        strip_whitespace=True,
-        pattern=r"\S+",
-        description="Organization name cannot be empty or contain only whitespace",
-        title="Organization name"
-    )],
+    name: Annotated[
+        str,
+        Form(
+            min_length=1,
+            strip_whitespace=True,
+            pattern=r"\S+",
+            description="Organization name cannot be empty or contain only whitespace",
+            title="Organization name",
+        ),
+    ],
     user: User = Depends(get_authenticated_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
     logger.debug(f"Received organization name: '{name}' (length: {len(name)})")
-    
+
     # Check if organization already exists
-    db_org = session.exec(select(Organization).where(
-        Organization.name == name)).first()
+    db_org = session.exec(select(Organization).where(Organization.name == name)).first()
     if db_org:
         raise OrganizationNameTakenError()
 
@@ -123,7 +130,9 @@ def create_organization(
     owner_role = next((role for role in db_org.roles if role.name == "Owner"), None)
 
     if owner_role is None:
-        logger.error(f"'Owner' role not found for newly created org ID {db_org.id} after create_default_roles call.")
+        logger.error(
+            f"'Owner' role not found for newly created org ID {db_org.id} after create_default_roles call."
+        )
         # Rollback might be needed
         session.rollback()
         raise OrganizationSetupError("Owner role missing after creation")
@@ -134,39 +143,48 @@ def create_organization(
     # Commit the user role link
     try:
         session.commit()
-        logger.info(f"Successfully created organization '{db_org.name}' (ID: {db_org.id}) and assigned owner (User ID: {user.id}).")
+        logger.info(
+            f"Successfully created organization '{db_org.name}' (ID: {db_org.id}) and assigned owner (User ID: {user.id})."
+        )
     except Exception as e:
-        logger.exception(f"Failed to commit user-owner role link for org ID {db_org.id} and user ID {user.id}")
+        logger.exception(
+            f"Failed to commit user-owner role link for org ID {db_org.id} and user ID {user.id}"
+        )
         session.rollback()
         raise OrganizationSetupError("Failed to assign owner role") from e
 
-    session.refresh(db_org) # Refresh again to be safe before redirect
+    session.refresh(db_org)  # Refresh again to be safe before redirect
 
     return RedirectResponse(
-        url=router.url_path_for("read_organization", org_id=db_org.id),
-        status_code=303
+        url=router.url_path_for("read_organization", org_id=db_org.id), status_code=303
     )
 
 
 @router.post("/update/{org_id}", response_class=RedirectResponse)
 def update_organization(
     org_id: int,
-    name: Annotated[str, Form(
-        min_length=1,
-        strip_whitespace=True,
-        pattern=r"\S+",
-        description="Organization name cannot be empty or contain only whitespace",
-        title="Organization name"
-    )],
+    name: Annotated[
+        str,
+        Form(
+            min_length=1,
+            strip_whitespace=True,
+            pattern=r"\S+",
+            description="Organization name cannot be empty or contain only whitespace",
+            title="Organization name",
+        ),
+    ],
     user: User = Depends(get_user_with_relations),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
     # This will raise appropriate exceptions if org doesn't exist or user lacks access
     organization: Organization | None = next(
-        (org_item for org_item in user.organizations if org_item.id == org_id), None)
+        (org_item for org_item in user.organizations if org_item.id == org_id), None
+    )
 
     # Check if user has permission to edit organization
-    if not organization or not user.has_permission(ValidPermissions.EDIT_ORGANIZATION, organization):
+    if not organization or not user.has_permission(
+        ValidPermissions.EDIT_ORGANIZATION, organization
+    ):
         raise InsufficientPermissionsError()
 
     # Check if new name already exists for another organization
@@ -184,26 +202,35 @@ def update_organization(
     session.add(organization)
     session.commit()
 
-    return RedirectResponse(url=router.url_path_for("read_organization", org_id=org_id), status_code=303)
+    return RedirectResponse(
+        url=router.url_path_for("read_organization", org_id=org_id), status_code=303
+    )
 
 
 @router.post("/delete/{org_id}", response_class=RedirectResponse)
 def delete_organization(
     org_id: int,
     user: User = Depends(get_user_with_relations),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
     # Find the organization the user belongs to
     organization: Organization | None = next(
-        (org for org in user.organizations if org.id == org_id), None)
+        (org for org in user.organizations if org.id == org_id), None
+    )
 
     # Check if the user is a member and has permission to delete the organization
-    if not organization or not user.has_permission(ValidPermissions.DELETE_ORGANIZATION, organization):
-        logger.warning(f"User {user.id} attempted to delete organization {org_id} without permission.")
+    if not organization or not user.has_permission(
+        ValidPermissions.DELETE_ORGANIZATION, organization
+    ):
+        logger.warning(
+            f"User {user.id} attempted to delete organization {org_id} without permission."
+        )
         raise InsufficientPermissionsError()
 
     # Delete organization
-    logger.info(f"User {user.id} deleting organization {org_id} ('{organization.name}').")
+    logger.info(
+        f"User {user.id} deleting organization {org_id} ('{organization.name}')."
+    )
     session.delete(organization)
     session.commit()
 
@@ -213,24 +240,23 @@ def delete_organization(
 @router.post("/invite/{org_id}", response_class=RedirectResponse)
 def invite_member(
     org_id: int,
-    email: Annotated[EmailStr, Form(
-        description="Email of the user to invite",
-        title="Email"
-    )],
+    email: Annotated[
+        EmailStr, Form(description="Email of the user to invite", title="Email")
+    ],
     user: User = Depends(get_user_with_relations),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
     # Check if the user has permission to invite members
     if not user.has_permission(ValidPermissions.INVITE_USER, org_id):
         raise InsufficientPermissionsError()
-    
+
     # Find the organization with all needed relationships
     organization = session.exec(
         select(Organization)
         .where(Organization.id == org_id)
         .options(
             selectinload(Organization.roles),
-            selectinload(Organization.roles).selectinload(Role.users)
+            selectinload(Organization.roles).selectinload(Role.users),
         )
     ).first()
 
@@ -241,11 +267,9 @@ def invite_member(
     account = session.exec(
         select(Account)
         .where(Account.email == email)
-        .options(
-            selectinload(Account.user)
-        )
+        .options(selectinload(Account.user))
     ).first()
-    
+
     if not account or not account.user:
         raise UserNotFoundError()
 
@@ -263,8 +287,7 @@ def invite_member(
 
     # Find the default "Member" role for this organization
     member_role = next(
-        (role for role in organization.roles if role.name == "Member"),
-        None
+        (role for role in organization.roles if role.name == "Member"), None
     )
 
     if not member_role:
@@ -280,6 +303,5 @@ def invite_member(
 
     # Return to the organization page
     return RedirectResponse(
-        url=router.url_path_for("read_organization", org_id=org_id),
-        status_code=303
+        url=router.url_path_for("read_organization", org_id=org_id), status_code=303
     )

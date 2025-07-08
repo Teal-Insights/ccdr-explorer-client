@@ -33,34 +33,30 @@ class Account(SQLModel, table=True):
 
     user: Mapped[Optional["User"]] = Relationship(
         back_populates="account",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan"
-        }
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
     password_reset_tokens: Mapped[List["PasswordResetToken"]] = Relationship(
         back_populates="account",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan"
-        }
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
     email_update_tokens: Mapped[List["EmailUpdateToken"]] = Relationship(
         back_populates="account",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan"
-        }
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
+
 
 class PasswordResetToken(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     account_id: Optional[int] = Field(foreign_key="account.id")
-    token: str = Field(default_factory=lambda: str(
-        uuid4()), index=True, unique=True)
+    token: str = Field(default_factory=lambda: str(uuid4()), index=True, unique=True)
     expires_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC) + timedelta(hours=1))
+        default_factory=lambda: datetime.now(UTC) + timedelta(hours=1)
+    )
     used: bool = Field(default=False)
 
     account: Mapped[Optional[Account]] = Relationship(
-        back_populates="password_reset_tokens")
+        back_populates="password_reset_tokens"
+    )
 
     def is_expired(self) -> bool:
         """
@@ -72,14 +68,15 @@ class PasswordResetToken(SQLModel, table=True):
 class EmailUpdateToken(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     account_id: Optional[int] = Field(foreign_key="account.id")
-    token: str = Field(default_factory=lambda: str(
-        uuid4()), index=True, unique=True)
+    token: str = Field(default_factory=lambda: str(uuid4()), index=True, unique=True)
     expires_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC) + timedelta(hours=1))
+        default_factory=lambda: datetime.now(UTC) + timedelta(hours=1)
+    )
     used: bool = Field(default=False)
 
     account: Mapped[Optional[Account]] = Relationship(
-        back_populates="email_update_tokens")
+        back_populates="email_update_tokens"
+    )
 
     def is_expired(self) -> bool:
         """
@@ -96,24 +93,20 @@ class UserRoleLink(SQLModel, table=True):
     Associates users with roles. This creates a many-to-many relationship
     between users and roles.
     """
+
     user_id: Optional[int] = Field(foreign_key="user.id", primary_key=True)
     role_id: Optional[int] = Field(foreign_key="role.id", primary_key=True)
 
 
 class RolePermissionLink(SQLModel, table=True):
     role_id: Optional[int] = Field(foreign_key="role.id", primary_key=True)
-    permission_id: Optional[int] = Field(
-        foreign_key="permission.id", primary_key=True)
+    permission_id: Optional[int] = Field(foreign_key="permission.id", primary_key=True)
 
 
 class UserBase(SQLModel):
     name: Optional[str] = None
-    avatar_data: Optional[bytes] = Field(
-        default=None, sa_column=Column(LargeBinary)
-    )
-    avatar_content_type: Optional[str] = Field(
-        default=None
-    )
+    avatar_data: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
+    avatar_content_type: Optional[str] = Field(default=None)
 
 
 # TODO: Prevent deleting a user who is sole owner of an organization
@@ -124,12 +117,9 @@ class User(UserBase, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
     account_id: Optional[int] = Field(foreign_key="account.id", unique=True)
-    account: Mapped[Optional[Account]] = Relationship(
-        back_populates="user"
-    )
+    account: Mapped[Optional[Account]] = Relationship(back_populates="user")
     roles: Mapped[List["Role"]] = Relationship(
-        back_populates="users",
-        link_model=UserRoleLink
+        back_populates="users", link_model=UserRoleLink
     )
     accepted_invitations: Mapped[List["Invitation"]] = Relationship(
         back_populates="accepted_by"
@@ -148,7 +138,9 @@ class User(UserBase, table=True):
                 organization_ids.add(role.organization_id)
         return organizations
 
-    def has_permission(self, permission: ValidPermissions, organization: Union["Organization", int]) -> bool:
+    def has_permission(
+        self, permission: ValidPermissions, organization: Union["Organization", int]
+    ) -> bool:
         """
         Check if the user has a specific permission for a given organization.
         """
@@ -175,15 +167,11 @@ class Organization(SQLModel, table=True):
 
     roles: Mapped[List["Role"]] = Relationship(
         back_populates="organization",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan"
-        }
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
     invitations: Mapped[List["Invitation"]] = Relationship(
         back_populates="organization",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan"
-        }
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
     @property
@@ -213,51 +201,49 @@ class Role(SQLModel, table=True):
         created_at: Timestamp when the role was created.
         updated_at: Timestamp when the role was last updated.
     """
+
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    organization_id: int = Field(
-        foreign_key="organization.id")
+    organization_id: int = Field(foreign_key="organization.id")
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
     organization: Mapped[Organization] = Relationship(back_populates="roles")
     users: Mapped[List[User]] = Relationship(
-        back_populates="roles",
-        link_model=UserRoleLink
+        back_populates="roles", link_model=UserRoleLink
     )
     permissions: Mapped[List["Permission"]] = Relationship(
-        back_populates="roles",
-        link_model=RolePermissionLink
+        back_populates="roles", link_model=RolePermissionLink
     )
     invitations: Mapped[List["Invitation"]] = Relationship(
-        back_populates="role",
-        sa_relationship_kwargs={
-            "cascade": "all, delete-orphan"
-        }
+        back_populates="role", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    
+
     __table_args__ = (
         UniqueConstraint("organization_id", "name", name="uq_role_organization_name"),
     )
+
 
 class Permission(SQLModel, table=True):
     """
     Represents a permission that can be assigned to a role. Should not be
     modified unless the application logic and ValidPermissions enum change.
     """
+
     id: Optional[int] = Field(default=None, primary_key=True)
     name: ValidPermissions = Field(
-        sa_column=Column(SQLAlchemyEnum(ValidPermissions, create_type=False)))
+        sa_column=Column(SQLAlchemyEnum(ValidPermissions, create_type=False))
+    )
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
     roles: Mapped[List[Role]] = Relationship(
-        back_populates="permissions",
-        link_model=RolePermissionLink
+        back_populates="permissions", link_model=RolePermissionLink
     )
 
 
 # --- New Invitation Model ---
+
 
 class Invitation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -274,17 +260,24 @@ class Invitation(SQLModel, table=True):
 
     organization: "Organization" = Relationship(back_populates="invitations")
     role: "Role" = Relationship(back_populates="invitations")
-    accepted_by: Optional["User"] = Relationship(
-        back_populates="accepted_invitations"
-    )
+    accepted_by: Optional["User"] = Relationship(back_populates="accepted_invitations")
 
     __table_args__ = (
-        UniqueConstraint("organization_id", "invitee_email", "used", name="uq_invitation_org_email_used"),
+        UniqueConstraint(
+            "organization_id",
+            "invitee_email",
+            "used",
+            name="uq_invitation_org_email_used",
+        ),
     )
 
     def is_expired(self) -> bool:
         """Checks if the invitation has passed its expiry date."""
-        aware_expires_at = self.expires_at.replace(tzinfo=UTC) if self.expires_at.tzinfo is None else self.expires_at
+        aware_expires_at = (
+            self.expires_at.replace(tzinfo=UTC)
+            if self.expires_at.tzinfo is None
+            else self.expires_at
+        )
         return utc_now() > aware_expires_at
 
     def is_active(self) -> bool:
@@ -292,7 +285,11 @@ class Invitation(SQLModel, table=True):
         return not self.used and not self.is_expired()
 
     @classmethod
-    def get_active_for_org(cls, session: Session, organization_id: int) -> list["Invitation"]:
-        statement = select(cls).where(cls.organization_id == organization_id, cls.used == False)
+    def get_active_for_org(
+        cls, session: Session, organization_id: int
+    ) -> list["Invitation"]:
+        statement = select(cls).where(
+            cls.organization_id == organization_id, cls.used == False
+        )
         results = session.exec(statement).all()
         return [inv for inv in results if not inv.is_expired()]

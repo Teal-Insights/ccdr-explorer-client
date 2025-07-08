@@ -24,40 +24,43 @@ if not assistant_id_env_var:
 else:
     assistant_id: str = assistant_id_env_var
 
-router = APIRouter(
-    prefix="/chat/files",
-    tags=["chat_files"]
-)
+router = APIRouter(prefix="/chat/files", tags=["chat_files"])
 
 
 @router.get("/{file_id}/openai_content")
 async def download_openai_file(
     file_id: str = Path(..., description="The ID of the file stored in OpenAI"),
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
+    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
 ) -> StreamingResponse:
     """This endpoint retrieves files created by the code interpreter"""
     try:
         file = await client.files.retrieve(file_id)
         file_content = await client.files.content(file_id)
-        
-        if not hasattr(file_content, 'content'):
+
+        if not hasattr(file_content, "content"):
             raise HTTPException(status_code=500, detail="File content not available")
-            
+
         # Use stream_file_content helper
         return StreamingResponse(
-            stream_file_content(file_content.content), # Assuming stream_file_content handles bytes
-            headers={"Content-Disposition": f'attachment; filename="{file.filename or file_id}"'}
+            stream_file_content(
+                file_content.content
+            ),  # Assuming stream_file_content handles bytes
+            headers={
+                "Content-Disposition": f'attachment; filename="{file.filename or file_id}"'
+            },
         )
     except Exception as e:
         logger.error(f"Error downloading file {file_id} from OpenAI: {e}")
-        raise HTTPException(status_code=500, detail=f"Error downloading file from OpenAI: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error downloading file from OpenAI: {str(e)}"
+        )
 
 
 @router.get("/{file_id}/content")
 async def get_file_content(
     file_id: str,
     user: User = Depends(get_authenticated_user),
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
+    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
 ) -> StreamingResponse:
     """
     Streams file content from OpenAI API.
@@ -66,13 +69,15 @@ async def get_file_content(
     try:
         # Get the file content from OpenAI
         file_content = await client.files.content(file_id)
-        file_bytes = file_content.read()  # Remove await since read() returns bytes directly
-        
+        file_bytes = (
+            file_content.read()
+        )  # Remove await since read() returns bytes directly
+
         # Return the file content as a streaming response
         # Note: In a production environment, you might want to add caching
         return StreamingResponse(
             content=iter([file_bytes]),
-            media_type="image/png"  # You might want to make this dynamic based on file type
+            media_type="image/png",  # You might want to make this dynamic based on file type
         )
     except Exception as e:
         logger.error(f"Error getting file content: {e}")

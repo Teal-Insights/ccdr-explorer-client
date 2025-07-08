@@ -32,11 +32,11 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 PASSWORD_PATTERN_COMPONENTS = [
-    r"(?=.*\d)",                   # At least one digit
-    r"(?=.*[a-z])",               # At least one lowercase letter
-    r"(?=.*[A-Z])",               # At least one uppercase letter
+    r"(?=.*\d)",  # At least one digit
+    r"(?=.*[a-z])",  # At least one lowercase letter
+    r"(?=.*[A-Z])",  # At least one uppercase letter
     r"(?=.*[\[\]\\@$!%*?&{}<>.,'#\-_=+\(\):;|~/\^])",  # At least one special character
-    r".{8,}"  # At least 8 characters long
+    r".{8,}",  # At least 8 characters long
 ]
 COMPILED_PASSWORD_PATTERN = re.compile(r"".join(PASSWORD_PATTERN_COMPONENTS))
 
@@ -48,14 +48,14 @@ def convert_python_regex_to_html(regex: str) -> str:
     """
     # Map each special char to its escaped form
     special_map = {
-        '{': r'\{',
-        '}': r'\}',
-        '<': r'\<',
-        '>': r'\>',
-        '.': r'\.',
-        '+': r'\+',
-        '|': r'\|',
-        ',': r'\,',
+        "{": r"\{",
+        "}": r"\}",
+        "<": r"\<",
+        ">": r"\>",
+        ".": r"\.",
+        "+": r"\+",
+        "|": r"\|",
+        ",": r"\,",
         "'": r"\\'",  # doubly escaped single quote
         "/": r"\/",
     }
@@ -97,17 +97,17 @@ def get_password_hash(password: str) -> str:
     Hash a password using bcrypt with a random salt
     """
     # Convert the password to bytes and generate the hash
-    password_bytes = password.encode('utf-8')
+    password_bytes = password.encode("utf-8")
     salt = gensalt()
-    return hashpw(password_bytes, salt).decode('utf-8')
+    return hashpw(password_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verify a password against a bcrypt hash
     """
-    password_bytes = plain_password.encode('utf-8')
-    hashed_bytes = hashed_password.encode('utf-8')
+    password_bytes = plain_password.encode("utf-8")
+    hashed_bytes = hashed_password.encode("utf-8")
     return checkpw(password_bytes, hashed_bytes)
 
 
@@ -117,8 +117,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(
-            UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -166,23 +165,22 @@ def generate_password_reset_url(email: str, token: str) -> str:
     Returns:
         Complete password reset URL
     """
-    base_url = os.getenv('BASE_URL')
+    base_url = os.getenv("BASE_URL")
     return f"{base_url}/account/reset_password?email={email}&token={token}"
 
 
 def send_reset_email(email: str, session: Session) -> None:
     # Check for an existing unexpired token
-    account: Optional[Account] = session.exec(select(Account).where(
-        Account.email == email
-    )).first()
-    
+    account: Optional[Account] = session.exec(
+        select(Account).where(Account.email == email)
+    ).first()
+
     if account:
         existing_token = session.exec(
-            select(PasswordResetToken)
-            .where(
+            select(PasswordResetToken).where(
                 PasswordResetToken.account_id == account.id,
                 PasswordResetToken.expires_at > datetime.now(UTC),
-                PasswordResetToken.used == False
+                PasswordResetToken.used == False,
             )
         ).first()
 
@@ -193,15 +191,15 @@ def send_reset_email(email: str, session: Session) -> None:
         # Generate a new token
         token: str = str(uuid.uuid4())
         reset_token: PasswordResetToken = PasswordResetToken(
-            account_id=account.id, token=token)
+            account_id=account.id, token=token
+        )
         session.add(reset_token)
 
         try:
             reset_url: str = generate_password_reset_url(email, token)
 
             # Render the email template
-            template: Template = templates.get_template(
-                "emails/reset_email.html")
+            template: Template = templates.get_template("emails/reset_email.html")
             html_content: str = template.render({"reset_url": reset_url})
 
             params: resend.Emails.SendParams = {
@@ -226,23 +224,19 @@ def generate_email_update_url(account_id: int, token: str, new_email: str) -> st
     """
     Generates the email update confirmation URL with proper query parameters.
     """
-    base_url = os.getenv('BASE_URL')
+    base_url = os.getenv("BASE_URL")
     return f"{base_url}/account/confirm_email_update?account_id={account_id}&token={token}&new_email={new_email}"
 
 
 def send_email_update_confirmation(
-    current_email: str,
-    new_email: str,
-    account_id: int,
-    session: Session
+    current_email: str, new_email: str, account_id: int, session: Session
 ) -> None:
     # Check for an existing unexpired token
     existing_token = session.exec(
-        select(EmailUpdateToken)
-        .where(
+        select(EmailUpdateToken).where(
             EmailUpdateToken.account_id == account_id,
             EmailUpdateToken.expires_at > datetime.now(UTC),
-            EmailUpdateToken.used == False
+            EmailUpdateToken.used == False,
         )
     ).first()
 
@@ -255,16 +249,17 @@ def send_email_update_confirmation(
     session.add(token)
 
     try:
-        confirmation_url = generate_email_update_url(
-            account_id, token.token, new_email)
+        confirmation_url = generate_email_update_url(account_id, token.token, new_email)
 
         # Render the email template
         template = templates.get_template("emails/update_email_email.html")
-        html_content = template.render({
-            "confirmation_url": confirmation_url,
-            "current_email": current_email,
-            "new_email": new_email
-        })
+        html_content = template.render(
+            {
+                "confirmation_url": confirmation_url,
+                "current_email": current_email,
+                "new_email": new_email,
+            }
+        )
 
         params: resend.Emails.SendParams = {
             "from": os.getenv("EMAIL_FROM", ""),

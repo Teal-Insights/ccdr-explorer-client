@@ -10,17 +10,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from routers import account, files, chat, organization, role, user, static_pages, invitation
-from utils.core.dependencies import (
-    get_optional_user
+from routers import (
+    account,
+    files,
+    chat,
+    organization,
+    role,
+    user,
+    static_pages,
+    invitation,
 )
-from exceptions.http_exceptions import (
-    AuthenticationError,
-    PasswordValidationError
-)
-from exceptions.exceptions import (
-    NeedsNewTokens
-)
+from utils.core.dependencies import get_optional_user
+from exceptions.http_exceptions import AuthenticationError, PasswordValidationError
+from exceptions.exceptions import NeedsNewTokens
 from utils.core.db import set_up_db
 from utils.core.models import User
 
@@ -30,9 +32,8 @@ logger.setLevel(logging.DEBUG)
 STATIC_DIR = Path("static")
 
 # Initialize with a sensible default; will be updated at startup
-LAST_MODIFIED_STATIC_FILES = {
-    "last_updated": datetime.now(UTC)
-}
+LAST_MODIFIED_STATIC_FILES = {"last_updated": datetime.now(UTC)}
+
 
 def get_last_modified_time_of_static_files(static_dir: Path) -> datetime:
     """
@@ -54,7 +55,7 @@ def get_last_modified_time_of_static_files(static_dir: Path) -> datetime:
                     # during the scan. Log and continue.
                     logger.warning(f"File not found during static scan: {file_path}")
                     pass
-    
+
     if latest_mod_time_float == 0.0:
         # Fallback if static dir is empty, doesn't exist, or no files found.
         # Using current time means cache will be short initially.
@@ -63,7 +64,7 @@ def get_last_modified_time_of_static_files(static_dir: Path) -> datetime:
             "Using current time as last_updated for cache control."
         )
         return datetime.now(UTC)
-    
+
     # Convert the timestamp to a timezone-aware datetime object
     return datetime.fromtimestamp(latest_mod_time_float, tz=UTC)
 
@@ -111,8 +112,7 @@ app.include_router(user.router)
 @app.exception_handler(AuthenticationError)
 async def authentication_error_handler(request: Request, exc: AuthenticationError):
     return RedirectResponse(
-        url=app.url_path_for("read_login"),
-        status_code=status.HTTP_303_SEE_OTHER
+        url=app.url_path_for("read_login"), status_code=status.HTTP_303_SEE_OTHER
     )
 
 
@@ -120,34 +120,34 @@ async def authentication_error_handler(request: Request, exc: AuthenticationErro
 @app.exception_handler(NeedsNewTokens)
 async def needs_new_tokens_handler(request: Request, exc: NeedsNewTokens):
     response = RedirectResponse(
-        url=request.url.path, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+        url=request.url.path, status_code=status.HTTP_307_TEMPORARY_REDIRECT
+    )
     response.set_cookie(
         key="access_token",
         value=exc.access_token,
         httponly=True,
         secure=True,
-        samesite="strict"
+        samesite="strict",
     )
     response.set_cookie(
         key="refresh_token",
         value=exc.refresh_token,
         httponly=True,
         secure=True,
-        samesite="strict"
+        samesite="strict",
     )
     return response
 
 
 # Handle PasswordValidationError by rendering the validation_error page
 @app.exception_handler(PasswordValidationError)
-async def password_validation_exception_handler(request: Request, exc: PasswordValidationError):
+async def password_validation_exception_handler(
+    request: Request, exc: PasswordValidationError
+):
     return templates.TemplateResponse(
         request,
         "errors/validation_error.html",
-        {
-            "status_code": 422,
-            "errors": {"error": exc.detail}
-        },
+        {"status_code": 422, "errors": {"error": exc.detail}},
         status_code=422,
     )
 
@@ -163,7 +163,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         "string_too_short": "this field is required",
         "missing": "this field is required",
         "string_pattern_mismatch": "this field cannot be empty or contain only whitespace",
-        "enum": "invalid value"
+        "enum": "invalid value",
     }
 
     for error in exc.errors():
@@ -178,27 +178,24 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         # For JSON body, it might be (body, field_name)
         # For array items, it might be (field_name, array_index)
         field_name = location[-2] if isinstance(location[-1], int) else location[-1]
-        
+
         # Format the field name to be more user-friendly
         display_name = field_name.replace("_", " ").title()
-        
+
         # Use mapped message if available, otherwise use FastAPI's message
         error_type = error.get("type", "")
         message_template = error_templates.get(error_type, error["msg"])
-        
+
         # For array items, append the index to the message
         if isinstance(location[-1], int):
             message_template = f"Item {location[-1] + 1}: {message_template}"
-            
+
         errors[display_name] = message_template
 
     return templates.TemplateResponse(
         request,
         "errors/validation_error.html",
-        {
-            "status_code": 422,
-            "errors": errors
-        },
+        {"status_code": 422, "errors": errors},
         status_code=422,
     )
 
@@ -223,10 +220,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     return templates.TemplateResponse(
         request,
         "errors/error.html",
-        {
-            "status_code": 500,
-            "detail": "Internal Server Error"
-        },
+        {"status_code": 500, "detail": "Internal Server Error"},
         status_code=500,
     )
 
@@ -236,16 +230,11 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 @app.get("/")
 async def read_home(
-    request: Request,
-    user: Optional[User] = Depends(get_optional_user)
+    request: Request, user: Optional[User] = Depends(get_optional_user)
 ):
     if user:
         return RedirectResponse(url=app.url_path_for("read_chat"), status_code=302)
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {"user": user}
-    )
+    return templates.TemplateResponse(request, "index.html", {"user": user})
 
 
 # Add middleware to set Cache-Control header for static files
