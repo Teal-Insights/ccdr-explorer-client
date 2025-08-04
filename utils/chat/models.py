@@ -1,15 +1,10 @@
-import os
 from datetime import date, datetime, UTC
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from dotenv import load_dotenv
 from sqlmodel import Field, Relationship, SQLModel, Column
 from pydantic import HttpUrl, field_validator
 from sqlalchemy.dialects.postgresql import ARRAY, FLOAT, JSONB
 from sqlalchemy.orm import Mapped
-
-# Load environment variables
-load_dotenv(os.getenv("ENVIRONMENT", ".env"), override=True)
 
 
 # Enums for document and node types
@@ -24,43 +19,40 @@ class NodeType(str, Enum):
     ELEMENT_NODE = "ELEMENT_NODE"
 
 
+# TODO: Create helper methods to return tags of a given type, e.g., top-level, structural, headings, etc.
 class TagName(str, Enum):
-    HEADER = "HEADER"
-    MAIN = "MAIN"
-    FOOTER = "FOOTER"
-    FIGURE = "FIGURE"
-    FIGCAPTION = "FIGCAPTION"
-    TABLE = "TABLE"
-    TH = "TH"
-    TR = "TR"
-    TD = "TD"
-    CAPTION = "CAPTION"
-    TITLE = "TITLE"
-    SECTION = "SECTION"
-    NAV = "NAV"
-    ASIDE = "ASIDE"
-    P = "P"
-    UL = "UL"
-    OL = "OL"
-    LI = "LI"
-    H1 = "H1"
-    H2 = "H2"
-    H3 = "H3"
-    H4 = "H4"
-    H5 = "H5"
-    H6 = "H6"
-    I = "I"
-    B = "B"
-    U = "U"
-    S = "S"
-    SUP = "SUP"
-    SUB = "SUB"
-    A = "A"
-    IMG = "IMG"
-    MATH = "MATH"
-    CODE = "CODE"
-    CITE = "CITE"
-    BLOCKQUOTE = "BLOCKQUOTE"
+    # Only structural elements
+    HEADER = "header"
+    MAIN = "main"
+    FOOTER = "footer"
+    FIGURE = "figure"
+    FIGCAPTION = "figcaption"
+    TABLE = "table"
+    THEAD = "thead"
+    TBODY = "tbody"
+    TFOOT = "tfoot"
+    TH = "th"
+    TR = "tr"
+    TD = "td"
+    CAPTION = "caption"
+    SECTION = "section"
+    NAV = "nav"
+    ASIDE = "aside"
+    P = "p"
+    UL = "ul"
+    OL = "ol"
+    LI = "li"
+    H1 = "h1"
+    H2 = "h2"
+    H3 = "h3"
+    H4 = "h4"
+    H5 = "h5"
+    H6 = "h6"
+    IMG = "img"
+    MATH = "math"
+    CODE = "code"
+    CITE = "cite"
+    BLOCKQUOTE = "blockquote"
 
 
 class SectionType(str, Enum):
@@ -109,17 +101,33 @@ class RelationType(str, Enum):
     CROSS_REFERENCES = "CROSS_REFERENCES"
 
 
+class BoundingBox(SQLModel):
+    """Model for bounding box coordinates with serialization support."""
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+
+
 # Pydantic model for positional data
-class PositionalData(SQLModel):
+class PositionalData(SQLModel, table=False):
+    """Represents the position of *one* of the bounding boxes
+    that make up a node. Intended for storage in a JSONB array
+    containing complete positional data for the node.
+
+    Most nodes will have only one bounding box, but some will
+    have multiple (e.g., paragraphs split across pages).
+    """
+
     page_pdf: int
     page_logical: Optional[int] = None
-    bbox: Dict[str, float]  # {x1, y1, x2, y2}
+    bbox: BoundingBox
 
     def dict(self, *args, **kwargs) -> Dict[str, Any]:
         return {
             "page_pdf": self.page_pdf,
             "page_logical": self.page_logical,
-            "bbox": self.bbox,
+            "bbox": self.bbox.model_dump(),
         }
 
 
