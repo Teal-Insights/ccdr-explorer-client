@@ -26,6 +26,7 @@ dependencies = [
     "modal>=0.74.0",
     "boto3>=1.38.1",
     "psycopg2-binary>=2.9.10",
+    "beautifulsoup4>=4.13.5",
 ]
 
 [dependency-groups]
