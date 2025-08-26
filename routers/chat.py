@@ -52,7 +52,7 @@ router: APIRouter = APIRouter(prefix="/chat", tags=["chat"])
 templates = Jinja2Templates(directory="templates")
 
 # Check if environment variables are missing
-load_dotenv(os.getenv("ENVIRONMENT", ".env"), override=True)
+load_dotenv(os.getenv("ENVIRONMENT", ".env"))
 openai_api_key = os.getenv("OPENAI_API_KEY")
 assistant_id_from_env = os.getenv("ASSISTANT_ID")
 
@@ -218,7 +218,7 @@ async def stream_response(
                                     else:
                                         # This case shouldn't occur
                                         logger.warning(
-                                            f"File citation annotation found, but text_delta.value is unexpectedly None."
+                                            "File citation annotation found, but text_delta.value is unexpectedly None."
                                         )
 
                                 # Handle file_path (code interpreter generated files)
@@ -270,7 +270,7 @@ async def stream_response(
                     step_id = event.data.id
 
                     yield sse_format(
-                        f"toolCallCreated",
+                        "toolCallCreated",
                         templates.get_template("chat/assistant-step.html").render(
                             step_type="toolCall", step_id=step_id
                         ),
@@ -291,14 +291,14 @@ async def stream_response(
                         if tool_call.type == "function":
                             if tool_call.function and tool_call.function.name:
                                 yield sse_format(
-                                    f"toolDelta",
+                                    "toolDelta",
                                     wrap_for_oob_swap(
                                         step_id, tool_call.function.name + "<br>"
                                     ),
                                 )
                             if tool_call.function and tool_call.function.arguments:
                                 yield sse_format(
-                                    f"toolDelta",
+                                    "toolDelta",
                                     wrap_for_oob_swap(
                                         step_id, tool_call.function.arguments
                                     ),
@@ -354,12 +354,12 @@ async def stream_response(
                                         # Create the image HTML on the backend
                                         image_html = f'<img src="/chat/files/{output.image.file_id}/content" class="code-interpreter-image">'
                                         yield sse_format(
-                                            f"imageOutput",
+                                            "imageOutput",
                                             wrap_for_oob_swap(step_id, image_html),
                                         )
                         elif tool_call.type == "file_search":
                             yield sse_format(
-                                f"toolDelta",
+                                "toolDelta",
                                 wrap_for_oob_swap(
                                     step_id, "<em>File search tool call</em>"
                                 ),

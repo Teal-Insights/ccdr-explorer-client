@@ -1,6 +1,6 @@
 from datetime import date, datetime, UTC
 from typing import List, Optional, Dict, Any
-from html import escape
+from html import escape, unescape
 from bs4 import BeautifulSoup
 from enum import Enum
 from sqlmodel import Field, Relationship, SQLModel, Column
@@ -474,7 +474,9 @@ class Node(SQLModel, table=True):
             else:
                 text_parts: List[str] = []
                 if content.text_content:
-                    text_parts.append(escape(content.text_content))
+                    # Unescape HTML entities that may have been escaped during database storage
+                    unescaped_content = unescape(content.text_content)
+                    text_parts.append(unescaped_content)
 
                 text_html = separator.join(p for p in text_parts if p)
 

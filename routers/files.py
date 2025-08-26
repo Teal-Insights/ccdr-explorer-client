@@ -16,7 +16,7 @@ logger = logging.getLogger("uvicorn.error")
 templates = Jinja2Templates(directory="templates")
 
 # Check if environment variables are missing
-load_dotenv(os.getenv("ENVIRONMENT", ".env"), override=True)
+load_dotenv(os.getenv("ENVIRONMENT", ".env"))
 assistant_id_env_var: str | None = os.getenv("ASSISTANT_ID")
 
 if not assistant_id_env_var:

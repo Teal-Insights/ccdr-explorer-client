@@ -14,6 +14,7 @@ from routers import (
     account,
     files,
     chat,
+    browse,
     organization,
     role,
     user,
@@ -97,6 +98,7 @@ templates = Jinja2Templates(directory="templates")
 
 app.include_router(account.router)
 app.include_router(chat.router)
+app.include_router(browse.router)
 app.include_router(files.router)
 app.include_router(invitation.router)
 app.include_router(organization.router)

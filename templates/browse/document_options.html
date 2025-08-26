@@ -1,0 +1,6 @@
+<option value="">Select a document...</option>
+{% for document in documents %}
+    <option value="{{ document.id }}">
+        {{ document.description }}
+    </option>
+{% endfor %}

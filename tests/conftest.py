@@ -1,9 +1,9 @@
+import os
 import pytest
 from typing import Generator
 from sqlmodel import create_engine, Session, select
 from sqlalchemy import Engine
 from fastapi.testclient import TestClient
-from dotenv import load_dotenv
 from utils.core.db import (
     get_connection_url,
     tear_down_db,
@@ -23,8 +23,12 @@ from utils.core.auth import get_password_hash, create_access_token, create_refre
 from main import app
 from datetime import datetime, UTC, timedelta
 
-# Load environment variables
-load_dotenv(override=True)
+# Set environment variables manually
+os.environ["POSTGRES_USER"] = "postgres"
+os.environ["POSTGRES_PASSWORD"] = "postgres"
+os.environ["POSTGRES_HOST"] = "localhost"
+os.environ["POSTGRES_PORT"] = "5432"
+os.environ["POSTGRES_NAME"] = "ccdr-explorer-test-db"
 
 
 # Define a custom exception for test setup errors

@@ -11,7 +11,7 @@ from exceptions.exceptions import EmailSendFailedError
 from exceptions.http_exceptions import DataIntegrityError
 
 # Load environment variables
-load_dotenv(os.getenv("ENVIRONMENT", ".env"), override=True)
+load_dotenv(os.getenv("ENVIRONMENT", ".env"))
 resend.api_key = os.environ.get("RESEND_API_KEY")
 BASE_URL = os.getenv("BASE_URL", "")
 

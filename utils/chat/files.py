@@ -6,9 +6,9 @@ from fastapi import HTTPException, Depends
 from sqlmodel import select, Session
 from sqlalchemy.orm import selectinload
 from utils.core.db import engine
-from utils.chat.models import Document, Publication
+from utils.chat.models import Document
 
-load_dotenv(os.getenv("ENVIRONMENT", ".env"), override=True)
+load_dotenv(os.getenv("ENVIRONMENT", ".env"))
 
 logger = logging.getLogger("uvicorn.error")
 

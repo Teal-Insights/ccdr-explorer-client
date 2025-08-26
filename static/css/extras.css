@@ -486,19 +486,19 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
     border-color: rgba(255, 255, 255, 0.3);
   }
   
-  footer {
+  #page-footer {
     background-color: #001926 !important; /* NF Dark Blue */
     color: #fff !important;
     padding-top: 2rem !important;
     padding-bottom: 2rem !important;
   }
   
-  footer .text-muted,
-  footer a.text-muted {
+  #page-footer .text-muted,
+  #page-footer a.text-muted {
     color: rgba(255, 255, 255, 0.7) !important;
   }
   
-  footer a.text-muted:hover {
+  #page-footer a.text-muted:hover {
     color: #3ab287 !important; /* NF Green */
     text-decoration: none;
   }
@@ -587,4 +587,76 @@ input:invalid:not(:placeholder-shown) + .invalid-feedback {
 
 #chatForm .btn[aria-busy="true"] .button__loader {
     display: inline-block;
+}
+
+/* Browse page content spacing and width constraints */
+.browse-content {
+    max-width: 66.67%; /* ~2/3 of width on large screens */
+    margin: 0 auto;
+    padding: 0 1rem; /* Minimum 1rem left/right spacing on mobile */
+}
+
+.browse-content .row.mb-4 {
+    margin-top: 3rem; /* Add space above the selector div */
+}
+
+.browse-content article {
+    margin-bottom: 3rem; /* Add space below the article */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .browse-content {
+        max-width: 100%;
+        padding: 0 1.5rem; /* Slightly more padding on mobile */
+    }
+    
+    .browse-content .row.mb-4 {
+        margin-top: 2rem; /* Less top margin on mobile */
+    }
+    
+    .browse-content article {
+        margin-bottom: 2rem; /* Less bottom margin on mobile */
+    }
+}
+
+/* Target leaf elements (no children) in article, excluding inline styling tags */
+article *:not(:has(*)):not(sup):not(sub):not(em):not(strong):not(i):not(b):not(s):not(u):not(br):not(code):not(cite) {
+    /* Make element focusable */
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    transition: outline-color 0.2s ease;
+}
+
+/* Focus state for leaf elements */
+article *:not(:has(*)):not(sup):not(sub):not(em):not(strong):not(i):not(b):not(s):not(u):not(br):not(code):not(cite):focus {
+    outline-color: #3ab287; /* Use your brand green */
+    outline-style: solid;
+}
+
+/* Hover state for leaf elements */
+article *:not(:has(*)):not(sup):not(sub):not(em):not(strong):not(i):not(b):not(s):not(u):not(br):not(code):not(cite):hover {
+    outline-color: rgba(58, 178, 135, 0.3); /* Subtle hover indicator */
+}
+
+/* Display data-pages attribute value on hover - ONLY for leaf elements */
+article *:not(:has(*))[data-pages]:hover::after {
+    content: "Pages: " attr(data-pages);
+    position: absolute;
+    top: -30px;
+    left: 0;
+    background-color: #001926; /* Your dark blue */
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Ensure leaf elements with data-pages have relative positioning for the tooltip */
+article *:not(:has(*))[data-pages] {
+    position: relative;
 }

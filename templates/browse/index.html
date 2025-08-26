@@ -1,0 +1,52 @@
+<!-- index.html -->
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="browse-content">
+    <!-- We'll need some kind of selector here to choose the report -->
+
+    <div class="row mb-4">
+    <div class="col-md-6">
+        <label for="publicationSelect" class="form-label">Publication</label>
+        <select class="form-select" id="publicationSelect" name="publication_id"
+                hx-post="/browse/documents"
+                hx-target="#documentSelect"
+                hx-trigger="change">
+            <option value="">Select a publication...</option>
+            {% for publication in available_publications %}
+                <option value="{{ publication.id }}"
+                        {% if selected_document and selected_document.publication_id == publication.id %}selected{% endif %}>
+                    {{ publication.title[:80] }}{% if publication.title|length > 80 %}...{% endif %}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label for="documentSelect" class="form-label">Document</label>
+        <select class="form-select" id="documentSelect" name="document_id"
+                hx-get="/browse/document"
+                hx-target="body"
+                hx-push-url="true"
+                hx-trigger="change[this.value!='']">
+            {% if selected_document %}
+                <option value="">Select a document...</option>
+                {% for document in selected_document.publication.documents %}
+                    <option value="{{ document.id }}"
+                            {% if document.id == selected_document.id %}selected{% endif %}>
+                        {{ document.description }}
+                    </option>
+                {% endfor %}
+            {% else %}
+                <option value="">Select publication first...</option>
+            {% endif %}
+        </select>
+    </div>
+</div>
+
+    <article>
+        {{ document_html | safe if document_html else "Please select a document" }}    
+    </article>
+</div>
+
+{% endblock %}
