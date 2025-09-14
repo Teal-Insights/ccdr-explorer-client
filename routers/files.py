@@ -1,11 +1,8 @@
-import os
 import logging
-from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Depends, Path
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from openai import AsyncOpenAI
-from exceptions.http_exceptions import OpenAIError
 from utils.chat.streaming import stream_file_content
 from utils.core.dependencies import get_authenticated_user
 from utils.core.models import User
@@ -15,52 +12,56 @@ logger = logging.getLogger("uvicorn.error")
 # Jinja2 templates
 templates = Jinja2Templates(directory="templates")
 
-# Check if environment variables are missing
-load_dotenv(os.getenv("ENVIRONMENT", ".env"))
-assistant_id_env_var: str | None = os.getenv("ASSISTANT_ID")
-
-if not assistant_id_env_var:
-    raise OpenAIError("OpenAI API key or assistant ID is missing")
-else:
-    assistant_id: str = assistant_id_env_var
-
-router = APIRouter(prefix="/chat/files", tags=["chat_files"])
+router = APIRouter(
+    prefix="/files",
+    tags=["files"]
+)
 
 
-@router.get("/{file_id}/openai_content")
-async def download_openai_file(
+@router.get("/{file_name}")
+async def download_stored_file(
+    file_name: str = Path(..., description="The name of the file to retrieve from app storage"),
+    user: User = Depends(get_authenticated_user)
+) -> FileResponse:
+    """This endpoint retrieves PDF files from app storage by filename"""
+    # TODO: implement secure retrieval from AWS S3 and make bucket non-public
+    # For now, return empty FileResponse
+    return FileResponse()
+
+
+@router.get("/{container_id}/{file_id}/openai_content")
+async def download_container_file(
+    container_id: str = Path(..., description="The ID of the container the file is stored in"),
     file_id: str = Path(..., description="The ID of the file stored in OpenAI"),
+    user: User = Depends(get_authenticated_user),
     client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
 ) -> StreamingResponse:
     """This endpoint retrieves files created by the code interpreter"""
     try:
-        file = await client.files.retrieve(file_id)
+        file = await client.containers.files.retrieve(file_id, container_id=container_id)
+        # base_url workaround because container file download is not supported in the Python client yet
+        client.base_url = f"https://api.openai.com/v1/containers/{container_id}"
         file_content = await client.files.content(file_id)
-
-        if not hasattr(file_content, "content"):
+        client.base_url = "https://api.openai.com/v1"
+        
+        if not hasattr(file_content, 'content'):
             raise HTTPException(status_code=500, detail="File content not available")
-
+            
         # Use stream_file_content helper
         return StreamingResponse(
-            stream_file_content(
-                file_content.content
-            ),  # Assuming stream_file_content handles bytes
-            headers={
-                "Content-Disposition": f'attachment; filename="{file.filename or file_id}"'
-            },
+            stream_file_content(file_content.content), # Assuming stream_file_content handles bytes
+            headers={"Content-Disposition": f'attachment; filename="{file.path.split("/")[-1] or file_id}"'}
         )
     except Exception as e:
         logger.error(f"Error downloading file {file_id} from OpenAI: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error downloading file from OpenAI: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error downloading file from OpenAI: {str(e)}")
 
 
 @router.get("/{file_id}/content")
-async def get_file_content(
+async def get_assistant_image_content(
     file_id: str,
     user: User = Depends(get_authenticated_user),
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
+    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI())
 ) -> StreamingResponse:
     """
     Streams file content from OpenAI API.
@@ -69,15 +70,13 @@ async def get_file_content(
     try:
         # Get the file content from OpenAI
         file_content = await client.files.content(file_id)
-        file_bytes = (
-            file_content.read()
-        )  # Remove await since read() returns bytes directly
+        file_bytes = file_content.read()  # Remove await since read() returns bytes directly
 
         # Return the file content as a streaming response
         # Note: In a production environment, you might want to add caching
         return StreamingResponse(
             content=iter([file_bytes]),
-            media_type="image/png",  # You might want to make this dynamic based on file type
+            media_type="image/png"  # We might want to make this dynamic based on file type
         )
     except Exception as e:
         logger.error(f"Error getting file content: {e}")

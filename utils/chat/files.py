@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from utils.core.db import engine
 from utils.chat.models import Document
 
-load_dotenv(os.getenv("ENVIRONMENT", ".env"))
+load_dotenv()
 
 logger = logging.getLogger("uvicorn.error")
 

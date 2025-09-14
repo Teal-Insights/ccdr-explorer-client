@@ -8,7 +8,7 @@ from utils.core.models import RolePermissionLink, Role, Permission
 from utils.core.enums import ValidPermissions
 
 # Load environment variables from a .env file
-load_dotenv(os.getenv("ENVIRONMENT", ".env"))
+load_dotenv()
 
 # Set up a logger for error reporting
 logger = logging.getLogger("uvicorn.error")

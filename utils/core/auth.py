@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi import Cookie
 from utils.core.models import PasswordResetToken, EmailUpdateToken, Account
 
-load_dotenv(os.getenv("ENVIRONMENT", ".env"))
+load_dotenv()
 resend.api_key = os.environ["RESEND_API_KEY"]
 
 logger = logging.getLogger(__name__)

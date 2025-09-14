@@ -25,7 +25,7 @@
           <form id="chatForm" class="w-75 d-flex align-items-end pb-3 ms-auto"
                 hx-on::after-request="this.reset()"
                 hx-on::before-request="disableSendButton()"
-                hx-post="{{ url_for('send_message', thread_id=thread_id) }}"
+                hx-post="{{ url_for('send_message', conversation_id=conversation_id) }}"
                 hx-target="#messages"
                 hx-swap="beforeend">
             <textarea
@@ -40,9 +40,12 @@
               required
             ></textarea>
             <button
+              id="sendButton"  
               type="submit"
               class="btn btn-primary"
-              id="sendButton"
+              hx-post="{{ url_for('send_message', conversation_id=conversation_id) }}"
+              hx-target="#messages"
+              hx-swap="beforeend"
               {% if inputDisabled %}disabled{% endif %}
             >
               <span class="button__text">Send</span>

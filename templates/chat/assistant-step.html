@@ -11,4 +11,4 @@
     {% if step_type == 'toolCall' %}
       style="white-space: pre-wrap;"
     {% endif %}
-  id="step-{{ step_id }}"></div>
+  id="step-{{ step_id }}">{{ content if content else "" }}</div>

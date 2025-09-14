@@ -4,29 +4,34 @@ window._streamingMarkdown = new WeakMap();
 // Main SSE event handler: called by HTMX for events listed in sse-swap if not handled by default HTMX swap
 // or for all events if hx-on:htmx:sse-before-message is used.
 function handleCustomSseEvents(evt) {
-	const originalSSEEvent = evt.detail;
-	if (!originalSSEEvent || !originalSSEEvent.type) {
-		console.warn("Malformed SSE event:", originalSSEEvent);
-		return;
+	const originalSSEEvent = evt.detail; // This is {data: "...", type: "...", lastEventId: "..."}
+	// const sendButton = document.getElementById('sendButton'); // sendButton not directly needed here anymore for endStream
+
+	// Explicitly check for endStream
+	if (originalSSEEvent.type === 'endStream') {
+        console.log("handleCustomSseEvents: Saw endStream event. Data:", originalSSEEvent.data, ". HTMX will handle sse-close.");
+		// This event is primarily for sse-close. No special action (like re-enabling button) needed here.
+		// HTMX will see the 'endStream' event name based on sse-close attribute and then dispatch 'htmx:sseClose'.
+		return; // Return as endStream is not for typical sse-swap content handling within this function.
 	}
 
-	if (!originalSSEEvent.data) {
-		// endStream can have null data; other event types should not
-		if (originalSSEEvent.type !== 'endStream') {
-			console.warn("SSE event without data or unexpected structure:", originalSSEEvent);
-		}
+	// For other events that are supposed to carry data for swapping:
+	if (!originalSSEEvent || !originalSSEEvent.data) {
+		// This condition should only be met if an event *meant* for swapping (like textDelta) is missing data.
+		console.warn(`SSE event type '${originalSSEEvent.type}' (expected data for swap) without data or unexpected structure:`, originalSSEEvent);
 		return;
+	} else if (originalSSEEvent.type === 'textReplacement') {
+		evt.preventDefault();
+		processTextReplacement(originalSSEEvent);
 	}
 
 	// Prevent default HTMX swap for specific events we handle in JS
 	if (originalSSEEvent.type === 'textDelta') {
 		evt.preventDefault();
 		processTextDelta(originalSSEEvent);
-	} else if (originalSSEEvent.type === 'textReplacement') {
-		evt.preventDefault();
-		processTextReplacement(originalSSEEvent);
 	}
-	// Other event types (messageCreated, toolCallCreated, etc.) will be handled by HTMX default swap
+	// Other event types (messageCreated, toolCallCreated, etc.) listed in sse-swap will be handled by HTMX default swap
+	// if they are listed in sse-swap and not prevented here by evt.preventDefault().
 }
 
 function processTextDelta(sseEvent) {
@@ -65,7 +70,7 @@ function processTextReplacement(sseEvent) {
 		return;
 	}
 	const textToReplace = parts[0]; // This is "sandbox:/path/to/file"
-	const replacementUrl = parts[1]; // This is the actual download URL
+	const replacementText = parts[1]; // This is the actual download URL
 
 	if (!window._streamingMarkdown) {
 		// Should have been initialized by processTextDelta
@@ -73,13 +78,13 @@ function processTextReplacement(sseEvent) {
 	}
 
 	let currentMarkdown = window._streamingMarkdown.get(targetElement) || '';
-	
-	// Regex to find the markdown link URL part: (sandbox:/path/to/file)
+
+	// Build regex from pattern where '*' is a wildcard within the markdown link URL
 	const regex = new RegExp(`\\(\\s*${escapeRegExp(textToReplace)}\\s*\\)`, 'g');
 
 	if (regex.test(currentMarkdown)) {
-		currentMarkdown = currentMarkdown.replace(regex, `(${replacementUrl})`);
-		console.log(`Applied replacement: ${textToReplace} -> ${replacementUrl}`);
+		currentMarkdown = currentMarkdown.replace(regex, `(${replacementText})`);
+		console.log(`Applied replacement: ${textToReplace} -> ${replacementText}`);
 		window._streamingMarkdown.set(targetElement, currentMarkdown);
 		renderMarkdown(targetElement, currentMarkdown, ''); // Re-render the whole thing
 	} else {
@@ -100,7 +105,7 @@ function parseOobSwap(oobHTML, eventTypeForLogging) {
 	}
 
 	const swapOobAttr = oobElement.getAttribute('hx-swap-oob');
-	const content = oobElement.innerHTML; // For textDelta, this is markdownChunk; for textReplacement, this is payload
+	const content = oobElement.innerHTML; // For textDelta, this is markdownChunk
 
 	if (!swapOobAttr) {
 		console.warn(`${eventTypeForLogging} message did not contain hx-swap-oob:`, oobHTML);
@@ -137,19 +142,22 @@ function renderMarkdown(targetElement, markdownToRender, fallbackChunkOnError) {
 		return;
 	}
 	try {
-		const renderer = new marked.Renderer();
-		renderer.link = ({ href, title, text }) => {
-			const titleAttr = title ? ` title="${title}"` : '';
-			return `<a target="_blank" rel="noopener noreferrer" href="${href}"${titleAttr}>${text}</a>`;
-		};
-		const rawHtml = marked.parse(markdownToRender, { renderer });
+		const rawHtml = marked.parse(markdownToRender);
 		const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
 			USE_PROFILES: { html: true },
-			ADD_TAGS: ["a"],
-			ADD_ATTR: ["href", "target", "rel"],
-			ALLOWED_PROTOCOLS: ["http", "https", "mailto", "ftp"]
 		});
 		targetElement.innerHTML = sanitizedHtml;
+
+		// Ensure links open in a new tab without altering hrefs
+		try {
+			const anchors = targetElement.querySelectorAll('a[href]');
+			anchors.forEach((a) => {
+				a.setAttribute('target', '_blank');
+				a.setAttribute('rel', 'noopener noreferrer');
+			});
+		} catch (linkErr) {
+			console.warn('Error post-processing links:', linkErr);
+		}
 
 		const messagesContainer = document.getElementById('messages');
 		if (messagesContainer) {
@@ -164,28 +172,28 @@ function renderMarkdown(targetElement, markdownToRender, fallbackChunkOnError) {
 	}
 }
 
-// Function to disable the send button and show loader
-function disableSendButton() {
+// Global functions for button state management
+window.disableSendButton = function() {
     const sendButton = document.getElementById('sendButton');
     if (sendButton) {
         sendButton.disabled = true;
-        sendButton.setAttribute('aria-busy', 'true');
         sendButton.querySelector('.button__text').style.display = 'none';
         sendButton.querySelector('.button__loader').style.display = 'inline-block';
-        console.log("sendButton disabled and loader shown via hx-on from form.");
-    } else {
-        console.warn("sendButton is not found.");
+        console.log("disableSendButton: Send button disabled and loader shown.");
     }
-}
+};
 
-// Function to re-enable the send button
-function reEnableSendButton() {
+window.reEnableSendButton = function() {
     const sendButton = document.getElementById('sendButton');
     if (sendButton && sendButton.disabled) {
         sendButton.disabled = false;
-        sendButton.setAttribute('aria-busy', 'false');
         sendButton.querySelector('.button__text').style.display = 'inline-block';
         sendButton.querySelector('.button__loader').style.display = 'none';
-        console.log("sendButton re-enabled via hx-on from partial.");
+        console.log("reEnableSendButton: Send button re-enabled and text restored, loader hidden.");
     }
-}
+};
+
+// Simplified DOMContentLoaded - no complex event listeners needed
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("stream-md.js: DOMContentLoaded - global button functions available.");
+});
