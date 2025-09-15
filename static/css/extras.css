@@ -702,3 +702,15 @@ article *:not(:has(*))[data-pages] {
 .dots div:nth-child(1){animation-delay:-.32s}
 .dots div:nth-child(2){animation-delay:-.16s}
 @keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+
+/* Network Error Banner */
+.networkError {
+  display: none;
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+  padding: 8px 16px;
+  border-radius: 8px;
+  margin: 8px 0;
+  width: fit-content;
+}

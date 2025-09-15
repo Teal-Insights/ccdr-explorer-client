@@ -197,3 +197,26 @@ window.reEnableSendButton = function() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("stream-md.js: DOMContentLoaded - global button functions available.");
 });
+
+// Network error helpers
+window.showNetworkError = function() {
+    try {
+        const banner = document.querySelector('.networkError');
+        if (banner) {
+            banner.style.display = 'inline-block';
+        }
+    } catch (e) {
+        console.warn('showNetworkError failed:', e);
+    }
+};
+
+window.removeNetworkError = function() {
+    try {
+        const banner = document.querySelector('.networkError');
+        if (banner) {
+			banner.remove();
+        }
+    } catch (e) {
+        console.warn('removeNetworkError failed:', e);
+    }
+};

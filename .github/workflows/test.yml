@@ -57,7 +57,6 @@ jobs:
           echo "RESEND_API_KEY=resend_api_key" >> $GITHUB_ENV
           echo "EMAIL_FROM=noreply@ccdrexplorer.com" >> $GITHUB_ENV
           echo "OPENAI_API_KEY=openai_api_key" >> $GITHUB_ENV
-          echo "ASSISTANT_ID=asst_1234567890" >> $GITHUB_ENV
         
       - name: Verify environment variables
         run: |
