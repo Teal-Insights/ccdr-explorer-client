@@ -1,5 +1,6 @@
 from datetime import timedelta, datetime, UTC
 from typing import Optional
+from utils.chat.models import Node, ContentData, TagName, EmbeddingSource
 from sqlmodel import select, Session
 from sqlalchemy.exc import IntegrityError
 import pytest
@@ -346,3 +347,19 @@ def test_role_name_unique_per_organization(
     # Org 2 should only have the one role we added
     assert len(roles_org2) == 1
     assert roles_org2[0].name == role_name
+
+    
+def test_node_to_html_allows_inline_bold(session: Session):
+    node = Node(tag_name=TagName.P, sequence_in_parent=0)
+    session.add(node)
+    session.commit()
+    session.refresh(node)
+
+    # Attach content with inline bold markup
+    content = ContentData(node_id=node.id, text_content="<b>Clean cooking (CC)</b>", embedding_source=EmbeddingSource.TEXT_CONTENT)
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+
+    html = node.to_html(pretty=False)
+    assert "<b>Clean cooking (CC)</b>" in html

@@ -4,6 +4,7 @@
      sse-connect="{{ url_for('stream_response', conversation_id=conversation_id) }}"
      sse-swap="messageCreated,toolCallCreated,toolOutput,imageOutput,fileOutput,textDelta,toolDelta,textReplacement,runCompleted"
      hx-on:htmx:sse-before-message="handleCustomSseEvents(event)"
+     hx-on:htmx:sse-message="document.querySelectorAll('.text-carousel[data-results-carousel]').forEach(function(n){initResultsCarousel(n)})"
      sse-close="endStream"
      hx-on::sse-close="reEnableSendButton()"
      hx-on::sse-error="reEnableSendButton()"

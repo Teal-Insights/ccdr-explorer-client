@@ -1,10 +1,25 @@
 # services/semantic_search.py
-from typing import List, Optional, TypedDict, Iterable, Union, Annotated
+from typing import List, Optional, TypedDict, Iterable, Annotated, TypeVar, Generic
 from sqlmodel import Session, text, select
 from openai import OpenAI
-from pydantic import Field
+from pydantic import Field, BaseModel
 from utils.core.db import engine
 from utils.chat.models import Node, TagName, SectionType, ISO3Country, GeoAggregate
+
+T = TypeVar("T")
+
+
+class ToolResult(BaseModel, Generic[T]):
+    """Standard tool result wrapper used by function tools.
+
+    - error: fatal error message; when set, result may be None
+    - warning: non-fatal warning message
+    - result: the successful payload (may be None depending on tool)
+    """
+    error: Optional[str] = None
+    warning: Optional[str] = None
+    result: Optional[T] = None
+
 
 class SearchResult(TypedDict):
     node_id: int
@@ -22,23 +37,25 @@ def embed_query(query: str, *, model: str = "text-embedding-3-small") -> List[fl
     return emb.data[0].embedding  # List[float]
 
 
+# TODO: Replace tag_names and section_types with include and exclude, each a union of TagName and SectionType?
 def semantic_search(
     query_text: Annotated[str, Field(description="The query text to embed and search for.")],
     *,
     top_k: Annotated[int, Field(description="Maximum number of results to return.", ge=1)] = 10,
     document_ids: Annotated[Optional[Iterable[int]], Field(description="Filter results to these document IDs.")] = None,
     publication_ids: Annotated[Optional[Iterable[int]], Field(description="Filter results to these publication IDs.")] = None,
-    tag_names: Annotated[Optional[Iterable[TagName]], Field(description="Filter by node tag names.")] = None,
-    section_types: Annotated[Optional[Iterable[SectionType]], Field(description="Filter by node section types.")] = None,
+    tag_names: Annotated[Optional[Iterable[str]], Field(description=f"Filter by node tag names. Any of {", ".join(TagName.__members__.keys())}.")] = None,
+    section_types: Annotated[Optional[Iterable[str]], Field(description=f"Filter by node section types. Any of {", ".join(SectionType.__members__.keys())}.")] = None,
     include_citation_data: Annotated[bool, Field(description="Include citation metadata in rendered HTML.")] = True,
     geographies: Annotated[
-        Optional[Iterable[Union[str, ISO3Country, GeoAggregate]]],
-        Field(description="Filter by ISO3 country codes or geographic aggregates (e.g., continent:AF)."),
+        Optional[Iterable[str]],
+        Field(description=f"Filter by ISO3 country codes or geographic aggregates (e.g., continent:AF). Any of {", ".join(ISO3Country.__members__.keys())} or {", ".join(GeoAggregate.__members__.keys())}."),
     ] = None,
-) -> List[SearchResult]:
+) -> ToolResult[List[SearchResult]]:
     """Perform a semantic (cosine similarity) search over content-bearing HTML nodes in the CCDR corpus."""
-    with Session(engine) as session:
-        qvec = embed_query(query_text, model="text-embedding-3-small")
+    try:
+        with Session(engine) as session:
+            qvec = embed_query(query_text, model="text-embedding-3-small")
 
         # NOTE: Uses pgvector cosine distance operator in ORDER BY.
         # If your column type is `vector`, this works as-is.
@@ -76,14 +93,30 @@ def semantic_search(
         pub_sql, pub_params = make_filter("d.publication_id", publication_ids)
 
         tag_sql, tag_params = ("", {})
+        invalid_tag_names: List[str] = []
         if tag_names:
-            tag_sql = "AND n.tag_name = ANY(:tag_name_arr)"
-            tag_params = {"tag_name_arr": list(tag_names)}
+            valid_tag_values: List[str] = []
+            for t in tag_names:
+                if t.lower() in TagName.__members__:
+                    valid_tag_values.append(t.lower())
+                else:
+                    invalid_tag_names.append(t)
+            if valid_tag_values:
+                tag_sql = "AND n.tag_name = ANY(:tag_name_arr)"
+                tag_params = {"tag_name_arr": valid_tag_values}
 
         sect_sql, sect_params = ("", {})
+        invalid_section_types: List[str] = []
         if section_types:
-            sect_sql = "AND n.section_type = ANY(:section_type_arr)"
-            sect_params = {"section_type_arr": list(section_types)}
+            valid_section_values: List[str] = []
+            for s in section_types:
+                if s.upper() in SectionType.__members__:
+                    valid_section_values.append(s.upper())
+                else:
+                    invalid_section_types.append(s)
+            if valid_section_values:
+                sect_sql = "AND n.section_type = ANY(:section_type_arr)"
+                sect_params = {"section_type_arr": valid_section_values}
 
         # Geography filter: split inputs into ISO3 codes vs aggregates
         geog_sql, geog_params = ("", {})
@@ -169,7 +202,17 @@ def semantic_search(
                 "similarity": 1.0 - dist,  # cosine distance -> similarity
                 "html": html,
             })
-    return results
+        warn_msgs: List[str] = []
+        if not results:
+            warn_msgs.append("No results found")
+        if invalid_tag_names:
+            warn_msgs.append("Ignored invalid tag_names: " + ", ".join(invalid_tag_names))
+        if invalid_section_types:
+            warn_msgs.append("Ignored invalid section_types: " + ", ".join(invalid_section_types))
+        warning = ". ".join(warn_msgs) if warn_msgs else None
+        return ToolResult[List[SearchResult]](result=results, warning=warning)
+    except Exception as exc:
+        return ToolResult[List[SearchResult]](error=str(exc), result=None)
 
 
 def render_context(
@@ -178,13 +221,18 @@ def render_context(
     include_citation_data: Annotated[bool, Field(description="Include citation metadata in the rendered HTML.")] = True,
     pretty: Annotated[bool, Field(description="Pretty-print the HTML output with indentation.")] = True,
     separator: Annotated[str, Field(description="String used to separate sections of the rendered context.")] = "\n",
-) -> Optional[str]:
+) -> ToolResult[Optional[str]]:
     """Render the HTML node in its parent context (e.g., the containing table, figure, or section)."""
-    with Session(engine) as session:
-        return Node.render_context_html(
-            session,
-            node_id,
-            include_citation_data=include_citation_data,
-            pretty=pretty,
-            separator=separator,
-        )
+    try:
+        with Session(engine) as session:
+            html = Node.render_context_html(
+                session,
+                node_id,
+                include_citation_data=include_citation_data,
+                pretty=pretty,
+                separator=separator,
+            )
+            warning = None if html else "Node not found or no context available"
+            return ToolResult[Optional[str]](result=html, warning=warning)
+    except Exception as exc:
+        return ToolResult[Optional[str]](error=str(exc), result=None)

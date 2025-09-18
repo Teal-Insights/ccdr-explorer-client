@@ -23,7 +23,8 @@ from openai.types.responses import (
 )
 from openai import AsyncOpenAI
 
-from utils.chat.custom_functions import get_function_tool_def, get_weather
+from utils.chat.semantic_search import semantic_search, render_context, ToolResult, SearchResult
+from utils.chat.custom_functions import get_function_tool_def
 from utils.chat.sse import sse_format
 from utils.chat.files import FILE_PATHS, DOCUMENT_CITATIONS
 from utils.chat.prompt import PROMPT
@@ -150,7 +151,8 @@ async def stream_response(
                 "container": {"type": "auto"}
             })
         if "function" in enabled_tools:
-            tools.append(get_function_tool_def())
+            tools.append(get_function_tool_def(semantic_search))
+            tools.append(get_function_tool_def(render_context))
 
 
         stream = await client.responses.create(
@@ -179,12 +181,11 @@ async def stream_response(
                             case ResponseInProgressEvent() | \
                                 ResponseFileSearchCallInProgressEvent() | \
                                 ResponseFileSearchCallCompletedEvent() | \
-                                ResponseOutputItemDoneEvent() | \
                                 ResponseTextDoneEvent() | \
                                 ResponseContentPartDoneEvent() | \
-                                ResponseOutputItemDoneEvent() | \
                                 ResponseCodeInterpreterCallCodeDoneEvent() | \
                                 ResponseCodeInterpreterCallInterpretingEvent() | \
+                                ResponseFunctionCallArgumentsDoneEvent() | \
                                 ResponseCodeInterpreterCallCompletedEvent():
                                 # Don't need to handle "in progress" or intermediate "done" events
                                 # (though long-running code interpreter interpreting might warrant handling)
@@ -249,6 +250,7 @@ async def stream_response(
                                     yield sse_format("toolDelta", wrap_for_oob_swap(current_item_id, event.delta))
 
                             case ResponseFunctionCallArgumentsDeltaEvent():
+                                logger.info(f"ResponseFunctionCallArgumentsDeltaEvent: {event}")
                                 current_item_id = event.item_id
                                 delta = event.delta
                                 if current_item_id:
@@ -265,54 +267,72 @@ async def stream_response(
                                     fn_args_buffer[current_item_id] += str(delta)
                                     yield sse_format("toolDelta", wrap_for_oob_swap(current_item_id, str(delta)))
 
-                            case ResponseFunctionCallArgumentsDoneEvent():
-                                current_item_id = event.item_id
-                                args_json = fn_args_buffer.get(current_item_id, "{}")
-                                # Execute function
-                                try:
-                                    args = json.loads(args_json or "{}")
-                                    location = args.get("location", "Unknown")
-                                    dates_raw = args.get("dates", [datetime.today().strftime("%Y-%m-%d")])
-                                    weather_output = get_weather(location, dates_raw)
-                                    # Render widget
-                                    weather_widget_html = templates.get_template(
-                                        "chat/weather-widget.html"
-                                    ).render(reports=weather_output)
-                                    yield sse_format("toolOutput", weather_widget_html)
-                                    # Submit outputs and continue streaming
+                            case ResponseOutputItemDoneEvent():
+                                if event.item.type == "function_call":
+                                    logger.info(f"ResponseOutputItemDoneEvent: {event}")
+                                    current_item_id = event.item.id
+                                    function_name = event.item.name
+                                    arguments_json = json.loads(event.item.arguments)
+                                    # Execute function
                                     try:
-                                        items = await client.conversations.items.list(
-                                            conversation_id=conversation_id
-                                        )
-                                        function_call_item = next((item for item in items.data if item.id == current_item_id), None)
-                                        if function_call_item:
-                                            call_id = function_call_item.call_id
-                                            await client.conversations.items.create(
-                                                conversation_id=conversation_id,
-                                                items=[{
-                                                    "type": "function_call_output",
-                                                    "call_id": call_id,
-                                                    "output": json.dumps({
-                                                        "weather": weather_output
-                                                    })
-                                                }]
+                                        match function_name:
+                                            case "semantic_search":
+                                                tr: ToolResult[List[SearchResult]] = semantic_search(**arguments_json)
+                                                if tr.error:
+                                                    yield sse_format("toolOutput", f"Function error: {tr.error}")
+                                                else:
+                                                    # TODO: Handle empty results better, e.g. by showing error/warning message
+                                                    widget_html = templates.get_template(
+                                                        "chat/search-results-widget.html"
+                                                    ).render(items=tr.result or [])
+                                                    if tr.warning:
+                                                        widget_html = f"<div class=\"text-muted small\">{tr.warning}</div>" + widget_html
+                                                    yield sse_format("toolOutput", widget_html)
+                                            case "render_context":
+                                                tr = render_context(**arguments_json)
+                                                if tr.error:
+                                                    yield sse_format("toolOutput", f"Function error: {tr.error}")
+                                                else:
+                                                    html = tr.result or ""
+                                                    # TODO: I may want to mount node_id on the containing div (maybe even as a class, in case the node appears in more than one search result) and do an innerHTML swap to guard in case of duplicate/nested context renders
+                                                    # TODO: Optimally, I would also only expand the last instance of this class that appears on the page, not all of them
+                                                    # Wrap for oob outerHTML swap targeting prefixed slide id
+                                                    yield sse_format("toolOutput",f"<span hx-swap-oob=\"outerHTML:#slide-{arguments_json['node_id']}\">{html}</span>")
+
+                                        # Submit outputs and continue streaming
+                                        try:
+                                            items = await client.conversations.items.list(
+                                                conversation_id=conversation_id
                                             )
-                                            next_stream = await client.responses.create(
-                                                input="",
-                                                conversation=conversation_id,
-                                                model=model,
-                                                tools=tools or None,
-                                                instructions=instructions,
-                                                parallel_tool_calls=False,
-                                                stream=True
-                                            )
-                                            async for out in iterate_stream(next_stream, response_id):
-                                                yield out
-                                    except Exception as e:
-                                        logger.error(f"Error submitting tool outputs: {e}")
-                                        raise HTTPException(status_code=500, detail=str(e))
-                                except Exception as err:
-                                    yield sse_format("toolOutput", f"Function error: {err}")
+                                            function_call_item = next((item for item in items.data if item.id == current_item_id), None)
+                                            if function_call_item:
+                                                call_id = function_call_item.call_id
+                                                # Submit structured tool output back to the conversation
+                                                await client.conversations.items.create(
+                                                    conversation_id=conversation_id,
+                                                    items=[{
+                                                        "type": "function_call_output",
+                                                        "call_id": call_id,
+                                                        "output": tr.model_dump_json()
+                                                    }]
+                                                )
+                                                next_stream = await client.responses.create(
+                                                    input="",
+                                                    conversation=conversation_id,
+                                                    model=model,
+                                                    tools=tools or None,
+                                                    instructions=instructions,
+                                                    parallel_tool_calls=False,
+                                                    stream=True
+                                                )
+                                                async for out in iterate_stream(next_stream, response_id):
+                                                    yield out
+                                        except Exception as e:
+                                            logger.error(f"Error submitting tool outputs: {e}")
+                                            raise HTTPException(status_code=500, detail=str(e))
+                                    except Exception as err:
+                                        # TODO: Handle this on frontend
+                                        yield sse_format("toolOutput", f"Function error: {err}")
 
                             case ResponseCompletedEvent():
                                 yield sse_format("runCompleted", "<span hx-swap-oob=\"outerHTML:.dots\"></span>")

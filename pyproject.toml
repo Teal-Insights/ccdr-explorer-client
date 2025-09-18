@@ -28,6 +28,7 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "beautifulsoup4>=4.13.5",
     "pgvector>=0.4.1",
+    "bleach>=6.2.0",
 ]
 
 [dependency-groups]
@@ -37,4 +38,6 @@ dev = [
     "mypy>=1.15.0",
     "boto3-stubs>=1.39.0",
     "ruff>=0.12.2",
+    "types-bleach>=6.2.0.20250809",
+    "ty>=0.0.1a20",
 ]

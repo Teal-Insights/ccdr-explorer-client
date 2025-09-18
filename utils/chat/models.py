@@ -1,6 +1,7 @@
 from datetime import date, datetime, UTC
 from typing import List, Optional, Dict, Any, Iterable
 from html import escape
+import bleach
 from bs4 import BeautifulSoup
 from enum import Enum
 from sqlmodel import Field, Relationship, SQLModel, Column
@@ -875,9 +876,32 @@ class Node(SQLModel, table=True):
                 # Self-contained img element; no caption rendering
                 result = f"<img src=\"{escape(src)}\" alt=\"{escape(alt)}\"{attrs}/>"
             else:
+                # Allow a safe subset of inline HTML within text_content
+                allowed_inline_tags: List[str] = [
+                    "b",
+                    "strong",
+                    "i",
+                    "em",
+                    "u",
+                    "s",
+                    "sup",
+                    "sub",
+                    "code",
+                    "br",
+                    "span",
+                    "small",
+                    "mark",
+                    "kbd",
+                ]
                 text_parts: List[str] = []
                 if content.text_content:
-                    text_parts.append(escape(content.text_content))
+                    sanitized = bleach.clean(
+                        content.text_content,
+                        tags=allowed_inline_tags,
+                        attributes={},
+                        strip=True,
+                    )
+                    text_parts.append(sanitized)
 
                 text_html = separator.join(p for p in text_parts if p)
 
