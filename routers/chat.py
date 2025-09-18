@@ -19,12 +19,16 @@ from openai.types.responses import (
     ResponseOutputItemDoneEvent, ResponseInProgressEvent, ResponseTextDoneEvent,
     ResponseContentPartDoneEvent, ResponseCodeInterpreterCallCodeDeltaEvent,
     ResponseCodeInterpreterCallCodeDoneEvent, ResponseCodeInterpreterCallInterpretingEvent,
-    ResponseCodeInterpreterCallCompletedEvent
+    ResponseCodeInterpreterCallCompletedEvent, ResponseMcpListToolsInProgressEvent,
+    ResponseMcpListToolsCompletedEvent, ResponseMcpCallArgumentsDoneEvent,
+    ResponseMcpCallCompletedEvent, ResponseMcpCallInProgressEvent,
+    ResponseMcpListToolsFailedEvent, ResponseMcpCallArgumentsDeltaEvent
 )
 from openai import AsyncOpenAI
 
-from utils.chat.semantic_search import semantic_search, render_context, ToolResult, SearchResult
-from utils.chat.custom_functions import get_function_tool_def
+from utils.chat.semantic_search import semantic_search, render_context
+from utils.chat.function_definitions import get_function_tool_def
+from utils.chat.function_calling import ToolRegistry, Context, ToolResult
 from utils.chat.sse import sse_format
 from utils.chat.files import FILE_PATHS, DOCUMENT_CITATIONS
 from utils.chat.prompt import PROMPT
@@ -46,6 +50,13 @@ router: APIRouter = APIRouter(
 # Jinja2 templates
 templates = Jinja2Templates(directory="templates")
 
+
+async def get_async_openai() -> AsyncGenerator[AsyncOpenAI, None]:
+    client = AsyncOpenAI()
+    try:
+        yield client
+    finally:
+        await client.close()
 
 def wrap_for_oob_swap(step_id: str, text_value: str) -> str:
     return f'<span hx-swap-oob="beforeend:#step-{step_id}">{text_value}</span>'
@@ -84,7 +95,7 @@ async def send_message(
     conversation_id: str,
     userInput: str = Form(...),
     user: User = Depends(get_authenticated_user),
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
+    client: AsyncOpenAI = Depends(get_async_openai),
 ) -> HTMLResponse:
     # Create a new conversation item for the user's message
     await client.conversations.items.create(
@@ -116,7 +127,7 @@ async def stream_response(
     conversation_id: str,
     user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session),
-    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
+    client: AsyncOpenAI = Depends(get_async_openai),
 ) -> StreamingResponse:
     """
     Streams the assistant response via Server-Sent Events (SSE). If the assistant requires
@@ -138,6 +149,12 @@ async def stream_response(
         instructions = os.getenv("RESPONSES_INSTRUCTIONS", PROMPT)
         enabled_tools = [t.strip() for t in os.getenv("ENABLED_TOOLS", "").split(",") if t.strip()]
 
+        # Initialize dynamic function-calling registry and register tools
+        registry = ToolRegistry()
+        registry.add_function(semantic_search)
+        registry.add_function(render_context)
+        # TODO: Register template/sse rendering functions for each tool here and use dynamic dispatch below
+
         # Build tools
         tools: list[Dict[str, Any]] = []
         if "file_search" in enabled_tools:
@@ -151,9 +168,12 @@ async def stream_response(
                 "container": {"type": "auto"}
             })
         if "function" in enabled_tools:
-            tools.append(get_function_tool_def(semantic_search))
-            tools.append(get_function_tool_def(render_context))
-
+            for reg in registry.list():
+                tool_def = get_function_tool_def(reg.fn)
+                # Ensure the published tool name matches the registry name
+                if tool_def.get("name") != reg.name:
+                    tool_def["name"] = reg.name
+                tools.append(tool_def)
 
         stream = await client.responses.create(
             input="",
@@ -166,7 +186,7 @@ async def stream_response(
         )
 
         async def iterate_stream(s, response_id: str = "") -> AsyncGenerator[str, None]:
-            nonlocal model, conversation_id, tools, instructions
+            nonlocal model, conversation_id, tools, instructions, registry
             current_item_id: str = ""
             # Accumulate function call args per current_item_id
             fn_args_buffer: Dict[str, str] = {}
@@ -185,10 +205,18 @@ async def stream_response(
                                 ResponseContentPartDoneEvent() | \
                                 ResponseCodeInterpreterCallCodeDoneEvent() | \
                                 ResponseCodeInterpreterCallInterpretingEvent() | \
-                                ResponseFunctionCallArgumentsDoneEvent() | \
-                                ResponseCodeInterpreterCallCompletedEvent():
+                                ResponseCodeInterpreterCallCompletedEvent() | \
+                                ResponseMcpListToolsInProgressEvent() | \
+                                ResponseMcpListToolsFailedEvent() | \
+                                ResponseMcpListToolsCompletedEvent() | \
+                                ResponseMcpCallArgumentsDeltaEvent() | \
+                                ResponseMcpCallArgumentsDoneEvent() | \
+                                ResponseMcpCallCompletedEvent() | \
+                                ResponseMcpCallInProgressEvent() | \
+                                ResponseFunctionCallArgumentsDoneEvent():
                                 # Don't need to handle "in progress" or intermediate "done" events
                                 # (though long-running code interpreter interpreting might warrant handling)
+                                # We shouldn't encounter MCP events, but ignore for completeness
                                 continue
                         
                             case ResponseFileSearchCallSearchingEvent() | ResponseCodeInterpreterCallInProgressEvent():
@@ -273,15 +301,18 @@ async def stream_response(
                                     current_item_id = event.item.id
                                     function_name = event.item.name
                                     arguments_json = json.loads(event.item.arguments)
-                                    # Execute function
+                                    
+                                    # Dispatch via registry
+                                    tr: ToolResult[Any] = await registry.call(function_name, arguments_json, context=Context())
+
+                                    # Render function result
                                     try:
                                         match function_name:
                                             case "semantic_search":
-                                                tr: ToolResult[List[SearchResult]] = semantic_search(**arguments_json)
                                                 if tr.error:
                                                     yield sse_format("toolOutput", f"Function error: {tr.error}")
                                                 else:
-                                                    # TODO: Handle empty results better, e.g. by showing error/warning message
+                                                    # TODO: Just pass the tool result to the template and handle errors/warnings in the template
                                                     widget_html = templates.get_template(
                                                         "chat/search-results-widget.html"
                                                     ).render(items=tr.result or [])
@@ -289,13 +320,12 @@ async def stream_response(
                                                         widget_html = f"<div class=\"text-muted small\">{tr.warning}</div>" + widget_html
                                                     yield sse_format("toolOutput", widget_html)
                                             case "render_context":
-                                                tr = render_context(**arguments_json)
                                                 if tr.error:
                                                     yield sse_format("toolOutput", f"Function error: {tr.error}")
                                                 else:
                                                     html = tr.result or ""
-                                                    # TODO: I may want to mount node_id on the containing div (maybe even as a class, in case the node appears in more than one search result) and do an innerHTML swap to guard in case of duplicate/nested context renders
-                                                    # TODO: Optimally, I would also only expand the last instance of this class that appears on the page, not all of them
+                                                    # TODO: Guard against duplicate slides with the same id, maybe by using a class instead of an id
+                                                    # TODO: Optimally, I would only expand the last instance of this class that appears on the page, not all of them
                                                     # Wrap for oob outerHTML swap targeting prefixed slide id
                                                     yield sse_format("toolOutput",f"<span hx-swap-oob=\"outerHTML:#slide-{arguments_json['node_id']}\">{html}</span>")
 

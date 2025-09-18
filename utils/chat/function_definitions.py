@@ -527,10 +527,7 @@ def get_function_tool_def(
 
 
 if __name__ == "__main__":
-    from utils.chat.semantic_search import semantic_search, render_context
-    tool_def = get_function_tool_def(semantic_search)
-    tool_def_render_context = get_function_tool_def(render_context)
-    print("Semantic Search Tool Def:")
+    from utils.custom_functions import get_weather
+    tool_def = get_function_tool_def(get_weather)
+    print("Get Weather Tool Def:")
     print(tool_def)
-    print("Render Context Tool Def:")
-    print(tool_def_render_context)
