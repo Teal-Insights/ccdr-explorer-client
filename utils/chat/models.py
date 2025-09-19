@@ -669,6 +669,7 @@ class Document(SQLModel, table=True):
         self,
         *,
         include_citation_data: bool = False,
+        include_node_ids: bool = False,
         separator: str = "\n",
         include_html_wrapper: bool = False,
         pretty: bool = True,
@@ -687,6 +688,7 @@ class Document(SQLModel, table=True):
         for root in root_nodes:
             html_fragment = root.to_html(
                 include_citation_data=include_citation_data,
+                include_node_ids=include_node_ids,
                 is_top_level=True,
                 separator=separator,
                 pretty=False,
@@ -777,6 +779,7 @@ class Node(SQLModel, table=True):
         self,
         *,
         include_citation_data: bool = False,
+        include_node_ids: bool = False,
         is_top_level: bool = True,
         separator: str = "\n",
         pretty: bool = True,
@@ -798,6 +801,9 @@ class Node(SQLModel, table=True):
 
         # Build attributes for this node render
         attr_parts: List[str] = []
+        # Optional id attribute for the emitted element corresponding to this node
+        if include_node_ids and getattr(self, "id", None) is not None:
+            attr_parts.append(f'id="node-{self.id}"')
         # Citation attributes only on top-level elements and only when a tag is present
         if include_citation_data and is_top_level and self.tag_name is not None:
             doc = self.document
@@ -850,6 +856,7 @@ class Node(SQLModel, table=True):
             child_html: List[str] = [
                 child.to_html(
                     include_citation_data=include_citation_data,
+                    include_node_ids=include_node_ids,
                     is_top_level=False,
                     separator=separator,
                     pretty=False,
@@ -951,6 +958,7 @@ class Node(SQLModel, table=True):
         *,
         container_tags: Iterable[TagName] = (TagName.SECTION,),
         include_citation_data: bool = True,
+        include_node_ids: bool = False,
         pretty: bool = True,
         separator: str = "\n",
     ) -> Optional[str]:
@@ -982,6 +990,7 @@ class Node(SQLModel, table=True):
         target: "Node" = container or node
         return target.to_html(
             include_citation_data=include_citation_data,
+            include_node_ids=include_node_ids,
             is_top_level=True,
             separator=separator,
             pretty=pretty,
@@ -994,6 +1003,7 @@ class Node(SQLModel, table=True):
         node_id: int,
         *,
         include_citation_data: bool = True,
+        include_node_ids: bool = False,
         pretty: bool = True,
         separator: str = "\n",
     ) -> Optional[str]:
@@ -1026,6 +1036,7 @@ class Node(SQLModel, table=True):
         if tag in direct_container_tags:
             return node.to_html(
                 include_citation_data=include_citation_data,
+                include_node_ids=include_node_ids,
                 is_top_level=True,
                 separator=separator,
                 pretty=pretty,
@@ -1075,6 +1086,7 @@ class Node(SQLModel, table=True):
             node_id,
             container_tags=preferred_containers,
             include_citation_data=include_citation_data,
+            include_node_ids=include_node_ids,
             pretty=pretty,
             separator=separator,
         )
