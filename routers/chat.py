@@ -27,7 +27,6 @@ from openai.types.responses import (
 from openai import AsyncOpenAI
 
 from utils.chat.semantic_search import semantic_search, render_context
-from utils.chat.function_definitions import get_function_tool_def
 from utils.chat.function_calling import ToolRegistry, Context, ToolResult
 from utils.chat.sse import sse_format
 from utils.chat.files import FILE_PATHS, DOCUMENT_CITATIONS
@@ -144,8 +143,8 @@ async def stream_response(
 
         # Initialize dynamic function-calling registry and register tools
         registry = ToolRegistry()
-        registry.add_function(semantic_search)
-        registry.add_function(render_context)
+        registry.add_function(semantic_search, context_kwarg="context")
+        registry.add_function(render_context, context_kwarg="context")
         # TODO: Register template/sse rendering functions for each tool here and use dynamic dispatch below
 
         # Build tools
@@ -161,12 +160,8 @@ async def stream_response(
                 "container": {"type": "auto"}
             })
         if "function" in enabled_tools:
-            for reg in registry.list():
-                tool_def = get_function_tool_def(reg.fn)
-                # Ensure the published tool name matches the registry name
-                if tool_def.get("name") != reg.name:
-                    tool_def["name"] = reg.name
-                tools.append(tool_def)
+            tool_def_list = registry.get_tool_def_list()
+            tools.extend(tool_def_list)
 
         stream = await client.responses.create(
             input="",
@@ -296,7 +291,7 @@ async def stream_response(
                                     arguments_json = json.loads(event.item.arguments)
                                     
                                     # Dispatch via registry
-                                    tr: ToolResult[Any] = await registry.call(function_name, arguments_json, context=Context())
+                                    tr: ToolResult[Any] = await registry.call(function_name, arguments_json, context=Context(session=session))
 
                                     # Render function result
                                     try:

@@ -6,6 +6,7 @@ from openai import OpenAI
 from pydantic import Field
 from utils.core.db import engine
 from utils.chat.models import Node, TagName, SectionType, ISO3Country, GeoAggregate
+from utils.chat.function_calling import Context
 
 
 class SearchResult(TypedDict):
@@ -41,10 +42,16 @@ def semantic_search(
         Optional[Iterable[str]],
         Field(description=f"Filter by ISO3 country codes or geographic aggregates (e.g., continent:AF). Any of {", ".join(ISO3Country.__members__.keys())} or {", ".join(GeoAggregate.__members__.keys())}."),
     ] = None,
+    context: Optional[Context] = None
 ) -> List[SearchResult]:
     """Perform a semantic (cosine similarity) search over content-bearing HTML nodes in the CCDR corpus."""
-    with Session(engine) as session:
-        qvec = embed_query(query_text, model="text-embedding-3-small")
+    session: Session
+    if context and context.session:
+        session = context.session
+    else:
+        session = Session(engine)
+
+    qvec = embed_query(query_text, model="text-embedding-3-small")
 
     # NOTE: Uses pgvector cosine distance operator in ORDER BY.
     # If your column type is `vector`, this works as-is.
@@ -197,6 +204,10 @@ def semantic_search(
         warnings.warn("Ignored invalid tag_names: " + ", ".join(invalid_tag_names))
     if invalid_section_types:
         warnings.warn("Ignored invalid section_types: " + ", ".join(invalid_section_types))
+    
+    if context and context.session:
+        context.session.close()
+
     return results
 
 
@@ -206,16 +217,24 @@ def render_context(
     include_citation_data: Annotated[bool, Field(description="Include citation metadata in the rendered HTML.")] = True,
     pretty: Annotated[bool, Field(description="Pretty-print the HTML output with indentation.")] = True,
     separator: Annotated[str, Field(description="String used to separate sections of the rendered context.")] = "\n",
+    context: Optional[Context] = None
 ) -> Optional[str]:
     """Render the HTML node in its parent context (e.g., the containing table, figure, or section)."""
-    with Session(engine) as session:
-        html = Node.render_context_html(
-            session,
-            node_id,
-            include_citation_data=include_citation_data,
-            pretty=pretty,
-            separator=separator,
-        )
-        if not html:
-            warnings.warn("Node not found or no context available")
-        return html
+    session: Session
+    if context and context.session:
+        session = context.session
+    else:
+        session = Session(engine)
+    
+    html = Node.render_context_html(
+        session,
+        node_id,
+        include_citation_data=include_citation_data,
+        pretty=pretty,
+        separator=separator,
+    )
+    if not html:
+        warnings.warn("Node not found or no context available")
+    if context and context.session:
+        context.session.close()
+    return html
