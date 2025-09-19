@@ -7,7 +7,7 @@
     - max_height (optional): collapsed max-height (default '20rem')
  #}
 
-<div class="text-carousel mb-2 w-75" data-results-carousel style="--carousel-hpad: {{ hpad|default('3rem', true) }}; max-height: {{ max_height|default('20rem', true) }};">
+<div class="text-carousel mb-2 w-75" data-results-carousel style="--carousel-hpad: {{ hpad|default('3rem', true) }}; --collapsed-max-height: {{ max_height|default('20rem', true) }};">
     <div class="carousel-content">
         {% for item in items %}
         <div class="text-slide">

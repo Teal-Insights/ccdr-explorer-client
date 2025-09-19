@@ -718,16 +718,21 @@ article *:not(:has(*))[data-pages] {
 .text-carousel {
   --carousel-hpad: 3rem;
   height: auto;
-  max-height: 20rem;
-  overflow: hidden;
+  /* Container no longer controls truncation height; keep overflow visible so controls are visible */
   transition: max-height 0.3s ease;
   position: relative;
   border: 1px solid #dee2e6;
   border-radius: 0.375rem;
   padding: 0 var(--carousel-hpad);
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
-/* Right-edge fade so peeked next slide text doesn't overlap visibly */
+/* Remove right-edge fade; horizontal overflow is hidden */
+
+.text-carousel.expanded {}
+
+/* Right-edge fade so the next slide is visually masked */
 .text-carousel::after {
   content: "";
   position: absolute;
@@ -738,10 +743,6 @@ article *:not(:has(*))[data-pages] {
   pointer-events: none;
   z-index: 5;
   background: linear-gradient(to left, var(--bs-body-bg, #ffffff) 0%, rgba(255, 255, 255, 0) 100%);
-}
-
-.text-carousel.expanded {
-  max-height: none;
 }
 
 .carousel-content {
@@ -755,9 +756,35 @@ article *:not(:has(*))[data-pages] {
   width: 100%;
   flex-shrink: 0;
   padding: 1rem;
-  overflow-y: auto;
   box-sizing: border-box;
 }
+
+/* Truncate only the slide body, not the entire carousel */
+.text-slide .slide-body {
+  max-height: var(--collapsed-max-height, 20rem);
+  overflow: hidden;
+  position: relative;
+}
+
+.text-carousel.expanded .text-slide .slide-body {
+  max-height: none;
+}
+
+/* Optional: fade at bottom when truncated */
+.text-slide .slide-body::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3rem;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), var(--bs-body-bg, #fff));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.text-slide.is-overflowing .slide-body::after { opacity: 1; }
+.text-carousel.expanded .text-slide .slide-body::after { opacity: 0; }
 
 .carousel-nav {
   position: absolute;

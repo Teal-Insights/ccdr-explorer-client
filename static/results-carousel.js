@@ -13,6 +13,7 @@
 
     var currentIndex = 0
     var totalItems = slides.length
+    var overflowingStates = []
     try { console.debug('[results-carousel] init', { totalItems: totalItems, container: container }) } catch (e) {}
 
     function update() {
@@ -33,12 +34,18 @@
       slides.forEach(function (slide, index) {
         var readMore = slide.querySelector('[data-action="expand"]')
         var collapse = slide.querySelector('[data-action="collapse"]')
+        var controls = slide.querySelector('.expand-controls')
         if (!readMore || !collapse) return
+
+        var isOverflowing = !!overflowingStates[index]
+
+        if (controls) controls.classList.toggle('d-none', !isOverflowing)
+
         if (index === currentIndex) {
-          readMore.classList.toggle('d-none', isExpanded)
-          collapse.classList.toggle('d-none', !isExpanded)
+          readMore.classList.toggle('d-none', isExpanded || !isOverflowing)
+          collapse.classList.toggle('d-none', !isExpanded || !isOverflowing)
         } else {
-          readMore.classList.remove('d-none')
+          readMore.classList.toggle('d-none', !isOverflowing)
           collapse.classList.add('d-none')
         }
       })
@@ -65,6 +72,22 @@
       update()
     }
 
+    function measureOverflow() {
+      var wasExpanded = container.classList.contains('expanded')
+      if (wasExpanded) container.classList.remove('expanded')
+
+      overflowingStates = slides.map(function (slide) {
+        var body = slide.querySelector('.slide-body')
+        if (!body) return false
+        var isOverflowing = body.scrollHeight > body.clientHeight + 1
+        slide.classList.toggle('is-overflowing', isOverflowing)
+        return isOverflowing
+      })
+
+      if (wasExpanded) container.classList.add('expanded')
+      update()
+    }
+
     // Event bindings
     if (prevBtn) prevBtn.addEventListener('click', function () { navigate(-1) })
     if (nextBtn) nextBtn.addEventListener('click', function () { navigate(1) })
@@ -76,7 +99,8 @@
       if (collapseBtn) collapseBtn.addEventListener('click', collapse)
     })
 
-    update()
+    measureOverflow()
+    window.addEventListener('resize', debounce(measureOverflow, 150))
   }
 
   function initAllCarousels() {
@@ -91,6 +115,7 @@
   }
 
   window.initResultsCarousel = initResultsCarousel
+  function debounce(fn, delay) { var t; return function () { clearTimeout(t); t = setTimeout(fn, delay) } }
 })()
 
 
