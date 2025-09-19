@@ -140,6 +140,7 @@ async def stream_response(
         model = os.getenv("RESPONSES_MODEL", "gpt-5-mini")
         instructions = os.getenv("RESPONSES_INSTRUCTIONS", PROMPT)
         enabled_tools = [t.strip() for t in os.getenv("ENABLED_TOOLS", "").split(",") if t.strip()]
+        show_tool_call_detail = os.getenv("SHOW_TOOL_CALL_DETAIL", "false").lower() == "true"
 
         # Initialize dynamic function-calling registry and register tools
         registry = ToolRegistry()
@@ -174,10 +175,8 @@ async def stream_response(
         )
 
         async def iterate_stream(s, response_id: str = "") -> AsyncGenerator[str, None]:
-            nonlocal model, conversation_id, tools, instructions, registry
+            nonlocal model, conversation_id, tools, instructions, registry, show_tool_call_detail
             current_item_id: str = ""
-            # Accumulate function call args per current_item_id
-            fn_args_buffer: Dict[str, str] = {}
 
             try:
                 async with s as events:
@@ -230,6 +229,19 @@ async def stream_response(
                                             step_id=event.item.id
                                         )
                                     )
+                                if event.item.type in [
+                                    "function_call", "mcp_call"
+                                ]:
+                                    current_item_id = event.item.id
+                                    tool_name = event.item.name
+                                    yield sse_format(
+                                        "toolCallCreated",
+                                        templates.get_template('components/assistant-step.html').render(
+                                            step_type='toolCall',
+                                            step_id=event.item.id,
+                                            content=f"Calling {tool_name} tool..." + ("\n" if show_tool_call_detail else "")
+                                        )
+                                    )
 
                             case ResponseContentPartAddedEvent():
                                 # This event indicates the start of annotations; skip creating a new assistantMessage
@@ -266,21 +278,9 @@ async def stream_response(
                                     yield sse_format("toolDelta", wrap_for_oob_swap(current_item_id, event.delta))
 
                             case ResponseFunctionCallArgumentsDeltaEvent():
-                                logger.info(f"ResponseFunctionCallArgumentsDeltaEvent: {event}")
-                                current_item_id = event.item_id
-                                delta = event.delta
-                                if current_item_id:
-                                    # Emit a toolCallCreated once per current_item_id
-                                    if current_item_id not in fn_args_buffer:
-                                        yield sse_format(
-                                            "toolCallCreated",
-                                            templates.get_template('chat/assistant-step.html').render(
-                                                step_type='toolCall',
-                                                step_id=current_item_id
-                                            )
-                                        )
-                                        fn_args_buffer[current_item_id] = ""
-                                    fn_args_buffer[current_item_id] += str(delta)
+                                if show_tool_call_detail:
+                                    current_item_id = event.item_id
+                                    delta = event.delta
                                     yield sse_format("toolDelta", wrap_for_oob_swap(current_item_id, str(delta)))
 
                             case ResponseOutputItemDoneEvent():
