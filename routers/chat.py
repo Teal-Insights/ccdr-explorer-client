@@ -51,13 +51,6 @@ router: APIRouter = APIRouter(
 templates = Jinja2Templates(directory="templates")
 
 
-async def get_async_openai() -> AsyncGenerator[AsyncOpenAI, None]:
-    client = AsyncOpenAI()
-    try:
-        yield client
-    finally:
-        await client.close()
-
 def wrap_for_oob_swap(step_id: str, text_value: str) -> str:
     return f'<span hx-swap-oob="beforeend:#step-{step_id}">{text_value}</span>'
 
@@ -95,7 +88,7 @@ async def send_message(
     conversation_id: str,
     userInput: str = Form(...),
     user: User = Depends(get_authenticated_user),
-    client: AsyncOpenAI = Depends(get_async_openai),
+    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
 ) -> HTMLResponse:
     # Create a new conversation item for the user's message
     await client.conversations.items.create(
@@ -127,7 +120,7 @@ async def stream_response(
     conversation_id: str,
     user: User = Depends(get_authenticated_user),
     session: Session = Depends(get_session),
-    client: AsyncOpenAI = Depends(get_async_openai),
+    client: AsyncOpenAI = Depends(lambda: AsyncOpenAI()),
 ) -> StreamingResponse:
     """
     Streams the assistant response via Server-Sent Events (SSE). If the assistant requires
