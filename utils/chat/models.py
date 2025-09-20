@@ -1,8 +1,15 @@
+from dataclasses import dataclass
+from citeproc import CitationStylesStyle
+from citeproc import CitationStylesBibliography
+from citeproc import Citation, CitationItem
+from citeproc import formatter
+from citeproc.source.json import CiteProcJSON
 from datetime import date, datetime, UTC
-from typing import List, Optional, Dict, Any, Iterable
+from typing import List, Optional, Dict, Any, Iterable, Tuple, Literal
 from html import escape
 import bleach
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 from enum import Enum
 from sqlmodel import Field, Relationship, SQLModel, Column
 from sqlmodel import Session
@@ -10,8 +17,130 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session as SASession
 from pydantic import HttpUrl, field_validator
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped
 from pgvector.sqlalchemy import Vector
+
+
+@dataclass
+class RenderOptions:
+    style: str = "apa"
+    locale: str = "en-US"
+    output: Literal["html", "text"] = "html"
+    mode: str = "bibliography"
+
+
+def render_csl_item(
+    csl_item: Dict[str, Any],
+    *,
+    options: Optional[RenderOptions] = None,
+) -> str:
+    opts = options or RenderOptions()
+
+    style_obj = CitationStylesStyle(opts.style, validate=False, locale=opts.locale)
+
+    items = [csl_item]
+    bib_source = CiteProcJSON(items)
+    bibliography = CitationStylesBibliography(style_obj, bib_source, formatter.html if opts.output == "html" else formatter.plain)
+
+    # Register a proper Citation with one CitationItem for the item's id
+    citation = Citation([CitationItem(csl_item["id"])])  # type: ignore[index]
+    bibliography.register(citation)
+
+    rendered_parts: List[str] = []
+    for item in bibliography.bibliography():  # type: ignore[assignment]
+        rendered_parts.append(str(item))
+    return rendered_parts[0]
+
+
+def guess_medium_from_mimetype(mime_type: Optional[str]) -> Optional[str]:
+    mapping = {"pdf": "PDF", "html": "HTML", "word": "DOCX", "msword": "DOCX", "docx": "DOCX"}
+    for key, value in mapping.items():
+        if mime_type and key in mime_type.lower():
+            return value
+    return None
+
+
+def normalize_language(code_or_label: Optional[str]) -> Optional[str]:
+    if not code_or_label:
+        return None
+    s = code_or_label.strip()
+    if not s:
+        return None
+    lower = s.lower()
+    # Map common labels to BCP-47
+    mapping = {
+        "en": "en-US",
+        "eng": "en-US",
+        "english": "en-US",
+        "fr": "fr-FR",
+        "fra": "fr-FR",
+        "french": "fr-FR",
+        "es": "es-ES",
+        "spa": "es-ES",
+        "spanish": "es-ES",
+    }
+    return mapping.get(lower, s)
+
+
+def parse_description_for_fields(description: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    if not description:
+        return None, None
+    desc = description.strip()
+    if not desc:
+        return None, None
+    # Detect annex/appendix style labels for CSL section
+    lower = desc.lower()
+    if "annex" in lower or "appendix" in lower:
+        return desc, None
+    # Otherwise, no section; return language hint when description is like "English PDF"
+    lang_hint = None
+    tokens = [t for t in desc.replace("-", " ").split() if t]
+    for t in tokens:
+        norm = normalize_language(t)
+        if norm != t and norm is not None:
+            lang_hint = norm
+            break
+    return None, lang_hint
+
+
+def build_variant_suffix(
+    *,
+    description: Optional[str],
+    medium: Optional[str],
+    language_label: Optional[str],
+    version: Optional[str],
+) -> Optional[str]:
+    parts: List[str] = []
+    if description and description.strip():
+        parts.append(description.strip())
+    if medium:
+        parts.append(medium)
+    if language_label:
+        parts.append(language_label)
+    if version and version.strip():
+        parts.append(f"Version {version.strip()}")
+    if not parts:
+        return None
+    return f"({'; '.join(parts)})"
+
+
+def compute_compacted_ranges(numbers: Iterable[int]) -> List[Tuple[int, int]]:
+    """Compact an iterable of page numbers into consecutive ranges.
+
+    Returns a list of (start, end) tuples with start <= end, sorted ascending.
+    """
+    unique_sorted: List[int] = sorted({int(n) for n in numbers})
+    if not unique_sorted:
+        return []
+    ranges: List[Tuple[int, int]] = []
+    start = end = unique_sorted[0]
+    for n in unique_sorted[1:]:
+        if n == end + 1:
+            end = n
+        else:
+            ranges.append((start, end))
+            start = end = n
+    ranges.append((start, end))
+    return ranges
 
 
 def list_to_ranges(nums):
@@ -19,36 +148,59 @@ def list_to_ranges(nums):
     Helper to convert a list of numbers into a string of ranges.
     Used for the `data-pages` attribute on HTML elements.
     """
-    if not nums:
-        return ""
-    
-    # Sort the list to handle unsorted input
-    nums = sorted(set(nums))  # Remove duplicates and sort
-    
-    ranges = []
-    start = nums[0]
-    end = nums[0]
-    
-    for i in range(1, len(nums)):
-        if nums[i] == end + 1:
-            # Continue the current range
-            end = nums[i]
+    ranges = compute_compacted_ranges(nums or [])
+    parts: List[str] = []
+    for a, b in ranges:
+        parts.append(str(a) if a == b else f"{a}-{b}")
+    return ",".join(parts)
+
+
+def format_pages_for_citation(numbers: Iterable[int]) -> Optional[str]:
+    """Format a list of page numbers for human-readable citations.
+
+    - Single page => "p. N"
+    - Multiple pages/ranges => "pp. A–B, C, D–E"
+    """
+    ranges = compute_compacted_ranges(numbers)
+    if not ranges:
+        return None
+    parts: List[str] = [str(a) if a == b else f"{a}–{b}" for a, b in ranges]
+    if len(ranges) == 1 and ranges[0][0] == ranges[0][1]:
+        return f"p. {parts[0]}"
+    return f"pp. {', '.join(parts)}"
+
+
+def _format_pages_for_citation(pages: List[int]) -> Optional[str]:
+    # Backward-compatible wrapper
+    return format_pages_for_citation(pages)
+
+
+def format_pages_for_citation_with_logical(
+    pdf_pages: Iterable[int],
+    pdf_to_logical: Dict[int, Optional[str]],
+) -> Optional[str]:
+    """Format pages preferring logical labels when available, falling back to PDF numbers.
+
+    Uses PDF page numbers to determine ordering and range grouping, but renders
+    range endpoints using logical labels when present.
+    """
+    ranges = compute_compacted_ranges(pdf_pages)
+    if not ranges:
+        return None
+    def label(n: int) -> str:
+        v = pdf_to_logical.get(n)
+        if v is None or str(v).strip() == "":
+            return str(n)
+        return str(v)
+    parts: List[str] = []
+    for a, b in ranges:
+        if a == b:
+            parts.append(label(a))
         else:
-            # End the current range and start a new one
-            if start == end:
-                ranges.append(str(start))
-            else:
-                ranges.append(f"{start}-{end}")
-            start = nums[i]
-            end = nums[i]
-    
-    # Handle the last range
-    if start == end:
-        ranges.append(str(start))
-    else:
-        ranges.append(f"{start}-{end}")
-    
-    return ",".join(ranges)
+            parts.append(f"{label(a)}–{label(b)}")
+    if len(ranges) == 1 and ranges[0][0] == ranges[0][1]:
+        return f"p. {parts[0]}"
+    return f"pp. {', '.join(parts)}"
 
 
 # Enums for document and node types
@@ -525,7 +677,7 @@ class Publication(SQLModel, table=True):
         return v
 
     # Relationships
-    documents: Mapped[List["Document"]] = Relationship(
+    documents: List["Document"] = Relationship(
         back_populates="publication", cascade_delete=True
     )
 
@@ -540,7 +692,7 @@ class Publication(SQLModel, table=True):
         parts: List[str] = []
 
         authors = cleaned(self.authors)
-        year = f"({self.publication_date.year})" if getattr(self, "publication_date", None) else None
+        year = f"({self.publication_date.year})" if self.publication_date else None
         author_year = " ".join(p for p in (authors, year) if p)
         if author_year:
             parts.append(author_year + ".")
@@ -621,6 +773,124 @@ class Publication(SQLModel, table=True):
     def metadata_models(self, value: PublicationMetadata) -> None:
         self.publication_metadata = value.model_dump()
 
+    def to_csl_item(self, document: Optional["Document"] = None) -> Dict[str, Any]:
+        """Build a CSL-JSON item representing this publication, optionally scoped to a document variant.
+
+        - Hardcodes publisher to "World Bank" for now.
+        - Maps repository/source to CSL `archive`.
+        - Prefers document-level URL when available.
+        - Includes document language, version, and section (when description indicates an annex/appendix).
+        """
+        item_id: str
+        if document is not None and document.id is not None:
+            item_id = f"pub-{self.id}-doc-{document.id}"
+        elif self.id is not None:
+            item_id = f"pub-{self.id}"
+        else:
+            item_id = "pub-unknown"
+
+        # Authors parsing into CSL list
+        authors_csl: List[Dict[str, Any]] = []
+        if self.authors:
+            authors_csl = self._parse_authors_to_csl(self.authors)
+
+        # Date mapping to CSL issued
+        issued: Optional[Dict[str, Any]] = None
+        if self.publication_date is not None:
+            issued = {"date-parts": [[self.publication_date.year, self.publication_date.month, self.publication_date.day]]}
+
+        # Document-specific fields
+        url: Optional[str] = None
+        language_bcp47: Optional[str] = None
+        version: Optional[str] = None
+        section: Optional[str] = None
+        medium: Optional[str] = None
+        if document is not None:
+            url = document.storage_url or document.download_url
+            version = document.version
+            medium = guess_medium_from_mimetype(document.mime_type)
+            language_bcp47 = normalize_language(document.language)
+            section_parsed, lang_hint = parse_description_for_fields(document.description)
+            if section_parsed:
+                section = section_parsed
+            if language_bcp47 is None and lang_hint is not None:
+                language_bcp47 = lang_hint
+
+        # Fallback URL from publication
+        if not url:
+            url = self.source_url or self.uri
+
+        csl: Dict[str, Any] = {
+            "id": item_id,
+            "type": "report",
+            "title": self.title or "",
+            "author": authors_csl,
+            "issued": issued,
+            "publisher": "World Bank",
+            "archive": self.source,
+            "URL": url,
+        }
+
+        if version:
+            csl["version"] = version
+        if language_bcp47:
+            csl["language"] = language_bcp47
+        if section:
+            csl["section"] = section
+        if medium:
+            # Not widely used by styles; included for completeness
+            csl["medium"] = medium
+
+        return csl
+
+    @staticmethod
+    def _parse_authors_to_csl(authors: str) -> List[Dict[str, Any]]:
+        """Parse an author string into a CSL author list.
+
+        Heuristics:
+        - Split on ';' or ' and '.
+        - If token contains a comma: treat as "Family, Given".
+        - Else if multiple tokens: last token is family, remainder is given.
+        - If only one token or ambiguous, use literal.
+        """
+        if not authors:
+            return []
+        raw = authors.strip()
+        if not raw:
+            return []
+        # Quick corporate author detection
+        corporate_tokens = {"world bank", "world bank group", "international monetary fund", "imf"}
+        lowered = raw.lower()
+        if lowered in corporate_tokens:
+            return [{"literal": authors.strip()}]
+
+        # Split authors
+        parts: List[str]
+        if ";" in raw:
+            parts = [p.strip() for p in raw.split(";") if p.strip()]
+        elif " and " in raw:
+            parts = [p.strip() for p in raw.split(" and ") if p.strip()]
+        else:
+            parts = [raw]
+
+        result: List[Dict[str, Any]] = []
+        for name in parts:
+            if not name:
+                continue
+            if "," in name:
+                fam, given = [s.strip() for s in name.split(",", 1)]
+                if fam and given:
+                    result.append({"family": fam, "given": given})
+                    continue
+            tokens = [t for t in name.split() if t]
+            if len(tokens) >= 2:
+                family = tokens[-1]
+                given = " ".join(tokens[:-1])
+                result.append({"family": family, "given": given})
+            else:
+                result.append({"literal": name})
+        return result
+
 
 class Document(SQLModel, table=True):
     __table_args__ = {
@@ -658,10 +928,10 @@ class Document(SQLModel, table=True):
         return v
 
     # Relationships
-    publication: Mapped[Optional[Publication]] = Relationship(
+    publication: Optional[Publication] = Relationship(
         back_populates="documents"
     )
-    nodes: Mapped[List["Node"]] = Relationship(
+    nodes: List["Node"] = Relationship(
         back_populates="document", cascade_delete=True
     )
 
@@ -704,6 +974,44 @@ class Document(SQLModel, table=True):
             return soup.prettify(formatter="html")
         return result
 
+    def get_citation(
+        self,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        output: Literal["html", "text"] = "html",
+        details_mode: str = "suffix",
+    ) -> Optional[str]:
+        """Render a citation for this document using its publication context.
+
+        details_mode: "suffix" | "csl" | "both" (we currently only implement suffix visibility).
+        Returns None when publication context is missing.
+        """
+        if self.publication is None:
+            return None
+
+        csl_item = self.publication.to_csl_item(self)
+        rendered = render_csl_item(csl_item, options=RenderOptions(style=style, locale=locale, output=output))
+
+        # Build human-visible suffix disambiguator
+        if details_mode in ("suffix", "both"):
+            medium = guess_medium_from_mimetype(self.mime_type)
+            # Prefer explicit language; otherwise try to infer from description
+            lang = normalize_language(self.language) if self.language else None
+            section, lang_hint = parse_description_for_fields(self.description)
+            # section is only used in CSL; for suffix we include the original description text
+            if lang is None:
+                lang = lang_hint
+            suffix = build_variant_suffix(
+                description=self.description,
+                medium=medium,
+                language_label=lang,
+                version=self.version,
+            )
+            if suffix:
+                return f"{rendered} {suffix}"
+        return rendered
+
 
 class Node(SQLModel, table=True):
     __table_args__ = {
@@ -725,22 +1033,22 @@ class Node(SQLModel, table=True):
     )
 
     # Relationships
-    document: Mapped[Optional[Document]] = Relationship(back_populates="nodes")
-    parent: Mapped[Optional["Node"]] = Relationship(
+    document: Optional[Document] = Relationship(back_populates="nodes")
+    parent: Optional["Node"] = Relationship(
         back_populates="children", sa_relationship_kwargs={"remote_side": "Node.id"}
     )
-    children: Mapped[List["Node"]] = Relationship(
+    children: List["Node"] = Relationship(
         back_populates="parent", cascade_delete=True
     )
-    content_data: Mapped[Optional["ContentData"]] = Relationship(
+    content_data: Optional["ContentData"] = Relationship(
         back_populates="node", cascade_delete=True
     )
-    source_relations: Mapped[List["Relation"]] = Relationship(
+    source_relations: List["Relation"] = Relationship(
         back_populates="source_node",
         sa_relationship_kwargs={"foreign_keys": "Relation.source_node_id"},
         cascade_delete=True,
     )
-    target_relations: Mapped[List["Relation"]] = Relationship(
+    target_relations: List["Relation"] = Relationship(
         back_populates="target_node",
         sa_relationship_kwargs={"foreign_keys": "Relation.target_node_id"},
         cascade_delete=True,
@@ -755,6 +1063,65 @@ class Node(SQLModel, table=True):
             elif isinstance(item, dict):
                 result.append(PositionalData(**item))
         return result
+
+    def get_citation(
+        self,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        output: Literal["html", "text"] = "html",
+        details_mode: str = "suffix",
+    ) -> Optional[str]:
+        """Render a citation for the node's document variant.
+
+        Returns None when the node is not attached to a document/publication.
+        """
+        if self.document is None:
+            return None
+        base = self.document.get_citation(
+            style=style,
+            locale=locale,
+            output=output,
+            details_mode=details_mode,
+        )
+        if base is None:
+            return None
+
+        # Append page information derived from positional_data, when available.
+        def extract_pages_from(node: "Node") -> Tuple[List[int], Dict[int, Optional[str]]]:
+            found: List[int] = []
+            mapping: Dict[int, Optional[str]] = {}
+            for pos in (node.positional_data or []):
+                page_value = None
+                if isinstance(pos, dict):
+                    page_value = pos.get("page_pdf")
+                    logical_value = pos.get("page_logical")
+                else:
+                    page_value = getattr(pos, "page_pdf", None)
+                    logical_value = getattr(pos, "page_logical", None)
+                if page_value is not None:
+                    try:
+                        pdf_num = int(page_value)
+                        found.append(pdf_num)
+                        if pdf_num not in mapping:
+                            mapping[pdf_num] = logical_value
+                    except (TypeError, ValueError):
+                        continue
+            return found, mapping
+
+        pages, pdf_to_logical = extract_pages_from(self)
+        if not pages:
+            current = self.parent
+            while current is not None and not pages:
+                pages, pdf_to_logical = extract_pages_from(current)
+                if pages:
+                    break
+                current = current.parent
+
+        page_suffix = format_pages_for_citation_with_logical(pages, pdf_to_logical)
+        if page_suffix:
+            return f"{base} ({page_suffix})"
+        return base
 
     @positional_data_models.setter
     def positional_data_models(self, value: List[PositionalData]) -> None:
@@ -802,7 +1169,7 @@ class Node(SQLModel, table=True):
         # Build attributes for this node render
         attr_parts: List[str] = []
         # Optional id attribute for the emitted element corresponding to this node
-        if include_node_ids and getattr(self, "id", None) is not None:
+        if include_node_ids and self.id is not None:
             attr_parts.append(f'id="node-{self.id}"')
         # Citation attributes only on top-level elements and only when a tag is present
         if include_citation_data and is_top_level and self.tag_name is not None:
@@ -810,22 +1177,22 @@ class Node(SQLModel, table=True):
             if doc is not None:
                 pub = doc.publication
                 if pub is not None:
-                    authors = cleaned_string(getattr(pub, "authors", None))
+                    authors = cleaned_string(pub.authors)
                     if authors:
                         attr_parts.append(f'data-publication-authors="{escape(authors)}"')
-                    title = cleaned_string(getattr(pub, "title", None))
+                    title = cleaned_string(pub.title)
                     if title:
                         attr_parts.append(f'data-publication-title="{escape(title)}"')
-                    pub_date = getattr(pub, "publication_date", None)
+                    pub_date = pub.publication_date
                     if pub_date is not None:
                         attr_parts.append(f'data-publication-date="{pub_date.isoformat()}"')
-                    source = cleaned_string(getattr(pub, "source", None))
+                    source = cleaned_string(pub.source)
                     if source:
                         attr_parts.append(f'data-publication-source="{escape(source)}"')
-                    pub_url = cleaned_string(getattr(pub, "source_url", None)) or cleaned_string(getattr(pub, "uri", None))
+                    pub_url = cleaned_string(pub.source_url) or cleaned_string(pub.uri)
                     if pub_url:
                         attr_parts.append(f'data-publication-url="{escape(pub_url)}"')
-                doc_desc = cleaned_string(getattr(doc, "description", None))
+                doc_desc = cleaned_string(doc.description)
                 if doc_desc:
                     attr_parts.append(f'data-document-description="{escape(doc_desc)}"')
 
@@ -836,7 +1203,7 @@ class Node(SQLModel, table=True):
             if isinstance(pos, dict):
                 page_value = pos.get("page_pdf")
             else:
-                page_value = getattr(pos, "page_pdf", None)
+                page_value = pos.get("page_pdf") if isinstance(pos, dict) else getattr(pos, "page_pdf", None)
             if page_value is not None:
                 try:
                     pages.append(int(page_value))
@@ -922,9 +1289,11 @@ class Node(SQLModel, table=True):
         if pretty:
             soup = BeautifulSoup(f"<div>{result}</div>", "html.parser")
             div = soup.div
+            if div is None:
+                return soup.prettify(formatter="html")
             parts: List[str] = []
             for child in div.contents:
-                if hasattr(child, "prettify"):
+                if isinstance(child, Tag):
                     parts.append(child.prettify(formatter="html"))
                 else:
                     parts.append(str(child))
@@ -1115,8 +1484,8 @@ class ContentData(SQLModel, table=True):
         return v
 
     # Relationships
-    node: Mapped[Node] = Relationship(back_populates="content_data")
-    embeddings: Mapped[List["Embedding"]] = Relationship(
+    node: Node = Relationship(back_populates="content_data")
+    embeddings: List["Embedding"] = Relationship(
         back_populates="content_data", cascade_delete=True
     )
 
@@ -1166,10 +1535,10 @@ def _validate_contentdata_fields(
     for obj in candidates:
         if isinstance(obj, ContentData):
             node = obj.node
-            if node is None and getattr(obj, "node_id", None) is not None:
+            if node is None and obj.node_id is not None:
                 # Fallback to load node if relationship not populated
                 node = session.get(Node, obj.node_id)
-            node_tag: Optional[TagName] = getattr(node, "tag_name", None) if node is not None else None
+            node_tag: Optional[TagName] = node.tag_name if node is not None else None
             ensure_description_caption_allowed(node_tag, obj.description, obj.caption)
 
 
@@ -1184,11 +1553,11 @@ class Relation(SQLModel, table=True):
     relation_type: RelationType
 
     # Relationships
-    source_node: Mapped[Node] = Relationship(
+    source_node: Node = Relationship(
         back_populates="source_relations",
         sa_relationship_kwargs={"foreign_keys": "Relation.source_node_id"},
     )
-    target_node: Mapped[Node] = Relationship(
+    target_node: Node = Relationship(
         back_populates="target_relations",
         sa_relationship_kwargs={"foreign_keys": "Relation.target_node_id"},
     )
@@ -1206,7 +1575,7 @@ class Embedding(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
-    content_data: Mapped[Optional[ContentData]] = Relationship(
+    content_data: Optional[ContentData] = Relationship(
         back_populates="embeddings"
     )
 

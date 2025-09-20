@@ -1,17 +1,16 @@
-{#
-  Usage:
-  {% include 'chat/search-results-widget.html' with context %}
-  Expects:
-    - items: iterable of HTML-safe strings (or plain text)
-    - hpad (optional): horizontal padding (default '3rem')
-    - max_height (optional): collapsed max-height (default '20rem')
- #}
-
-<div class="text-carousel mb-2 w-75" data-results-carousel style="--carousel-hpad: {{ hpad|default('3rem', true) }}; --collapsed-max-height: {{ max_height|default('20rem', true) }};">
+{% if tr.error %}
+    <div class="text-danger">Function error</div>
+{% elif not tr.result %}
+    <div class="text-muted">No results found</div>
+{% else %}
+<div class="text-carousel mb-2 w-75" data-results-carousel style="--carousel-hpad: 3rem; --collapsed-max-height: 20rem;">
     <div class="carousel-content">
-        {% for item in items %}
+        {% for item in tr.result %}
         <div class="text-slide">
-            <div id="slide-{{ item.node_id }}" class="slide-body">{{ item.html | safe }}</div>
+            <div id="slide-{{ item.node_id }}" class="slide-body">
+                {{ item.html | safe }}
+                <p class="text-muted small mt-2"><b>Source:</b> {{item.citation | safe }}</p>
+            </div>
             <div class="expand-controls">
                 <button type="button" class="btn btn-primary btn-sm read-more-btn" data-action="expand">Read more</button>
                 <button type="button" class="btn btn-secondary btn-sm d-none" data-action="collapse">Hide</button>
@@ -27,5 +26,4 @@
         <span class="badge bg-secondary me-1" data-role="indicator"></span>
     </div>
 </div>
-
-
+{% endif %}

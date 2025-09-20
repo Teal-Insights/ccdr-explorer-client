@@ -1,0 +1,10 @@
+{% if tr.error %}
+    <div class="text-danger">Function error</div>
+{% elif not tr.result %}
+    <div class="text-muted">No context found</div>
+{% else %}
+    <span hx-swap-oob=\"outerHTML:#slide-{{tr.result.node_id}}\">
+        {{tr.result.html | safe}}
+        <p class="text-muted small mt-2"><b>Source:</b> {{tr.result.citation | safe}}</p>
+    </span>
+{% endif %}

@@ -13,9 +13,17 @@ class SearchResult(TypedDict):
     node_id: int
     document_id: int
     publication_id: Optional[int]
-    distance: float
     similarity: float
     html: str
+    citation: str
+
+class ContextResult(TypedDict):
+    node_id: int
+    parent_node_id: int
+    document_id: int
+    publication_id: Optional[int]
+    html: str
+    citation: str
 
 
 def embed_query(query: str, *, model: str = "text-embedding-3-small") -> List[float]:
@@ -37,7 +45,6 @@ def semantic_search(
     publication_ids: Annotated[Optional[Iterable[int]], Field(description="Filter results to these publication IDs.")] = None,
     tag_names: Annotated[Optional[Iterable[str]], Field(description=f"Filter by node tag names. Any of {", ".join(TagName.__members__.keys())}.")] = None,
     section_types: Annotated[Optional[Iterable[str]], Field(description=f"Filter by node section types. Any of {", ".join(SectionType.__members__.keys())}.")] = None,
-    include_citation_data: Annotated[bool, Field(description="Include citation metadata in rendered HTML.")] = True,
     geographies: Annotated[
         Optional[Iterable[str]],
         Field(description=f"Filter by ISO3 country codes or geographic aggregates (e.g., continent:AF). Any of {", ".join(ISO3Country.__members__.keys())} or {", ".join(GeoAggregate.__members__.keys())}."),
@@ -186,18 +193,18 @@ def semantic_search(
     for r in rows:
         node = nodes_by_id.get(r["node_id"])
         html = node.to_html(
-            include_citation_data=include_citation_data,
+            include_citation_data=False,
             pretty=False,
         ) if node else ""
         dist = float(r["distance"])
-        results.append({
-            "node_id": int(r["node_id"]),
-            "document_id": int(r["document_id"]),
-            "publication_id": int(r["publication_id"]) if r["publication_id"] is not None else None,
-            "distance": dist,
-            "similarity": 1.0 - dist,  # cosine distance -> similarity
-            "html": html,
-        })
+        results.append(SearchResult(
+            node_id=int(r["node_id"]),
+            document_id=int(r["document_id"]),
+            publication_id=int(r["publication_id"]) if r["publication_id"] is not None else None,
+            similarity=1.0 - dist,  # cosine distance -> similarity
+            html=html,
+            citation=node.get_citation() if node else "",
+        ))
     if not results:
         warnings.warn("No results found")
     if invalid_tag_names:
@@ -214,11 +221,10 @@ def semantic_search(
 def render_context(
     node_id: Annotated[int, Field(description="ID of the HTML node to render in context.")],
     *,
-    include_citation_data: Annotated[bool, Field(description="Include citation metadata in the rendered HTML.")] = True,
     pretty: Annotated[bool, Field(description="Pretty-print the HTML output with indentation.")] = True,
     separator: Annotated[str, Field(description="String used to separate sections of the rendered context.")] = "\n",
     context: Optional[Context] = None
-) -> Optional[str]:
+) -> Optional[ContextResult]:
     """Render the HTML node in its parent context (e.g., the containing table, figure, or section)."""
     session: Session
     if context and context.session:
@@ -226,10 +232,14 @@ def render_context(
     else:
         session = Session(engine)
     
-    html = Node.render_context_html(
+    node = session.get(Node, node_id)
+    if not node:
+        warnings.warn("Node not found")
+        return None
+    html = node.render_context_html(
         session,
         node_id,
-        include_citation_data=include_citation_data,
+        include_citation_data=False,
         pretty=pretty,
         separator=separator,
     )
@@ -237,4 +247,11 @@ def render_context(
         warnings.warn("Node not found or no context available")
     if context and context.session:
         context.session.close()
-    return html
+    return ContextResult(
+        node_id=node.id,
+        parent_node_id=node.parent_id,
+        document_id=node.document_id,
+        publication_id=node.document.publication_id,
+        html=html,
+        citation=node.get_citation(),
+    )

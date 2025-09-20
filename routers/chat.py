@@ -236,7 +236,7 @@ async def stream_response(
                                     tool_name = event.item.name
                                     yield sse_format(
                                         "toolCallCreated",
-                                        templates.get_template('components/assistant-step.html').render(
+                                        templates.get_template('chat/assistant-step.html').render(
                                             step_type='toolCall',
                                             step_id=event.item.id,
                                             content=f"Calling {tool_name} tool..." + ("\n" if show_tool_call_detail else "")
@@ -295,27 +295,22 @@ async def stream_response(
 
                                     # Render function result
                                     try:
+                                        result_html = ""
                                         match function_name:
                                             case "semantic_search":
-                                                if tr.error:
-                                                    yield sse_format("toolOutput", f"Function error: {tr.error}")
-                                                else:
-                                                    # TODO: Just pass the tool result to the template and handle errors/warnings in the template
-                                                    widget_html = templates.get_template(
-                                                        "chat/search-results-widget.html"
-                                                    ).render(items=tr.result or [])
-                                                    if tr.warning:
-                                                        widget_html = f"<div class=\"text-muted small\">{tr.warning}</div>" + widget_html
-                                                    yield sse_format("toolOutput", widget_html)
+                                                # TODO: Just pass the tool result to the template and handle errors/warnings in the template
+                                                result_html = templates.get_template(
+                                                    "chat/search-results-widget.html"
+                                                ).render(tr=tr)
                                             case "render_context":
-                                                if tr.error:
-                                                    yield sse_format("toolOutput", f"Function error: {tr.error}")
-                                                else:
-                                                    html = tr.result or ""
-                                                    # TODO: Guard against duplicate slides with the same id, maybe by using a class instead of an id
-                                                    # TODO: Optimally, I would only expand the last instance of this class that appears on the page, not all of them
-                                                    # Wrap for oob outerHTML swap targeting prefixed slide id
-                                                    yield sse_format("toolOutput",f"<span hx-swap-oob=\"outerHTML:#slide-{arguments_json['node_id']}\">{html}</span>")
+                                                result_html = templates.get_template(
+                                                    "chat/context-result.html"
+                                                ).render(tr=tr)
+                                        # TODO: Guard against rendering duplicate slides with the same id, maybe by using a class instead of an id
+                                        # TODO: Optimally, I would only expand the last instance of this class that appears on the page, not all of them
+                                        # Wrap for oob outerHTML swap targeting prefixed slide id
+                                        if result_html:
+                                            yield sse_format("toolOutput", result_html)
 
                                         # Submit outputs and continue streaming
                                         try:
