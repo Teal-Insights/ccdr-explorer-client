@@ -3,7 +3,7 @@ import asyncio
 from urllib.parse import quote as url_quote
 from datetime import datetime
 from logging import getLogger, Logger
-from typing import Optional, List, Dict, Any, AsyncGenerator
+from typing import Optional, List, Dict, Any, AsyncGenerator, TypeVar
 from fastapi import APIRouter, Form, Depends, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import Response, HTMLResponse, StreamingResponse
@@ -52,6 +52,40 @@ templates = Jinja2Templates(directory="templates")
 
 def wrap_for_oob_swap(step_id: str, text_value: str) -> str:
     return f'<span hx-swap-oob="beforeend:#step-{step_id}">{text_value}</span>'
+
+
+T = TypeVar("T")
+
+def _is_conv_locked(e: Exception) -> bool:
+    m = str(e)
+    return (
+        "conversation_locked" in m
+        or "conversation_lock_failed" in m
+        or "Failed to acquire conversation lock" in m
+        or "Another process is currently operating on this conversation" in m
+    )
+
+def _is_call_not_found(e: Exception) -> bool:
+    m = str(e)
+    return (
+        "No tool call found for function call output" in m
+        or "No tool output found for function call" in m
+    )
+
+async def _with_conv_retry(op, op_name: str, max_attempts: int = 5):
+    delay = 0.1
+    attempt = 1
+    while True:
+        try:
+            return await op()
+        except Exception as e:
+            if (_is_conv_locked(e) or _is_call_not_found(e)) and attempt < max_attempts:
+                logger.warning(f"{op_name} transient; retrying in {delay:.2f}s (attempt {attempt})")
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 1.0)
+                attempt += 1
+                continue
+            raise
 
 
 # --- Authenticated Routes ---
@@ -285,8 +319,10 @@ async def stream_response(
                             case ResponseOutputItemDoneEvent():
                                 if event.item.type == "function_call":
                                     current_item_id = event.item.id
+                                    call_id = event.item.call_id
                                     function_name = event.item.name
                                     arguments_json = json.loads(event.item.arguments)
+                                    logger.info(f"Function call event: {event}")
 
                                     # Dispatch via registry
                                     tr: ToolResult[Any] = await registry.call(function_name, arguments_json, context=Context(session=session))
@@ -306,7 +342,6 @@ async def stream_response(
                                                 ).render(tr=tr)
                                                 if isinstance(result_html, str):
                                                     result_html = result_html.strip()
-                                                logger.info(f"Rendering context result: {result_html}")
                                         # TODO: Guard against rendering duplicate slides with the same id, maybe by using a class instead of an id
                                         # TODO: Optimally, I would only expand the last instance of this class that appears on the page, not all of them
                                         # Wrap for oob outerHTML swap targeting prefixed slide id
@@ -315,32 +350,33 @@ async def stream_response(
 
                                         # Submit outputs and continue streaming
                                         try:
-                                            items = await client.conversations.items.list(
-                                                conversation_id=conversation_id
-                                            )
-                                            function_call_item = next((item for item in items.data if item.id == current_item_id), None)
-                                            if function_call_item:
-                                                call_id = function_call_item.call_id
-                                                # Submit structured tool output back to the conversation
-                                                await client.conversations.items.create(
+                                            await _with_conv_retry(
+                                                lambda: client.conversations.items.create(
                                                     conversation_id=conversation_id,
                                                     items=[{
                                                         "type": "function_call_output",
                                                         "call_id": call_id,
-                                                        "output": tr.model_dump_json()
-                                                    }]
-                                                )
-                                                next_stream = await client.responses.create(
+                                                        "output": tr.model_dump_json(),
+                                                    }],
+                                                ),
+                                                "conversations.items.create",
+                                            )
+
+                                            next_stream = await _with_conv_retry(
+                                                lambda: client.responses.create(
                                                     input="",
                                                     conversation=conversation_id,
                                                     model=model,
                                                     tools=tools or None,
                                                     instructions=instructions,
                                                     parallel_tool_calls=False,
-                                                    stream=True
-                                                )
-                                                async for out in iterate_stream(next_stream, response_id):
-                                                    yield out
+                                                    stream=True,
+                                                ),
+                                                "responses.create",
+                                            )
+
+                                            async for out in iterate_stream(next_stream, response_id):
+                                                yield out
                                         except Exception as e:
                                             logger.error(f"Error submitting tool outputs: {e}")
                                             raise HTTPException(status_code=500, detail=str(e))
