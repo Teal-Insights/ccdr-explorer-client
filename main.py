@@ -30,7 +30,9 @@ from utils.core.models import User
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
 
-STATIC_DIR = Path("static")
+# Resolve static directory relative to this file so both startup scan and
+# StaticFiles mount agree regardless of current working directory.
+STATIC_DIR = (Path(__file__).resolve().parent / "static").resolve()
 
 # Initialize with a sensible default; will be updated at startup
 LAST_MODIFIED_STATIC_FILES = {"last_updated": datetime.now(UTC)}
@@ -89,7 +91,7 @@ async def lifespan(app: FastAPI):
 app: FastAPI = FastAPI(lifespan=lifespan)
 
 # Mount static files (e.g., CSS, JS) and initialize Jinja2 templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory="templates")
 
 

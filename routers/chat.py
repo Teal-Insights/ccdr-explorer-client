@@ -253,7 +253,6 @@ async def stream_response(
 
                             case ResponseOutputTextAnnotationAddedEvent():
                                 if event.annotation and current_item_id:
-                                    logger.info(f"ResponseOutputTextAnnotationAddedEvent: {event.annotation}")
                                     if event.annotation["type"] == "file_citation":
                                         filename = event.annotation["filename"]
                                         # Emit a literal HTML anchor to avoid markdown parsing edge cases
@@ -285,11 +284,10 @@ async def stream_response(
 
                             case ResponseOutputItemDoneEvent():
                                 if event.item.type == "function_call":
-                                    logger.info(f"ResponseOutputItemDoneEvent: {event}")
                                     current_item_id = event.item.id
                                     function_name = event.item.name
                                     arguments_json = json.loads(event.item.arguments)
-                                    
+
                                     # Dispatch via registry
                                     tr: ToolResult[Any] = await registry.call(function_name, arguments_json, context=Context(session=session))
 
@@ -306,6 +304,9 @@ async def stream_response(
                                                 result_html = templates.get_template(
                                                     "chat/context-result.html"
                                                 ).render(tr=tr)
+                                                if isinstance(result_html, str):
+                                                    result_html = result_html.strip()
+                                                logger.info(f"Rendering context result: {result_html}")
                                         # TODO: Guard against rendering duplicate slides with the same id, maybe by using a class instead of an id
                                         # TODO: Optimally, I would only expand the last instance of this class that appears on the page, not all of them
                                         # Wrap for oob outerHTML swap targeting prefixed slide id
@@ -348,6 +349,7 @@ async def stream_response(
                                         yield sse_format("toolOutput", f"Function error: {err}")
 
                             case ResponseCompletedEvent():
+                                logger.info("Response completed")
                                 yield sse_format("runCompleted", "<span hx-swap-oob=\"outerHTML:.dots\"></span>")
                                 yield sse_format("endStream", "DONE")
 

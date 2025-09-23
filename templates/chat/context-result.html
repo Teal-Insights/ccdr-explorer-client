@@ -3,7 +3,7 @@
 {% elif not tr.result %}
     <div class="text-muted">No context found</div>
 {% else %}
-    <span hx-swap-oob=\"outerHTML:#slide-{{tr.result.node_id}}\">
+    <span hx-swap-oob="innerHTML:#slide-{{tr.result.node_id}}">
         {{tr.result.html | safe}}
         <p class="text-muted small mt-2"><b>Source:</b> {{tr.result.citation | safe}}</p>
     </span>

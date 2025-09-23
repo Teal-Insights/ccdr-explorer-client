@@ -212,8 +212,8 @@ def semantic_search(
     if invalid_section_types:
         warnings.warn("Ignored invalid section_types: " + ", ".join(invalid_section_types))
     
-    if context and context.session:
-        context.session.close()
+    if not (context and context.session):
+        session.close()
 
     return results
 
@@ -231,27 +231,28 @@ def render_context(
         session = context.session
     else:
         session = Session(engine)
-    
-    node = session.get(Node, node_id)
-    if not node:
-        warnings.warn("Node not found")
-        return None
-    html = node.render_context_html(
-        session,
-        node_id,
-        include_citation_data=False,
-        pretty=pretty,
-        separator=separator,
-    )
-    if not html:
-        warnings.warn("Node not found or no context available")
-    if context and context.session:
-        context.session.close()
-    return ContextResult(
-        node_id=node.id,
-        parent_node_id=node.parent_id,
-        document_id=node.document_id,
-        publication_id=node.document.publication_id,
-        html=html,
-        citation=node.get_citation(),
-    )
+    try:
+        node = session.get(Node, node_id)
+        if not node:
+            warnings.warn("Node not found")
+            return None
+        html = node.render_context_html(
+            session,
+            node_id,
+            include_citation_data=False,
+            pretty=pretty,
+            separator=separator,
+        )
+        if not html:
+            warnings.warn("Node not found or no context available")
+        return ContextResult(
+            node_id=node.id,
+            parent_node_id=node.parent_id,
+            document_id=node.document_id,
+            publication_id=node.document.publication_id,
+            html=html,
+            citation=node.get_citation(),
+        )
+    finally:
+        if not (context and context.session):
+            session.close()
